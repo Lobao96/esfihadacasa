@@ -325,6 +325,18 @@
   .seo-menu ul { margin: 0 0 10px; padding-left: 18px; }
   .seo-menu li { margin: 4px 0; }
 
+  .combo-card { border: 2px solid var(--gold); position: relative; }
+  .combo-flag {
+    position: absolute; top: -10px; left: 14px;
+    background: var(--gold); color: var(--ink);
+    font-size: 0.68rem; font-weight: 800;
+    padding: 3px 10px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .antes { color: var(--ink-soft); font-size: 0.82rem; font-weight: 600; margin-left: 4px; }
+  .unit-combo { border-color: var(--gold); background: rgba(244,185,66,0.07); }
+  .combo-step { font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); margin: 10px 0 4px; }
+
   .pay-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .pay-chip {
     font-size: 0.86rem; font-weight: 700;
@@ -470,6 +482,8 @@
     <div class="grid" id="salgadasGrid"></div>
     <p class="extras-title">Doces</p>
     <div class="grid" id="docesGrid"></div>
+    <p class="extras-title">Combo</p>
+    <div class="grid" id="comboGrid"></div>
     <p class="extras-title">Bebidas</p>
     <div class="grid" id="bebidasGrid"></div>
     <div class="alerg-note">
@@ -663,16 +677,28 @@
   };
 
   const EXTRAS_SALGADAS = [
-    { id: "bacon", name: "Bacon", price: 0.60 },
+    { id: "bacon", name: "Bacon", price: 0.50 },
     { id: "milho", name: "Milho", price: 0.50 },
     { id: "queijo", name: "Queijo", price: 0.50 },
     { id: "azeitona", name: "Azeitona", price: 0.50 },
+    { id: "chourico", name: "Chouriço em cubos", price: 0.50 },
+    { id: "fiambre", name: "Fiambre", price: 0.50 },
   ];
   const EXTRAS_DOCES = [
     { id: "morango", name: "Morango", price: 0.60 },
     { id: "coco", name: "Coco", price: 0.60 },
     { id: "amendoim", name: "Amendoim", price: 0.60 },
   ];
+
+  // ---- COMBO ----
+  const COMBO = {
+    id: "combo1",
+    name: "Combo Minha Fome, Minhas Regras",
+    desc: "3 esfihas salgadas à escolha + 1 bebida de lata",
+    price: 8.50,
+    antes: 9.70,
+    nSalgadas: 3,
+  };
 
   const HOURS = [
     { day: 0, open: null, close: null },           // Domingo
@@ -698,6 +724,24 @@
     MENU.doces.forEach(i => dg.innerHTML += cardHtml(i));
     const bg = document.getElementById('bebidasGrid');
     MENU.bebidas.forEach(i => bg.innerHTML += drinkHtml(i));
+    const cg = document.getElementById('comboGrid');
+    if (cg) cg.innerHTML = comboHtml();
+  }
+
+  function comboHtml() {
+    return `<div class="card combo-card">
+      <span class="combo-flag">Combo</span>
+      <h3>${COMBO.name}</h3>
+      <p class="desc">${COMBO.desc}</p>
+      <div class="card-foot">
+        <span class="price">${fmt(COMBO.price)} <s class="antes">${fmt(COMBO.antes)}</s></span>
+        <div class="stepper">
+          <button onclick="changeQty('${COMBO.id}', -1)">−</button>
+          <span class="qty" data-qty="${COMBO.id}">0</span>
+          <button onclick="changeQty('${COMBO.id}', 1)">+</button>
+        </div>
+      </div>
+    </div>`;
   }
   function drinkHtml(i) {
     return `<div class="card drink">
@@ -745,7 +789,11 @@
   let units = [];        // { uid, itemId, extras: {extraId: true} }
   let uidCounter = 0;
 
-  function itemById(id) { return allItems().find(i => i.id === id); }
+  function itemById(id) {
+    if (id === COMBO.id) return COMBO;
+    return allItems().find(i => i.id === id);
+  }
+  function isCombo(id) { return id === COMBO.id; }
   function isSalgada(id) { return MENU.salgadas.some(i => i.id === id); }
   function isBebida(id) { return MENU.bebidas.some(i => i.id === id); }
   function extrasFor(id) {
@@ -754,6 +802,7 @@
   }
 
   function unitPrice(u) {
+    if (isCombo(u.itemId)) return COMBO.price;
     let p = itemById(u.itemId).price;
     extrasFor(u.itemId).forEach(e => { if (u.extras[e.id]) p += e.price; });
     return p;
@@ -761,7 +810,7 @@
 
   function changeQty(id, delta) {
     if (delta > 0) {
-      units.push({ uid: ++uidCounter, itemId: id, extras: {} });
+      units.push({ uid: ++uidCounter, itemId: id, extras: {}, sabores: [], bebida: null });
     } else {
       for (let k = units.length - 1; k >= 0; k--) {
         if (units[k].itemId === id) { units.splice(k, 1); break; }
@@ -797,6 +846,44 @@
     });
   }
 
+  function comboSaborChip(u, s) {
+    const n = u.sabores.filter(x => x === s.id).length;
+    const on = n > 0 ? ' on' : '';
+    return `<button class="ex-chip${on}" onclick="comboAddSabor(${u.uid}, '${s.id}')">${s.name}${n > 0 ? ' ×' + n : ''}</button>`;
+  }
+
+  function comboAddSabor(uid, sid) {
+    const u = units.find(x => x.uid === uid);
+    if (!u) return;
+    if (u.sabores.length >= COMBO.nSalgadas) u.sabores = [];
+    u.sabores.push(sid);
+    renderOrderList(); updateTotal();
+  }
+
+  function comboSetBebida(uid, bid) {
+    const u = units.find(x => x.uid === uid);
+    if (!u) return;
+    u.bebida = u.bebida === bid ? null : bid;
+    renderOrderList(); updateTotal();
+  }
+
+  function comboLatas() {
+    return MENU.bebidas.filter(b => b.desc.indexOf('Lata') === 0);
+  }
+
+  function comboBlock(u) {
+    const faltam = COMBO.nSalgadas - u.sabores.length;
+    const sab = MENU.salgadas.map(s => comboSaborChip(u, s)).join('');
+    const beb = comboLatas().map(b =>
+      `<button class="ex-chip${u.bebida === b.id ? ' on' : ''}" onclick="comboSetBebida(${u.uid}, '${b.id}')">${b.name}</button>`
+    ).join('');
+    return `
+      <p class="combo-step">Escolha ${COMBO.nSalgadas} salgadas ${faltam > 0 ? '(faltam ' + faltam + ')' : '✓'}</p>
+      <div class="ex-chips">${sab}</div>
+      <p class="combo-step">Escolha a bebida ${u.bebida ? '✓' : '(falta escolher)'}</p>
+      <div class="ex-chips">${beb}</div>`;
+  }
+
   function renderOrderList() {
     const el = document.getElementById('orderList');
     if (units.length === 0) {
@@ -806,18 +893,23 @@
     let html = '';
     units.forEach((u, idx) => {
       const item = itemById(u.itemId);
-      const chips = extrasFor(u.itemId).map(e => {
-        const on = u.extras[e.id] ? ' on' : '';
-        return `<button class="ex-chip${on}" onclick="toggleUnitExtra(${u.uid}, '${e.id}')">${e.name} +${fmt(e.price)}</button>`;
-      }).join('');
+      let corpo;
+      if (isCombo(u.itemId)) {
+        corpo = comboBlock(u);
+      } else {
+        corpo = '<div class="ex-chips">' + extrasFor(u.itemId).map(e => {
+          const on = u.extras[e.id] ? ' on' : '';
+          return `<button class="ex-chip${on}" onclick="toggleUnitExtra(${u.uid}, '${e.id}')">${e.name} +${fmt(e.price)}</button>`;
+        }).join('') + '</div>';
+      }
       html += `
-        <div class="unit">
+        <div class="unit${isCombo(u.itemId) ? ' unit-combo' : ''}">
           <div class="unit-top">
             <span class="unit-name">${idx + 1}. ${item.name}</span>
             <span class="unit-price">${fmt(unitPrice(u))}</span>
             <button class="unit-del" onclick="removeUnit(${u.uid})" title="Remover">✕</button>
           </div>
-          <div class="ex-chips">${chips}</div>
+          ${corpo}
         </div>`;
     });
     el.innerHTML = html;
@@ -836,7 +928,9 @@
     const payload = {
       u: units.map(u => ({
         i: u.itemId,
-        e: Object.keys(u.extras).filter(k => u.extras[k])
+        e: Object.keys(u.extras).filter(k => u.extras[k]),
+        s: u.sabores && u.sabores.length ? u.sabores : undefined,
+        b: u.bebida || undefined
       })),
       m: orderType === 'entrega' ? 'E' : 'L',
       z: orderType === 'entrega' ? currentZoneId() : null,
@@ -854,6 +948,12 @@
       p.u.forEach((x, idx) => {
         const item = itemById(x.i);
         if (!item) return;
+        if (x.i === COMBO.id) {
+          const nomes = (x.s || []).map(id => (MENU.salgadas.find(s => s.id === id) || {}).name).filter(Boolean);
+          const beb = x.b ? (MENU.bebidas.find(b => b.id === x.b) || {}).name : '(sem bebida)';
+          out.push(`${idx + 1}. ${item.name} — ${nomes.join(', ')} + ${beb}`);
+          return;
+        }
         const exNames = (x.e || []).map(id => {
           const e = extrasFor(x.i).find(y => y.id === id);
           return e ? e.name : id;
@@ -887,6 +987,14 @@
     let lines = ["Oi! Gostaria de fazer o seguinte pedido:", ""];
     units.forEach((u, idx) => {
       const item = itemById(u.itemId);
+      if (isCombo(u.itemId)) {
+        const nomes = u.sabores.map(id => (MENU.salgadas.find(s => s.id === id) || {}).name).filter(Boolean);
+        const beb = u.bebida ? (MENU.bebidas.find(b => b.id === u.bebida) || {}).name : "(bebida por escolher)";
+        lines.push(`${idx + 1}. ${item.name} — ${fmt(COMBO.price)}`);
+        lines.push(`   Salgadas: ${nomes.length ? nomes.join(", ") : "(por escolher)"}`);
+        lines.push(`   Bebida: ${beb}`);
+        return;
+      }
       const ex = extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name);
       const exTxt = ex.length ? ` (com ${ex.join(", ")})` : "";
       lines.push(`${idx + 1}. ${item.name}${exTxt} — ${fmt(unitPrice(u))}`);
