@@ -460,7 +460,7 @@
     <p class="meta">Portimão · Delivery e retirada combinada · Pedidos pelo WhatsApp</p>
     <div id="preBanner" class="pre-banner" style="display:none;">
       <strong>Não perca a super promoção de abertura! 🔥</strong><br>
-      A gente abre dia <strong>10 de outubro</strong> em Portimão, com uma promoção que só acontece uma vez.<br>
+      A gente abre dia <strong>11 de outubro</strong> em Portimão, com uma promoção que só acontece uma vez.<br>
       Dá uma olhada no cardápio e segue a gente no <a href="https://www.instagram.com/esfihadacasaptm" target="_blank" rel="noopener">Instagram</a> pra não perder nada.
     </div>
     <button class="cta-primary" onclick="document.getElementById('montar').scrollIntoView({behavior:'smooth'})">
@@ -470,8 +470,8 @@
 </section>
 
 <div class="promo" id="promoBanner">
-  🎉 Compra 1, leva 2 — semana de inauguração
-  <small>10 a 17 de outubro</small>
+  🎉 Compra 1, leva 2 — só no dia da abertura
+  <small>Domingo, 11 de outubro</small>
 </div>
 
 <section id="sabores">
@@ -630,7 +630,7 @@
   ];
 
   // Antes da inauguração: mantém o site em modo "em breve" (sem aceitar pedidos).
-  // Mudar para false no dia 10 de outubro para abrir os pedidos.
+  // Mudar para false no dia 11 de outubro para abrir os pedidos.
   const PRE_LANCAMENTO = true;
 
   const MENU = {
@@ -1105,7 +1105,7 @@
     if (PRE_LANCAMENTO) {
       btn.href = '#';
       btn.classList.add('disabled');
-      btn.textContent = '🗓️ Pedidos abrem a 10 de outubro';
+      btn.textContent = '🗓️ Pedidos abrem a 11 de outubro';
       return;
     }
     const text = encodeURIComponent(buildMessage());
@@ -1137,7 +1137,7 @@
     let isOpen = false;
     if (PRE_LANCAMENTO) {
       badge.className = 'status closed';
-      text.textContent = 'Abrimos a 10 de outubro';
+      text.textContent = 'Abrimos a 11 de outubro';
       return;
     }
     if (h && h.open) {
