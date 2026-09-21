@@ -347,6 +347,11 @@
   .drink-art svg { height: 60%; width: auto; display: block; }
   .drink-art .drink-foto { width: auto; max-width: 100%; object-fit: contain; display: block; }
   .combo-card .card-img { margin-bottom: 10px; }
+  .faltas-aviso {
+    background: #FDECEC; color: var(--red-dark); border: 1.5px solid var(--red);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;
+    font-size: 0.86rem; font-weight: 600; line-height: 1.5;
+  }
   .clear-row {
     display: none; align-items: center; justify-content: flex-end;
     margin-bottom: 10px;
@@ -588,6 +593,7 @@
         <span class="amount" id="totalAmount">0,00€</span>
       </div>
 
+      <div class="faltas-aviso" id="faltasAviso" style="display:none;"></div>
       <a class="send-btn" id="sendBtn" href="#" target="_blank" rel="noopener" onclick="return enviarPedido(event)">
         📲 Enviar pedido no WhatsApp
       </a>
@@ -657,15 +663,6 @@
         <p>Se alguma coisa der errado com seu pedido — item trocado, faltando, ou que não chegou como devia — fala com a gente no WhatsApp no mesmo dia.</p>
         <p>A gente sempre resolve: refaz o item, desconta no valor ou devolve o dinheiro, conforme o caso e o que fizer mais sentido pra você.</p>
         <p>Sua opinião ajuda a gente a melhorar. Se tiver uma sugestão ou uma crítica, fala direto com a gente — a gente prefere saber.</p>
-      </div>
-    </div>
-    <div class="staff">
-      <button class="staff-toggle" onclick="document.getElementById('staffPanel').classList.toggle('open')">Verificar pedido</button>
-      <div id="staffPanel" class="staff-panel">
-        <p class="staff-hint">Cole aqui o código "Ref:" que veio na mensagem do cliente para ver o pedido real.</p>
-        <textarea id="codeInput" placeholder="Cola o código aqui"></textarea>
-        <button class="copy-btn" onclick="checkCode()">Verificar</button>
-        <pre id="codeResult" class="code-result"></pre>
       </div>
     </div>
   </div>
@@ -1335,11 +1332,6 @@
     });
   }
 
-  function checkCode() {
-    const val = document.getElementById('codeInput').value;
-    document.getElementById('codeResult').textContent = decodeCode(val);
-  }
-
   // ---- SENHA DO PEDIDO ----
   // Gerada no telemovel do cliente, por isso nao e sequencial: e uma
   // marca de hora (dia, hora, minuto, segundo) mais 2 letras. Serve para
@@ -1396,8 +1388,6 @@
     lines.push("");
     lines.push("Total estimado: " + fmt(computeTotal()));
     lines.push("Pagamento: " + payMethods());
-    lines.push("");
-    lines.push("Ref: " + orderCode());
     return lines.join("\n");
   }
 
@@ -1569,11 +1559,41 @@
     if (btn) { btn.classList.add('disabled'); btn.textContent = 'Esgotado por hoje'; }
   }
 
+  // O cliente pode carregar em enviar com um combo a meio. Em vez de
+  // deixar chegar um pedido incompleto, avisa-se antes.
+  function combosPorAcabar() {
+    const faltas = [];
+    units.forEach(u => {
+      const c = comboById(u.itemId);
+      if (!c) return;
+      const f = [];
+      if (u.picks.length < c.nSalgadas) f.push((c.nSalgadas - u.picks.length) + ' salgada(s)');
+      if (u.picksDoces.length < c.nDoces) f.push((c.nDoces - u.picksDoces.length) + ' doce(s)');
+      if (u.bebidas.length < c.nBebidas) f.push((c.nBebidas - u.bebidas.length) + ' bebida(s)');
+      if (f.length) faltas.push(c.name + ': falta escolher ' + f.join(', '));
+    });
+    if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
+    return faltas;
+  }
+
+  function mostrarFaltas(faltas) {
+    const el = document.getElementById('faltasAviso');
+    if (!el) return;
+    if (!faltas.length) { el.style.display = 'none'; return; }
+    el.innerHTML = '<strong>Falta completar o pedido:</strong><br>' + faltas.join('<br>');
+    el.style.display = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   async function enviarPedido(ev) {
     const btn = document.getElementById('sendBtn');
     if (btn.classList.contains('disabled')) { ev.preventDefault(); return false; }
     if (itemCount() === 0) { ev.preventDefault(); return false; }
     ev.preventDefault();
+
+    const faltas = combosPorAcabar();
+    if (faltas.length) { mostrarFaltas(faltas); return false; }
+    mostrarFaltas([]);
 
     const textoOriginal = btn.textContent;
     btn.textContent = 'A enviar…';
