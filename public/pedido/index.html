@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Seu pedido — Esfiha da Casa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --red:#C8232B; --red-dark:#9E1B22; --cream:#FFF3DC; --white:#fff;
+    --ink:#3A1F12; --ink-soft:#6B4A38; --gold:#F4B942; --verde:#1E8E4A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Nunito',-apple-system,sans-serif;background:var(--cream);color:var(--ink);
+    min-height:100vh;padding-bottom:40px}
+  header{background:var(--red);color:#fff;padding:18px;text-align:center;position:relative}
+  header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;background:var(--gold)}
+  header .marca{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.5rem}
+  .wrap{max-width:520px;margin:0 auto;padding:18px}
+
+  .cartao{background:var(--white);border-radius:18px;padding:22px 20px;
+    box-shadow:0 6px 22px rgba(58,31,18,.08)}
+  .num{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:2.6rem;color:var(--red-dark);line-height:1}
+  .sub{font-size:.88rem;color:var(--ink-soft);font-weight:600;margin-top:2px}
+
+  .passos{margin:22px 0 4px;position:relative}
+  .passo{display:flex;gap:14px;align-items:flex-start;padding:0 0 22px;position:relative}
+  .passo:last-child{padding-bottom:0}
+  .passo::before{content:"";position:absolute;left:13px;top:28px;bottom:0;width:2px;background:#E6DCCA}
+  .passo:last-child::before{display:none}
+  .bolha{width:28px;height:28px;border-radius:50%;background:#E6DCCA;flex:0 0 28px;
+    display:flex;align-items:center;justify-content:center;font-size:.9rem;z-index:1}
+  .passo.feito .bolha{background:var(--verde);color:#fff}
+  .passo.agora .bolha{background:var(--red);color:#fff;
+    box-shadow:0 0 0 5px rgba(200,35,43,.16)}
+  .p-txt{flex:1;padding-top:3px}
+  .p-tit{font-weight:800;font-size:1rem;color:#9C9282}
+  .passo.feito .p-tit,.passo.agora .p-tit{color:var(--ink)}
+  .p-desc{font-size:.84rem;color:var(--ink-soft);line-height:1.4;margin-top:2px;display:none}
+  .passo.agora .p-desc{display:block}
+
+  .resumo{margin-top:18px;padding-top:16px;border-top:1px solid rgba(58,31,18,.1)}
+  .linha{display:flex;justify-content:space-between;gap:12px;font-size:.9rem;
+    font-weight:600;padding:3px 0}
+  .linha .v{font-weight:800}
+  .total{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.3rem;color:var(--red)}
+  .pago{display:inline-block;font-weight:800;font-size:.74rem;padding:3px 10px;border-radius:999px;
+    background:rgba(30,142,74,.14);color:var(--verde);margin-left:8px}
+  .pago.nao{background:rgba(200,35,43,.12);color:var(--red-dark)}
+
+  .wa{display:block;text-align:center;margin-top:18px;background:var(--verde);color:#fff;
+    text-decoration:none;font-weight:800;padding:13px;border-radius:999px}
+  .rodape{text-align:center;font-size:.8rem;color:var(--ink-soft);margin-top:16px;line-height:1.5}
+  .erro{background:var(--white);border-radius:18px;padding:26px 20px;text-align:center}
+  .erro h2{font-family:'Baloo 2',sans-serif;font-size:1.2rem;margin-bottom:8px}
+  .erro p{font-size:.9rem;color:var(--ink-soft);line-height:1.5}
+  .ensaio{background:#2B2B2B;color:var(--gold);text-align:center;padding:10px;
+    font-weight:800;font-size:.78rem;letter-spacing:.03em}
+</style>
+</head>
+<body>
+
+<div id="ensaio" class="ensaio" style="display:none">ENSAIO DE TESTE</div>
+<header><div class="marca">Esfiha da Casa</div></header>
+
+<div class="wrap" id="conteudo">
+  <div class="cartao"><div class="sub">A carregar…</div></div>
+</div>
+
+<script>
+  const ESTADOS = [
+    { id: 'novo',       tit: 'Pedido recebido',   desc: 'Chegou certinho. Já vamos confirmar e começar.' },
+    { id: 'preparacao', tit: 'A ser preparado',   desc: 'A massa já está nas mãos. Sai quentinho daqui a pouco.' },
+    { id: 'caminho',    tit: 'A caminho',         desc: 'Saiu para entrega. Fica atento ao telemóvel.' },
+    { id: 'entregue',   tit: 'Entregue',          desc: 'Bom apetite! Obrigado por pedir na gente.' },
+  ];
+  const ESTADOS_RET = [
+    { id: 'novo',       tit: 'Pedido recebido',   desc: 'Chegou certinho. Já vamos confirmar e começar.' },
+    { id: 'preparacao', tit: 'A ser preparado',   desc: 'A massa já está nas mãos. Avisamos quando puder vir.' },
+    { id: 'entregue',   tit: 'Pronto / levantado', desc: 'Bom apetite! Obrigado por pedir na gente.' },
+  ];
+
+  function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + '€'; }
+  function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function token() {
+    return (new URLSearchParams(location.search).get('t') || '').toUpperCase();
+  }
+
+  async function carregar() {
+    const t = token();
+    const el = document.getElementById('conteudo');
+    if (!t) return semPedido('Falta o código do pedido no link.');
+    let d;
+    try {
+      const r = await fetch('/api/acompanhar?t=' + encodeURIComponent(t), { cache: 'no-store' });
+      d = await r.json();
+    } catch (e) { return; }               // falha de rede: mantém o que está
+    if (!d || !d.ok) return semPedido('Não encontrámos esse pedido. Confirme o link, ou fale com a gente no WhatsApp.');
+    pintar(d.pedido);
+  }
+
+  function semPedido(msg) {
+    document.getElementById('conteudo').innerHTML =
+      `<div class="erro"><h2>Pedido não encontrado</h2><p>${esc(msg)}</p>
+       <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a></div>`;
+  }
+
+  function pintar(p) {
+    if (p.ensaio) document.getElementById('ensaio').style.display = 'block';
+    const entrega = p.modo === 'entrega';
+    const passos = entrega ? ESTADOS : ESTADOS_RET;
+    let idx = passos.findIndex(x => x.id === p.estado);
+    if (p.estado === 'cancelado') idx = -1;
+
+    const hora = (() => {
+      try { return new Date(p.criado_em).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }); }
+      catch (e) { return ''; }
+    })();
+
+    const listaPassos = passos.map((x, i) => {
+      const cls = i < idx ? 'feito' : (i === idx ? 'agora' : '');
+      const marca = i < idx ? '✓' : (i === idx ? '●' : '');
+      return `<div class="passo ${cls}">
+        <div class="bolha">${marca}</div>
+        <div class="p-txt"><div class="p-tit">${x.tit}</div><div class="p-desc">${x.desc}</div></div>
+      </div>`;
+    }).join('');
+
+    const cancelado = p.estado === 'cancelado'
+      ? `<div class="erro" style="margin-bottom:14px"><h2>Pedido cancelado</h2>
+         <p>Se isto lhe parecer um engano, fale com a gente no WhatsApp.</p></div>` : '';
+
+    document.getElementById('conteudo').innerHTML = `
+      ${cancelado}
+      <div class="cartao">
+        <div class="num">#${p.numero}</div>
+        <div class="sub">${entrega ? 'Entrega' : 'Retirada'} · pedido às ${hora}</div>
+        <div class="passos">${listaPassos}</div>
+        <div class="resumo">
+          <div class="linha"><span>Esfihas</span><span class="v">${p.n_esfihas || 0}</span></div>
+          ${entrega && p.localidade ? `<div class="linha"><span>Localidade</span><span class="v">${esc(p.localidade)}</span></div>` : ''}
+          <div class="linha"><span>Total</span><span class="total">${eur(p.total_cent)}
+            <span class="pago ${p.pago ? '' : 'nao'}">${p.pago ? 'pago' : 'por pagar'}</span></span></div>
+        </div>
+        <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>
+      </div>
+      <p class="rodape">Esta página atualiza sozinha.<br>Pode deixá-la aberta e ir vendo.</p>`;
+  }
+
+  carregar();
+  setInterval(carregar, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) carregar(); });
+</script>
+</body>
+</html>

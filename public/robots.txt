@@ -1,6 +1,9 @@
 User-agent: *
 Allow: /
+
 Disallow: /teste-k7m2q9/
 Disallow: /painel/
+Disallow: /admin/
+Disallow: /pedido/
 
 Sitemap: https://esfihadacasa.com/sitemap.xml

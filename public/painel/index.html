@@ -111,6 +111,7 @@
 <div id="app" style="display:none">
   <header>
     <h1>🫓 Pedidos de hoje</h1>
+    <a href="/admin/" style="color:var(--gold);font-weight:800;font-size:.82rem;text-decoration:none">Análise →</a>
     <span class="hora" id="hora"></span>
   </header>
 
@@ -152,6 +153,44 @@
   let primeiraCarga = true;
 
   function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + '€'; }
+
+  // Mensagens prontas para o cliente. Abrem o WhatsApp já escritas; basta enviar.
+  function mensagemPara(p, momento) {
+    const link = location.origin + '/pedido/?t=' + p.token;
+    const n = '#' + p.numero;
+    const entrega = p.modo === 'entrega';
+    const M = {
+      recebido: `Oi! Recebemos seu pedido ${n} 🫓\n\n` +
+        (entrega && !p.pago
+          ? `Pra gente começar, falta só o pagamento por MB Way de ${eur(p.total_cent)} para o 938 211 480.\n\n`
+          : '') +
+        `Você pode acompanhar tudo por aqui:\n${link}`,
+      pago: `Pagamento recebido, obrigado! 🙌\nJá vamos colocar seu pedido ${n} na bancada.\n\n${link}`,
+      preparacao: `Seu pedido ${n} já está sendo feito 🔥\n\n${link}`,
+      caminho: `Seu pedido ${n} saiu para entrega 🛵\nFica de olho no telemóvel!\n\n${link}`,
+      pronto: `Seu pedido ${n} está pronto pra retirada 🫓\nQuando puder vir, é só avisar aqui.`,
+      entregue: `Entregue! Bom apetite 😊\nSe correu tudo bem (ou não), conta pra gente — a gente quer saber.`,
+    };
+    return M[momento] || '';
+  }
+
+  function abrirWhats(id, momento) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p) return;
+    const tel = (p.telefone || '').replace(/[^0-9]/g, '');
+    const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
+    const txt = encodeURIComponent(mensagemPara(p, momento));
+    window.open(num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`, '_blank', 'noopener');
+  }
+
+  // Momento certo para cada estado do pedido.
+  function momentoDe(p) {
+    if (p.estado === 'novo') return p.pago ? 'pago' : 'recebido';
+    if (p.estado === 'preparacao') return 'preparacao';
+    if (p.estado === 'caminho') return 'caminho';
+    if (p.estado === 'entregue') return 'entregue';
+    return null;
+  }
 
   async function api(caminho, opcoes) {
     const o = Object.assign({ headers: {} }, opcoes || {});
@@ -331,6 +370,8 @@
           ${p.senha ? ' · senha ' + p.senha : ''}
           ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}
           ${entrega && p.morada ? '<br>' + p.morada : ''}
+          ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
+          ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
         </div>
         <div class="prod-lista">${producaoHtml(dadosDe(p))}</div>
         <div class="acoes">
@@ -339,6 +380,8 @@
           </button>
           ${prox ? `<button class="ac ${travado ? '' : 'destaque'}" ${travado ? 'disabled title="Na entrega, marque pago primeiro"' : ''}
               onclick="marcar(${p.id}, {estado: '${prox[0]}'})">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
+          ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
+            💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           <button class="ac" onclick="marcar(${p.id}, {estado: 'cancelado'})">Cancelar</button>
         </div>
       </div>`;

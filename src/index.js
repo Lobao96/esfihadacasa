@@ -47,6 +47,20 @@ async function estadoDoDia(db, dia) {
   };
 }
 
+// Token curto e sem letras confundiveis, para o link de acompanhamento.
+function novoToken() {
+  const L = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const r = new Uint8Array(7);
+  crypto.getRandomValues(r);
+  return Array.from(r, x => L[x % L.length]).join('');
+}
+
+function soDigitos(v) {
+  if (!v) return null;
+  const d = String(v).replace(/[^0-9+]/g, '').slice(0, 20);
+  return d.length >= 9 ? d : null;
+}
+
 function limpar(v, max = 400) {
   if (v === null || v === undefined) return null;
   return String(v).slice(0, max);
@@ -69,23 +83,51 @@ async function novoPedido(request, env) {
   // b.itens pode ser a lista simples (formato antigo) ou o objecto com
   // linhas, producao e bebidas (formato novo). Guarda-se tal como vem.
   const itens = JSON.stringify(b.itens && typeof b.itens === 'object' ? b.itens : []);
+  const token = novoToken();
 
   // O numero da fila sai do maximo do proprio dia, numa so instrucao,
   // para dois pedidos ao mesmo segundo nao apanharem o mesmo numero.
   const res = await env.DB.prepare(
     `INSERT INTO pedidos
-       (dia, numero, senha, ensaio, modo, localidade, morada, total_cent, n_esfihas, itens, mensagem, criado_em)
-     SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       (dia, numero, senha, ensaio, modo, localidade, morada, total_cent, n_esfihas,
+        itens, mensagem, criado_em, token, telefone, origem, campanha)
+     SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        FROM pedidos WHERE dia = ? AND ensaio = ?
-     RETURNING id, numero`
+     RETURNING id, numero, token`
   ).bind(
     dia, limpar(b.senha, 40), ensaio, limpar(b.modo, 20), limpar(b.localidade, 80),
     limpar(b.morada, 300), Math.max(0, parseInt(b.total_cent, 10) || 0),
     Math.max(0, parseInt(b.n_esfihas, 10) || 0), itens, limpar(b.mensagem, 4000), agora,
+    token, soDigitos(b.telefone), limpar(b.origem, 60), limpar(b.campanha, 80),
     dia, ensaio
   ).first();
 
-  return j({ ok: true, id: res.id, numero: res.numero, dia, estado: await estadoDoDia(env.DB, dia) });
+  return j({ ok: true, id: res.id, numero: res.numero, token: res.token, dia,
+             estado: await estadoDoDia(env.DB, dia) });
+}
+
+// Pagina publica de acompanhamento: devolve o minimo, nunca morada nem telefone.
+async function acompanhar(request, env) {
+  const url = new URL(request.url);
+  const tk = (url.searchParams.get('t') || '').toUpperCase().slice(0, 12);
+  if (!tk) return j({ ok: false, erro: 'sem codigo' }, 400);
+  const p = await env.DB.prepare(
+    `SELECT numero, estado, pago, modo, localidade, total_cent, n_esfihas,
+            itens, criado_em, atualizado_em, ensaio
+       FROM pedidos WHERE token = ?`
+  ).bind(tk).first();
+  if (!p) return j({ ok: false, erro: 'nao encontrado' }, 404);
+  return j({ ok: true, pedido: p });
+}
+
+async function registarVisita(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: true }); }
+  await env.DB.prepare(
+    'INSERT INTO visitas (dia, origem, campanha, pagina, criado_em) VALUES (?, ?, ?, ?, ?)'
+  ).bind(diaLisboa(), limpar(b.origem, 60), limpar(b.campanha, 80),
+         limpar(b.pagina, 120), new Date().toISOString()).run();
+  return j({ ok: true });
 }
 
 // ---------------------------------------------------------------- painel
@@ -95,7 +137,8 @@ async function listar(request, env) {
   const dia = url.searchParams.get('dia') || diaLisboa();
   const { results } = await env.DB.prepare(
     `SELECT id, numero, senha, ensaio, estado, pago, modo, localidade, morada,
-            total_cent, n_esfihas, itens, mensagem, criado_em, atualizado_em
+            total_cent, n_esfihas, itens, mensagem, criado_em, atualizado_em,
+            token, telefone, origem
        FROM pedidos WHERE dia = ? ORDER BY ensaio ASC, numero ASC`
   ).bind(dia).all();
   return j({ ok: true, dia, pedidos: results, estado: await estadoDoDia(env.DB, dia) });
@@ -166,6 +209,64 @@ async function limparEnsaio(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, diaLisboa()) });
 }
 
+// ---------------------------------------------------------------- analise
+
+async function analise(request, env) {
+  const url = new URL(request.url);
+  const dias = Math.min(365, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 30));
+  const desde = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
+  const F = 'ensaio = 0 AND estado <> \'cancelado\' AND dia >= ?';
+
+  const q = sql => env.DB.prepare(sql).bind(desde);
+
+  const [resumo, porDia, porHora, porZona, porOrigem, visitas] = await env.DB.batch([
+    q(`SELECT COUNT(*) AS pedidos, COALESCE(SUM(total_cent),0) AS receita,
+              COALESCE(SUM(n_esfihas),0) AS esfihas,
+              COALESCE(AVG(total_cent),0) AS medio,
+              SUM(CASE WHEN modo = 'entrega' THEN 1 ELSE 0 END) AS entregas
+         FROM pedidos WHERE ${F}`),
+    q(`SELECT dia, COUNT(*) AS pedidos, SUM(total_cent) AS receita, SUM(n_esfihas) AS esfihas
+         FROM pedidos WHERE ${F} GROUP BY dia ORDER BY dia`),
+    q(`SELECT CAST(strftime('%H', criado_em, '+1 hour') AS INTEGER) AS hora,
+              COUNT(*) AS pedidos, SUM(total_cent) AS receita
+         FROM pedidos WHERE ${F} GROUP BY hora ORDER BY hora`),
+    q(`SELECT COALESCE(localidade, '(retirada)') AS zona, COUNT(*) AS pedidos,
+              SUM(total_cent) AS receita
+         FROM pedidos WHERE ${F} GROUP BY zona ORDER BY pedidos DESC`),
+    q(`SELECT COALESCE(NULLIF(origem, ''), 'direto') AS origem, COUNT(*) AS pedidos,
+              SUM(total_cent) AS receita
+         FROM pedidos WHERE ${F} GROUP BY origem ORDER BY pedidos DESC`),
+    q(`SELECT COALESCE(NULLIF(origem, ''), 'direto') AS origem, COUNT(*) AS visitas
+         FROM visitas WHERE dia >= ? GROUP BY origem ORDER BY visitas DESC`),
+  ]);
+
+  // O que mais se vende sai da lista de producao guardada em cada pedido.
+  const { results: linhas } = await env.DB.prepare(
+    `SELECT itens FROM pedidos WHERE ${F}`
+  ).bind(desde).all();
+
+  const sabores = {}, extras = {}, bebidas = {};
+  for (const r of linhas || []) {
+    let d = null;
+    try { d = JSON.parse(r.itens || 'null'); } catch (e) { continue; }
+    if (!d || Array.isArray(d)) continue;
+    for (const x of d.producao || []) {
+      sabores[x.sabor] = (sabores[x.sabor] || 0) + (x.n || 0);
+      for (const e of x.extras || []) extras[e] = (extras[e] || 0) + (x.n || 0);
+    }
+    for (const b of d.bebidas || []) bebidas[b.nome] = (bebidas[b.nome] || 0) + (b.n || 0);
+  }
+  const ordenar = o => Object.keys(o).map(k => ({ nome: k, n: o[k] })).sort((a, b) => b.n - a.n);
+
+  return j({
+    ok: true, dias, desde,
+    resumo: resumo.results[0] || {},
+    porDia: porDia.results, porHora: porHora.results, porZona: porZona.results,
+    porOrigem: porOrigem.results, visitas: visitas.results,
+    sabores: ordenar(sabores), extras: ordenar(extras), bebidas: ordenar(bebidas),
+  });
+}
+
 // ---------------------------------------------------------------- entrada
 
 export default {
@@ -196,6 +297,12 @@ export default {
       if (p === '/api/pedido' && request.method === 'POST') {
         return await novoPedido(request, env);
       }
+      if (p === '/api/acompanhar' && request.method === 'GET') {
+        return await acompanhar(request, env);
+      }
+      if (p === '/api/visita' && request.method === 'POST') {
+        return await registarVisita(request, env);
+      }
 
       if (p.startsWith('/api/painel/')) {
         if (!autorizado(request, env)) return j({ ok: false, erro: 'nao autorizado' }, 401);
@@ -203,6 +310,7 @@ export default {
         if (p === '/api/painel/pedido' && request.method === 'POST') return await mudarPedido(request, env);
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
+        if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
       }
 
       return j({ ok: false, erro: 'nao existe' }, 404);

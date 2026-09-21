@@ -352,6 +352,24 @@
     border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;
     font-size: 0.86rem; font-weight: 600; line-height: 1.5;
   }
+  #telInput {
+    width: 100%; font-family: inherit; font-size: 1rem; font-weight: 700;
+    padding: 11px 13px; border: 1.5px solid rgba(58,31,18,0.18);
+    border-radius: 10px; background: var(--white); color: var(--ink);
+  }
+  #telInput:focus { outline: none; border-color: var(--red); }
+  .tel-nota { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
+  .link-pedido {
+    background: rgba(30,142,74,0.10); border: 1.5px solid #1E8E4A; color: #146634;
+    border-radius: 12px; padding: 14px; margin-top: 12px; display: none;
+    font-size: 0.88rem; font-weight: 700; line-height: 1.5;
+  }
+  .link-pedido a { color: #146634; word-break: break-all; }
+  .link-pedido .lp-copiar {
+    display: inline-block; margin-top: 8px; font-family: inherit; font-weight: 800;
+    font-size: 0.8rem; padding: 7px 14px; border-radius: 999px;
+    border: 1.5px solid #1E8E4A; background: transparent; color: #146634; cursor: pointer;
+  }
   .clear-row {
     display: none; align-items: center; justify-content: flex-end;
     margin-bottom: 10px;
@@ -584,6 +602,11 @@
         <p class="zone-note">Entregamos até 10 km de Portimão: Portimão centro, Parchal, Praia da Rocha, Praia do Vau, Alvor, Estômbar, Ferragudo e Mexilhoeira Grande.</p>
       </div>
 
+      <p class="extras-title">Seu WhatsApp</p>
+      <input type="tel" id="telInput" inputmode="tel" placeholder="Ex.: 912 345 678"
+             autocomplete="tel" aria-label="Seu número de WhatsApp">
+      <p class="tel-nota">Serve só para a gente te avisar quando o pedido estiver a caminho. Pode deixar em branco.</p>
+
       <p class="extras-title">Pagamento</p>
       <div class="pay-row" id="payRow"></div>
       <p class="pay-note" id="payNote"></p>
@@ -594,6 +617,7 @@
       </div>
 
       <div class="faltas-aviso" id="faltasAviso" style="display:none;"></div>
+      <div class="link-pedido" id="linkPedido"></div>
       <a class="send-btn" id="sendBtn" href="#" target="_blank" rel="noopener" onclick="return enviarPedido(event)">
         📲 Enviar pedido no WhatsApp
       </a>
@@ -1503,7 +1527,40 @@
   // nunca se perde por causa disto.
   // ---------------------------------------------------------------
   const API = '/api';
+
+  // De onde veio o cliente: primeiro o que vier marcado no link (utm_source),
+  // depois o site que o mandou para ca, senao é acesso direto.
+  function origemDaVisita() {
+    try {
+      const q = new URLSearchParams(location.search);
+      const utm = (q.get('utm_source') || '').toLowerCase().slice(0, 40);
+      if (utm) return { origem: utm, campanha: (q.get('utm_campaign') || '').slice(0, 80) };
+      const r = document.referrer;
+      if (!r) return { origem: 'direto', campanha: '' };
+      const h = new URL(r).hostname.replace(/^www\./, '').toLowerCase();
+      if (h === location.hostname) return { origem: 'direto', campanha: '' };
+      if (h.indexOf('instagram') >= 0) return { origem: 'instagram', campanha: '' };
+      if (h.indexOf('facebook') >= 0 || h.indexOf('fb.') === 0) return { origem: 'facebook', campanha: '' };
+      if (h.indexOf('google') >= 0) return { origem: 'google', campanha: '' };
+      if (h.indexOf('whatsapp') >= 0 || h.indexOf('wa.me') >= 0) return { origem: 'whatsapp', campanha: '' };
+      return { origem: h.slice(0, 40), campanha: '' };
+    } catch (e) { return { origem: 'direto', campanha: '' }; }
+  }
+
+  const ORIGEM = origemDaVisita();
+
+  function registarVisita() {
+    try {
+      fetch(API + '/visita', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ origem: ORIGEM.origem, campanha: ORIGEM.campanha,
+                               pagina: MODO_TESTE ? 'ensaio' : 'loja' }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch (e) {}
+  }
   let numeroFila = null;
+  let tokenPedido = null;
   let estadoLoja = null;
 
   function contaEsfihasTotal() {
@@ -1656,6 +1713,9 @@
           modo: orderType === 'entrega' ? 'entrega' : 'retirada',
           localidade: orderType === 'entrega' ? (localidade || '') : '',
           morada: orderType === 'entrega' ? document.getElementById('addrInput').value.trim() : '',
+          telefone: (document.getElementById('telInput') || {}).value || '',
+          origem: ORIGEM.origem,
+          campanha: ORIGEM.campanha,
           total_cent: Math.round(computeTotal() * 100),
           n_esfihas: contaEsfihasTotal(),
           itens: { linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido() },
@@ -1663,7 +1723,7 @@
         }),
       });
       const d = await r.json();
-      if (d && d.ok) numeroFila = d.numero;
+      if (d && d.ok) { numeroFila = d.numero; tokenPedido = d.token || null; }
       else if (d && d.erro === 'esgotado') {
         btn.textContent = textoOriginal;
         aplicarEsgotadoServidor();
@@ -1674,11 +1734,35 @@
     btn.textContent = textoOriginal;
     const texto = encodeURIComponent(buildMessage());
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${texto}`, '_blank', 'noopener');
+    mostrarLinkPedido();
     // Pedido enviado: o proximo comeca com senha e numero proprios, mesmo que
     // o cliente nao feche a pagina.
     senhaAtual = null;
     numeroFila = null;
     return false;
+  }
+
+  // Depois de enviar, o cliente fica com um link onde vê o pedido a andar.
+  function mostrarLinkPedido() {
+    const el = document.getElementById('linkPedido');
+    if (!el || !tokenPedido) return;
+    const url = location.origin + '/pedido/?t=' + tokenPedido;
+    el.innerHTML = `Pedido enviado! 🫓<br>
+      Acompanhe aqui, em tempo real:<br>
+      <a href="${url}" target="_blank" rel="noopener">${url}</a><br>
+      <button type="button" class="lp-copiar" onclick="copiarLink('${url}', this)">Copiar link</button>`;
+    el.style.display = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    tokenPedido = null;
+  }
+
+  function copiarLink(url, b) {
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    const antes = b.textContent; b.textContent = 'Copiado!';
+    setTimeout(() => { b.textContent = antes; }, 1500);
   }
 
   function copyOrder() {
@@ -1760,6 +1844,7 @@
   applyEsgotado();
   updateTotal();
   verEstadoLoja();
+  registarVisita();
   setInterval(verEstadoLoja, 120000);
   setInterval(updateStatus, 60000);
 </script>

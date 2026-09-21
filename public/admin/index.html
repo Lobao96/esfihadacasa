@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Análise — Esfiha da Casa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --red:#C8232B; --red-dark:#9E1B22; --cream:#FFF3DC; --white:#fff;
+    --ink:#3A1F12; --ink-soft:#6B4A38; --ink-mudo:#9A8571; --gold:#F4B942;
+    --verde:#1E8E4A; --grelha:rgba(58,31,18,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Nunito',-apple-system,sans-serif;background:#F6EFE1;color:var(--ink);padding-bottom:50px}
+  header{background:var(--ink);color:var(--cream);padding:14px 18px;position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-family:'Baloo 2',sans-serif;font-size:1.15rem;font-weight:800;color:var(--gold)}
+  header a{color:var(--gold);font-weight:800;font-size:.82rem;text-decoration:none;margin-left:auto}
+  .wrap{max-width:900px;margin:0 auto;padding:16px}
+
+  .login{max-width:360px;margin:16vh auto;background:var(--white);border-radius:16px;padding:26px;
+    box-shadow:0 8px 28px rgba(58,31,18,.12)}
+  .login h2{font-family:'Baloo 2',sans-serif;font-size:1.35rem;margin-bottom:6px}
+  .login p{font-size:.86rem;color:var(--ink-soft);margin-bottom:16px}
+  input[type=password]{width:100%;font-family:inherit;font-size:1rem;font-weight:700;padding:11px 13px;
+    border:1.5px solid rgba(58,31,18,.2);border-radius:10px;background:var(--white);color:var(--ink)}
+  input:focus{outline:none;border-color:var(--red)}
+  .btn{font-family:inherit;font-weight:800;font-size:.92rem;padding:11px 18px;border-radius:999px;
+    border:none;background:var(--red);color:#fff;cursor:pointer;width:100%;margin-top:12px}
+  .erro{color:var(--red-dark);font-weight:700;font-size:.85rem;margin-top:10px;display:none}
+
+  .periodo{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .pb{font-family:inherit;font-weight:800;font-size:.8rem;padding:7px 15px;border-radius:999px;
+    border:1.5px solid rgba(58,31,18,.2);background:var(--white);color:var(--ink-soft);cursor:pointer}
+  .pb.on{background:var(--ink);border-color:var(--ink);color:var(--cream)}
+
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  .tile{background:var(--white);border-radius:14px;padding:15px 16px}
+  .tile .v{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.9rem;line-height:1.05;color:var(--ink)}
+  .tile .v.destaque{color:var(--red)}
+  .tile .k{font-size:.74rem;font-weight:800;color:var(--ink-mudo);text-transform:uppercase;
+    letter-spacing:.05em;margin-top:5px}
+  .tile .extra{font-size:.78rem;color:var(--ink-soft);font-weight:600;margin-top:3px}
+
+  .bloco{background:var(--white);border-radius:14px;padding:16px;margin-bottom:14px}
+  .bloco h2{font-family:'Baloo 2',sans-serif;font-size:1.05rem;margin-bottom:2px}
+  .bloco .nota{font-size:.78rem;color:var(--ink-soft);margin-bottom:12px;line-height:1.4}
+  .vazio{color:var(--ink-mudo);font-weight:700;font-size:.85rem;padding:18px 0;text-align:center}
+
+  /* barras horizontais */
+  .bar{display:grid;grid-template-columns:minmax(76px,auto) 1fr auto;gap:10px;align-items:center;
+    padding:5px 0;font-size:.85rem}
+  .bar .rot{font-weight:700;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .pista{display:block;background:rgba(58,31,18,.06);border-radius:4px;height:14px;overflow:hidden}
+  .bar .fill{display:block;height:100%;background:var(--red);border-radius:4px;min-width:3px}
+  .bar .val{font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+  /* barras verticais (dia e hora) */
+  .colunas{display:flex;align-items:flex-end;gap:3px;height:150px;margin-top:6px}
+  .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+    height:100%;min-width:0;cursor:default}
+  .col .haste{width:100%;background:var(--red);border-radius:4px 4px 0 0;min-height:2px}
+  .col .et{font-size:.62rem;color:var(--ink-mudo);font-weight:700;margin-top:4px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .eixo{display:flex;justify-content:space-between;font-size:.72rem;color:var(--ink-mudo);
+    font-weight:700;border-top:1px solid var(--grelha);padding-top:5px;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:4px}
+  th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-mudo);padding:5px 0;border-bottom:1px solid var(--grelha)}
+  td{padding:6px 0;border-bottom:1px solid rgba(58,31,18,.05);font-weight:700}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .duas{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:640px){ .duas{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <h2>Análise da loja</h2>
+  <p>Esfiha da Casa &middot; entrada reservada</p>
+  <input type="password" id="pass" placeholder="Palavra-passe" autocomplete="current-password">
+  <button class="btn" onclick="entrar()">Entrar</button>
+  <div class="erro" id="loginErro">Palavra-passe errada.</div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>📊 Análise</h1>
+    <a href="/painel/">← Pedidos</a>
+  </header>
+  <div class="wrap">
+    <div class="periodo">
+      <button class="pb" data-d="7" onclick="periodo(this)">7 dias</button>
+      <button class="pb on" data-d="30" onclick="periodo(this)">30 dias</button>
+      <button class="pb" data-d="90" onclick="periodo(this)">90 dias</button>
+      <button class="pb" data-d="365" onclick="periodo(this)">Um ano</button>
+    </div>
+    <div id="conteudo"></div>
+  </div>
+</div>
+
+<script>
+  let pass = '', dias = 30, D = null;
+
+  const eur = c => ((c || 0) / 100).toFixed(2).replace('.', ',') + '€';
+  const eur0 = c => Math.round((c || 0) / 100).toLocaleString('pt-PT') + '€';
+  const esc = t => String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  async function api(caminho) {
+    const r = await fetch('/api' + caminho, { headers: { 'x-painel-pass': pass }, cache: 'no-store' });
+    if (r.status === 401) throw new Error('401');
+    return r.json();
+  }
+
+  async function entrar() {
+    pass = document.getElementById('pass').value;
+    try {
+      await api('/painel/analise?dias=1');
+      try { localStorage.setItem('painelPass', pass); } catch (e) {}
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      carregar();
+    } catch (e) { document.getElementById('loginErro').style.display = 'block'; }
+  }
+
+  function periodo(b) {
+    document.querySelectorAll('.pb').forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); dias = parseInt(b.dataset.d, 10); carregar();
+  }
+
+  async function carregar() {
+    D = await api('/painel/analise?dias=' + dias);
+    pintar();
+  }
+
+  // ---- peças ----
+  function barras(lista, rotulo, valor, formatar) {
+    if (!lista || !lista.length) return '<div class="vazio">Ainda sem dados.</div>';
+    const max = Math.max(...lista.map(valor), 1);
+    return lista.slice(0, 12).map(x => `
+      <div class="bar">
+        <span class="rot" title="${esc(rotulo(x))}">${esc(rotulo(x))}</span>
+        <span class="pista"><span class="fill" style="width:${Math.max(2, valor(x) / max * 100)}%"></span></span>
+        <span class="val">${formatar(x)}</span>
+      </div>`).join('');
+  }
+
+  function colunas(lista, etiqueta, valor, dica) {
+    if (!lista || !lista.length) return '<div class="vazio">Ainda sem dados.</div>';
+    const max = Math.max(...lista.map(valor), 1);
+    // Com muitas colunas, so algumas levam etiqueta: evita texto cortado.
+    const salto = Math.ceil(lista.length / 7);
+    return `<div class="colunas">` + lista.map((x, i) => `
+      <div class="col" title="${esc(dica(x))}">
+        <span class="haste" style="height:${Math.max(2, valor(x) / max * 100)}%"></span>
+        <span class="et">${(i % salto === 0 || lista.length <= 8) ? esc(etiqueta(x)) : ''}</span>
+      </div>`).join('') + `</div>`;
+  }
+
+  function diaCurto(d) {
+    const p = String(d).split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] : d;
+  }
+
+  function pintar() {
+    const r = D.resumo || {};
+    const pedidos = r.pedidos || 0;
+    const entregas = r.entregas || 0;
+    const totalVisitas = (D.visitas || []).reduce((a, x) => a + x.visitas, 0);
+    const conversao = totalVisitas ? (pedidos / totalVisitas * 100) : null;
+
+    // visitas por origem, para cruzar com pedidos
+    const vis = {}; (D.visitas || []).forEach(x => { vis[x.origem] = x.visitas; });
+
+    document.getElementById('conteudo').innerHTML = `
+      <div class="tiles">
+        <div class="tile"><div class="v destaque">${eur0(r.receita)}</div><div class="k">Receita</div>
+          <div class="extra">${dias} dias</div></div>
+        <div class="tile"><div class="v">${pedidos}</div><div class="k">Pedidos</div>
+          <div class="extra">${entregas} entrega${entregas === 1 ? '' : 's'} · ${pedidos - entregas} retirada${pedidos - entregas === 1 ? '' : 's'}</div></div>
+        <div class="tile"><div class="v">${eur(r.medio)}</div><div class="k">Valor médio</div>
+          <div class="extra">por pedido</div></div>
+        <div class="tile"><div class="v">${r.esfihas || 0}</div><div class="k">Esfihas</div>
+          <div class="extra">${pedidos ? (r.esfihas / pedidos).toFixed(1) : '0'} por pedido</div></div>
+      </div>
+
+      <div class="bloco">
+        <h2>Receita por dia</h2>
+        <p class="nota">Cada coluna é um dia. Passe o rato por cima para ver o valor.</p>
+        ${colunas(D.porDia, x => diaCurto(x.dia), x => x.receita,
+                  x => `${diaCurto(x.dia)}: ${eur(x.receita)} · ${x.pedidos} pedido(s)`)}
+      </div>
+
+      <div class="bloco">
+        <h2>A que horas entram os pedidos</h2>
+        <p class="nota">Hora de Lisboa. Serve para saber quando é preciso ter massa pronta.</p>
+        ${colunas(D.porHora, x => x.hora + 'h', x => x.pedidos,
+                  x => `${x.hora}h: ${x.pedidos} pedido(s) · ${eur(x.receita)}`)}
+      </div>
+
+      <div class="duas">
+        <div class="bloco">
+          <h2>Sabores mais vendidos</h2>
+          <p class="nota">Unidades feitas, combos incluídos.</p>
+          ${barras(D.sabores, x => x.nome, x => x.n, x => x.n)}
+        </div>
+        <div class="bloco">
+          <h2>Zonas</h2>
+          <p class="nota">Onde estão os clientes.</p>
+          ${barras(D.porZona, x => x.zona, x => x.pedidos, x => x.pedidos)}
+        </div>
+      </div>
+
+      <div class="duas">
+        <div class="bloco">
+          <h2>Extras</h2>
+          <p class="nota">Quantas vezes foram pedidos.</p>
+          ${barras(D.extras, x => x.nome, x => x.n, x => x.n)}
+        </div>
+        <div class="bloco">
+          <h2>Bebidas</h2>
+          <p class="nota">Unidades, brindes incluídos.</p>
+          ${barras(D.bebidas, x => x.nome, x => x.n, x => x.n)}
+        </div>
+      </div>
+
+      <div class="bloco">
+        <h2>De onde vêm os clientes</h2>
+        <p class="nota">Visitas à loja e quantas se transformaram em pedido.
+          ${conversao !== null ? `No total, ${conversao.toFixed(1)}% de quem entra acaba por pedir.` : ''}</p>
+        ${(D.porOrigem && D.porOrigem.length) || (D.visitas && D.visitas.length) ? `
+        <table>
+          <tr><th>Origem</th><th class="n">Visitas</th><th class="n">Pedidos</th><th class="n">Taxa</th><th class="n">Receita</th></tr>
+          ${
+            Object.keys(Object.assign({}, vis,
+              Object.fromEntries((D.porOrigem || []).map(x => [x.origem, 0]))))
+            .map(o => {
+              const ped = (D.porOrigem || []).find(x => x.origem === o) || { pedidos: 0, receita: 0 };
+              const v = vis[o] || 0;
+              const taxa = v ? (ped.pedidos / v * 100).toFixed(1) + '%' : '—';
+              return `<tr><td>${esc(o)}</td><td class="n">${v || '—'}</td>
+                      <td class="n">${ped.pedidos}</td><td class="n">${taxa}</td>
+                      <td class="n">${eur(ped.receita)}</td></tr>`;
+            }).join('')
+          }
+        </table>
+        <p class="nota" style="margin-top:12px;margin-bottom:0">
+          Para separar os anúncios do resto, acrescente <code>?utm_source=meta&amp;utm_campaign=abertura</code>
+          ao link que divulga. O que vier sem marca e sem site de origem conta como “direto”.
+        </p>` : '<div class="vazio">Ainda sem dados.</div>'}
+      </div>`;
+  }
+
+  try {
+    const g = localStorage.getItem('painelPass');
+    if (g) { document.getElementById('pass').value = g; entrar(); }
+  } catch (e) {}
+  document.getElementById('pass').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+</script>
+</body>
+</html>
