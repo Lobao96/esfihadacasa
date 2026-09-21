@@ -336,6 +336,24 @@
   .antes { color: var(--ink-soft); font-size: 0.82rem; font-weight: 600; margin-left: 4px; }
   .unit-combo { border-color: var(--gold); background: rgba(244,185,66,0.07); }
   .combo-step { font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); margin: 10px 0 4px; }
+  .combo-pick {
+    border: 1px solid rgba(58,31,18,0.14); border-radius: 10px;
+    padding: 8px 10px; margin: 6px 0; background: var(--white);
+  }
+  .combo-pick-top { display: flex; align-items: center; gap: 8px; }
+  .combo-pick-name { flex: 1; font-weight: 700; font-size: 0.9rem; }
+  .combo-pick .ex-chips { margin-top: 6px; }
+  .ex-chip.disabled { opacity: 0.4; pointer-events: none; }
+  .brinde-aviso {
+    margin-top: 10px; padding: 9px 12px; border-radius: 10px;
+    background: rgba(244,185,66,0.18); border: 1px dashed var(--gold);
+    font-size: 0.85rem; font-weight: 600; color: var(--ink-soft);
+  }
+  .esgotado-banner {
+    margin: 0; padding: 18px 20px; text-align: center;
+    background: var(--ink); color: var(--cream);
+    font-weight: 700; font-size: 1rem; line-height: 1.45;
+  }
 
   .pay-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .pay-chip {
@@ -460,7 +478,7 @@
     <p class="meta">Portimão · Delivery e retirada combinada · Pedidos pelo WhatsApp</p>
     <div id="preBanner" class="pre-banner" style="display:none;">
       <strong>Não perca a super promoção de abertura! 🔥</strong><br>
-      A gente abre dia <strong>10 de outubro</strong> em Portimão, com uma promoção que só acontece uma vez.<br>
+      A gente abre dia <strong>11 de outubro</strong> em Portimão, com uma promoção que só acontece uma vez.<br>
       Dá uma olhada no cardápio e segue a gente no <a href="https://www.instagram.com/esfihadacasaptm" target="_blank" rel="noopener">Instagram</a> pra não perder nada.
     </div>
     <button class="cta-primary" onclick="document.getElementById('montar').scrollIntoView({behavior:'smooth'})">
@@ -470,9 +488,11 @@
 </section>
 
 <div class="promo" id="promoBanner">
-  🎉 Compra 1, leva 2 — semana de inauguração
-  <small>10 a 17 de outubro</small>
+  🎉 Compra 1, leva 2 — só no dia da abertura
+  <small>Domingo, 11 de outubro · promoção única</small>
 </div>
+
+<div class="esgotado-banner" id="esgotadoBanner" style="display:none;"></div>
 
 <section id="sabores">
   <div class="wrap">
@@ -482,7 +502,7 @@
     <div class="grid" id="salgadasGrid"></div>
     <p class="extras-title">Doces</p>
     <div class="grid" id="docesGrid"></div>
-    <p class="extras-title">Combo</p>
+    <p class="extras-title">Combos e promoções</p>
     <div class="grid" id="comboGrid"></div>
     <p class="extras-title">Bebidas</p>
     <div class="grid" id="bebidasGrid"></div>
@@ -630,8 +650,14 @@
   ];
 
   // Antes da inauguração: mantém o site em modo "em breve" (sem aceitar pedidos).
-  // Mudar para false no dia 10 de outubro para abrir os pedidos.
+  // Mudar para false no dia 11 de outubro para abrir os pedidos.
   const PRE_LANCAMENTO = true;
+
+  // ---- ESGOTADO DO DIA ----
+  // Quando a producao do dia acabar, poe ESGOTADO = true e faz commit.
+  // O site deixa de aceitar pedidos e mostra a mensagem abaixo.
+  const ESGOTADO = false;
+  const ESGOTADO_MSG = "Acabou a massa de hoje! Foi tudo mais rapido do que a gente imaginava e ficamos sem palavras. Obrigado de coracao a quem pediu. Amanha tem fornada nova — a gente te espera.";
 
   const MENU = {
     salgadas: [
@@ -668,10 +694,12 @@
     ],
     bebidas: [
       { id: "coca1l", name: "Coca-Cola 1L", desc: "Garrafa 1 litro — dá para partilhar", price: 3.50, ing: "", alerg: [], icon: "garrafa", cor: "#C8232B" },
+      { id: "fanta1l", name: "Fanta Laranja 1L", desc: "Garrafa 1 litro — dá para partilhar", price: 3.50, ing: "", alerg: [], icon: "garrafa", cor: "#F08000" },
       { id: "guarana", name: "Guaraná", desc: "Lata 33cl", price: 2.20, ing: "", alerg: [], icon: "lata", cor: "#1F7A3D" },
       { id: "coca", name: "Coca-Cola", desc: "Lata 33cl", price: 2.20, ing: "", alerg: [], icon: "lata", cor: "#C8232B" },
       { id: "cocazero", name: "Coca-Cola Zero", desc: "Lata 33cl", price: 2.20, ing: "", alerg: [], icon: "lata", cor: "#2B2B2B" },
-      { id: "sumol", name: "Sumol laranja", desc: "Lata 33cl", price: 2.20, ing: "", alerg: [], icon: "lata", cor: "#F08000" },
+      { id: "fanta", name: "Fanta Laranja", desc: "Lata 33cl", price: 2.20, ing: "", alerg: [], icon: "lata", cor: "#F08000" },
+      { id: "icetea", name: "Iced Tea Pêssego", desc: "Lata 33cl", price: 2.20, ing: "", alerg: [], icon: "lata", cor: "#E8A33D" },
       { id: "agua", name: "Água", desc: "Garrafa 50cl", price: 1.50, ing: "", alerg: [], icon: "garrafa", cor: "#4A9BD1" },
     ]
   };
@@ -690,15 +718,27 @@
     { id: "amendoim", name: "Amendoim", price: 0.60 },
   ];
 
-  // ---- COMBO ----
-  const COMBO = {
-    id: "combo1",
-    name: "Combo Minha Fome, Minhas Regras",
-    desc: "3 esfihas salgadas à escolha + 1 bebida de lata",
-    price: 8.50,
-    antes: 9.70,
-    nSalgadas: 3,
-  };
+  // ---- COMBOS E PROMOÇÕES ----
+  const COMBOS = [
+    {
+      id: "combo1",
+      name: "Combo Minha Fome, Minhas Regras",
+      desc: "3 esfihas salgadas à escolha + 1 bebida de lata",
+      price: 8.50, antes: 9.70,
+      nSalgadas: 3, nDoces: 0, nBebidas: 1, tipoBebida: "lata",
+    },
+    {
+      id: "combo2",
+      name: "Combo Junta a Malta",
+      desc: "15 salgadas + 5 doces à escolha + 2 bebidas de 1L grátis",
+      price: 48.00, antes: 57.50,
+      nSalgadas: 15, nDoces: 5, nBebidas: 2, tipoBebida: "garrafa1l",
+    },
+  ];
+
+  // Brinde automático: a partir de N esfihas avulsas, 1 bebida de 1L grátis.
+  // As esfihas que vêm dentro de um combo não contam (o combo já traz bebidas).
+  const PROMO_BRINDE = { minEsfihas: 10 };
 
   const HOURS = [
     { day: 0, open: null, close: null },           // Domingo
@@ -729,19 +769,28 @@
   }
 
   function comboHtml() {
-    return `<div class="card combo-card">
+    const cards = COMBOS.map(c => `<div class="card combo-card">
       <span class="combo-flag">Combo</span>
-      <h3>${COMBO.name}</h3>
-      <p class="desc">${COMBO.desc}</p>
+      <h3>${c.name}</h3>
+      <p class="desc">${c.desc}</p>
       <div class="card-foot">
-        <span class="price">${fmt(COMBO.price)} <s class="antes">${fmt(COMBO.antes)}</s></span>
+        <span class="price">${fmt(c.price)} <s class="antes">${fmt(c.antes)}</s></span>
         <div class="stepper">
-          <button onclick="changeQty('${COMBO.id}', -1)">−</button>
-          <span class="qty" data-qty="${COMBO.id}">0</span>
-          <button onclick="changeQty('${COMBO.id}', 1)">+</button>
+          <button onclick="changeQty('${c.id}', -1)">−</button>
+          <span class="qty" data-qty="${c.id}">0</span>
+          <button onclick="changeQty('${c.id}', 1)">+</button>
         </div>
       </div>
+    </div>`).join('');
+    const brinde = `<div class="card combo-card">
+      <span class="combo-flag">Promoção</span>
+      <h3>${PROMO_BRINDE.minEsfihas} esfihas, bebida grátis</h3>
+      <p class="desc">Na compra de ${PROMO_BRINDE.minEsfihas} esfihas de qualquer sabor, ganha 1 bebida de 1L à escolha. É automático: chegue às ${PROMO_BRINDE.minEsfihas} e escolha a bebida no seu pedido. Não acumula com combos nem com outras promoções — as esfihas que vêm dentro de um combo não contam.</p>
+      <div class="card-foot">
+        <span class="price">Grátis</span>
+      </div>
     </div>`;
+    return cards + brinde;
   }
   function drinkHtml(i) {
     return `<div class="card drink">
@@ -789,20 +838,44 @@
   let units = [];        // { uid, itemId, extras: {extraId: true} }
   let uidCounter = 0;
 
+  function comboById(id) { return COMBOS.find(c => c.id === id); }
   function itemById(id) {
-    if (id === COMBO.id) return COMBO;
+    const c = comboById(id);
+    if (c) return c;
     return allItems().find(i => i.id === id);
   }
-  function isCombo(id) { return id === COMBO.id; }
+  function isCombo(id) { return !!comboById(id); }
   function isSalgada(id) { return MENU.salgadas.some(i => i.id === id); }
+  function isDoce(id) { return MENU.doces.some(i => i.id === id); }
   function isBebida(id) { return MENU.bebidas.some(i => i.id === id); }
   function extrasFor(id) {
     if (isBebida(id)) return [];
     return isSalgada(id) ? EXTRAS_SALGADAS : EXTRAS_DOCES;
   }
+  function bebidasLata() { return MENU.bebidas.filter(b => b.desc.indexOf('Lata') === 0); }
+  function bebidas1L() { return MENU.bebidas.filter(b => b.desc.indexOf('Garrafa 1 litro') === 0); }
+  function bebidasDoCombo(c) { return c.tipoBebida === 'lata' ? bebidasLata() : bebidas1L(); }
+  function nomeBebida(id) { const b = MENU.bebidas.find(x => x.id === id); return b ? b.name : ''; }
+  function nomeSabor(id) {
+    const i = [...MENU.salgadas, ...MENU.doces].find(x => x.id === id);
+    return i ? i.name : '';
+  }
+
+  // extras escolhidos dentro de um combo, por esfiha
+  function picksDe(u, tipo) { return tipo === 'doce' ? u.picksDoces : u.picks; }
+  function extrasDoPick(tipo) { return tipo === 'doce' ? EXTRAS_DOCES : EXTRAS_SALGADAS; }
 
   function unitPrice(u) {
-    if (isCombo(u.itemId)) return COMBO.price;
+    const c = comboById(u.itemId);
+    if (c) {
+      let p = c.price;
+      ['salgada','doce'].forEach(t => {
+        picksDe(u, t).forEach(pk => {
+          extrasDoPick(t).forEach(e => { if (pk.extras[e.id]) p += e.price; });
+        });
+      });
+      return p;
+    }
     let p = itemById(u.itemId).price;
     extrasFor(u.itemId).forEach(e => { if (u.extras[e.id]) p += e.price; });
     return p;
@@ -810,7 +883,7 @@
 
   function changeQty(id, delta) {
     if (delta > 0) {
-      units.push({ uid: ++uidCounter, itemId: id, extras: {}, sabores: [], bebida: null });
+      units.push({ uid: ++uidCounter, itemId: id, extras: {}, picks: [], picksDoces: [], bebidas: [] });
     } else {
       for (let k = units.length - 1; k >= 0; k--) {
         if (units[k].itemId === id) { units.splice(k, 1); break; }
@@ -837,7 +910,7 @@
   }
 
   function syncCounts() {
-    allItems().forEach(i => {
+    [...allItems(), ...COMBOS].forEach(i => {
       const n = units.filter(u => u.itemId === i.id).length;
       document.querySelectorAll(`[data-qty="${i.id}"]`).forEach(el => {
         el.textContent = n;
@@ -846,42 +919,124 @@
     });
   }
 
-  function comboSaborChip(u, s) {
-    const n = u.sabores.filter(x => x === s.id).length;
-    const on = n > 0 ? ' on' : '';
-    return `<button class="ex-chip${on}" onclick="comboAddSabor(${u.uid}, '${s.id}')">${s.name}${n > 0 ? ' ×' + n : ''}</button>`;
-  }
-
-  function comboAddSabor(uid, sid) {
+  function comboAddSabor(uid, sid, tipo) {
     const u = units.find(x => x.uid === uid);
     if (!u) return;
-    if (u.sabores.length >= COMBO.nSalgadas) u.sabores = [];
-    u.sabores.push(sid);
+    const c = comboById(u.itemId);
+    const max = tipo === 'doce' ? c.nDoces : c.nSalgadas;
+    const arr = picksDe(u, tipo);
+    if (arr.length >= max) return;
+    arr.push({ sid: sid, extras: {} });
     renderOrderList(); updateTotal();
   }
 
-  function comboSetBebida(uid, bid) {
+  function comboRemovePick(uid, tipo, idx) {
     const u = units.find(x => x.uid === uid);
     if (!u) return;
-    u.bebida = u.bebida === bid ? null : bid;
+    picksDe(u, tipo).splice(idx, 1);
     renderOrderList(); updateTotal();
   }
 
-  function comboLatas() {
-    return MENU.bebidas.filter(b => b.desc.indexOf('Lata') === 0);
+  function comboPickExtra(uid, tipo, idx, extraId) {
+    const u = units.find(x => x.uid === uid);
+    if (!u) return;
+    const pk = picksDe(u, tipo)[idx];
+    if (!pk) return;
+    pk.extras[extraId] = !pk.extras[extraId];
+    renderOrderList(); updateTotal();
+  }
+
+  function comboToggleBebida(uid, bid) {
+    const u = units.find(x => x.uid === uid);
+    if (!u) return;
+    const c = comboById(u.itemId);
+    const i = u.bebidas.indexOf(bid);
+    if (i >= 0) { u.bebidas.splice(i, 1); }
+    else {
+      if (u.bebidas.length >= c.nBebidas) u.bebidas.shift();
+      u.bebidas.push(bid);
+    }
+    renderOrderList(); updateTotal();
+  }
+
+  // Cada esfiha escolhida dentro do combo aparece em linha propria com os seus
+  // proprios extras: e assim que se sabe em qual esfiha entra cada extra.
+  function comboPicksHtml(u, tipo) {
+    const arr = picksDe(u, tipo);
+    if (arr.length === 0) return '';
+    return arr.map((pk, idx) => {
+      const chips = extrasDoPick(tipo).map(e => {
+        const on = pk.extras[e.id] ? ' on' : '';
+        return `<button class="ex-chip${on}" onclick="comboPickExtra(${u.uid}, '${tipo}', ${idx}, '${e.id}')">${e.name} +${fmt(e.price)}</button>`;
+      }).join('');
+      return `<div class="combo-pick">
+        <div class="combo-pick-top">
+          <span class="combo-pick-name">${idx + 1}. ${nomeSabor(pk.sid)}</span>
+          <button class="unit-del" onclick="comboRemovePick(${u.uid}, '${tipo}', ${idx})" title="Tirar">&#10005;</button>
+        </div>
+        <div class="ex-chips">${chips}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function comboSecao(u, tipo, lista, n) {
+    if (!n) return '';
+    const arr = picksDe(u, tipo);
+    const faltam = n - arr.length;
+    const chips = lista.map(s => {
+      const cheio = arr.length >= n ? ' disabled' : '';
+      return `<button class="ex-chip${cheio}" onclick="comboAddSabor(${u.uid}, '${s.id}', '${tipo}')">${s.name}</button>`;
+    }).join('');
+    const label = tipo === 'doce' ? 'doces' : 'salgadas';
+    return `
+      <p class="combo-step">Escolha ${n} ${label} ${faltam > 0 ? '(faltam ' + faltam + ')' : '✓'}</p>
+      <div class="ex-chips">${chips}</div>
+      ${comboPicksHtml(u, tipo)}`;
   }
 
   function comboBlock(u) {
-    const faltam = COMBO.nSalgadas - u.sabores.length;
-    const sab = MENU.salgadas.map(s => comboSaborChip(u, s)).join('');
-    const beb = comboLatas().map(b =>
-      `<button class="ex-chip${u.bebida === b.id ? ' on' : ''}" onclick="comboSetBebida(${u.uid}, '${b.id}')">${b.name}</button>`
+    const c = comboById(u.itemId);
+    const beb = bebidasDoCombo(c).map(b =>
+      `<button class="ex-chip${u.bebidas.indexOf(b.id) >= 0 ? ' on' : ''}" onclick="comboToggleBebida(${u.uid}, '${b.id}')">${b.name}</button>`
     ).join('');
+    const faltamB = c.nBebidas - u.bebidas.length;
+    const rotuloB = c.nBebidas === 1 ? 'a bebida' : c.nBebidas + ' bebidas';
     return `
-      <p class="combo-step">Escolha ${COMBO.nSalgadas} salgadas ${faltam > 0 ? '(faltam ' + faltam + ')' : '✓'}</p>
-      <div class="ex-chips">${sab}</div>
-      <p class="combo-step">Escolha a bebida ${u.bebida ? '✓' : '(falta escolher)'}</p>
+      ${comboSecao(u, 'salgada', MENU.salgadas, c.nSalgadas)}
+      ${comboSecao(u, 'doce', MENU.doces, c.nDoces)}
+      <p class="combo-step">Escolha ${rotuloB} ${faltamB > 0 ? '(falta ' + faltamB + ')' : '✓'}</p>
       <div class="ex-chips">${beb}</div>`;
+  }
+
+  // ---- brinde automatico: 10 esfihas avulsas dao 1 bebida de 1L gratis ----
+  let brindeBebida = null;
+
+  function contaEsfihasAvulsas() {
+    return units.filter(u => isSalgada(u.itemId) || isDoce(u.itemId)).length;
+  }
+  function temBrinde() { return contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas; }
+  function setBrinde(bid) {
+    brindeBebida = brindeBebida === bid ? null : bid;
+    renderOrderList(); updateTotal();
+  }
+  function brindeHtml() {
+    const n = contaEsfihasAvulsas();
+    if (!temBrinde()) {
+      if (n === 0) return '';
+      const faltam = PROMO_BRINDE.minEsfihas - n;
+      return `<div class="brinde-aviso">Faltam ${faltam} esfiha${faltam > 1 ? 's' : ''} para ganhar 1 bebida de 1L grátis.</div>`;
+    }
+    const chips = bebidas1L().map(b =>
+      `<button class="ex-chip${brindeBebida === b.id ? ' on' : ''}" onclick="setBrinde('${b.id}')">${b.name}</button>`
+    ).join('');
+    return `<div class="unit unit-combo">
+      <div class="unit-top">
+        <span class="unit-name">🎁 Bebida de 1L grátis</span>
+        <span class="unit-price">0,00€</span>
+      </div>
+      <p class="combo-step">Escolha a bebida ${brindeBebida ? '✓' : '(falta escolher)'}</p>
+      <div class="ex-chips">${chips}</div>
+    </div>`;
   }
 
   function renderOrderList() {
@@ -912,6 +1067,7 @@
           ${corpo}
         </div>`;
     });
+    html += brindeHtml();
     el.innerHTML = html;
   }
 
@@ -926,11 +1082,14 @@
   function orderCode() {
     // codifica o pedido real; se o cliente editar o texto, o código deixa de bater certo
     const payload = {
+      k: senhaAtual || undefined,
+      g: temBrinde() ? (brindeBebida || 'x') : undefined,
       u: units.map(u => ({
         i: u.itemId,
         e: Object.keys(u.extras).filter(k => u.extras[k]),
-        s: u.sabores && u.sabores.length ? u.sabores : undefined,
-        b: u.bebida || undefined
+        s: u.picks && u.picks.length ? u.picks.map(pk => [pk.sid, Object.keys(pk.extras).filter(k => pk.extras[k])]) : undefined,
+        d: u.picksDoces && u.picksDoces.length ? u.picksDoces.map(pk => [pk.sid, Object.keys(pk.extras).filter(k => pk.extras[k])]) : undefined,
+        b: u.bebidas && u.bebidas.length ? u.bebidas : undefined
       })),
       m: orderType === 'entrega' ? 'E' : 'L',
       z: orderType === 'entrega' ? currentZoneId() : null,
@@ -945,13 +1104,24 @@
     try {
       const p = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
       let out = [];
+      if (p.k) { out.push('Senha: ' + p.k); out.push(''); }
       p.u.forEach((x, idx) => {
         const item = itemById(x.i);
         if (!item) return;
-        if (x.i === COMBO.id) {
-          const nomes = (x.s || []).map(id => (MENU.salgadas.find(s => s.id === id) || {}).name).filter(Boolean);
-          const beb = x.b ? (MENU.bebidas.find(b => b.id === x.b) || {}).name : '(sem bebida)';
-          out.push(`${idx + 1}. ${item.name} — ${nomes.join(', ')} + ${beb}`);
+        if (isCombo(x.i)) {
+          out.push(`${idx + 1}. ${item.name}`);
+          [['salgada', x.s], ['doce', x.d]].forEach(par => {
+            if (!par[1] || !par[1].length) return;
+            out.push(`   ${par[0] === 'doce' ? 'Doces' : 'Salgadas'}:`);
+            par[1].forEach((pk, i) => {
+              const ex = (pk[1] || []).map(id => {
+                const e = extrasDoPick(par[0]).find(y => y.id === id);
+                return e ? e.name : id;
+              });
+              out.push(`   ${i + 1}) ${nomeSabor(pk[0])}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}`);
+            });
+          });
+          out.push('   Bebidas: ' + ((x.b || []).map(nomeBebida).filter(Boolean).join(', ') || '(nenhuma)'));
           return;
         }
         const exNames = (x.e || []).map(id => {
@@ -960,6 +1130,7 @@
         });
         out.push(`${idx + 1}. ${item.name}${exNames.length ? ' (com ' + exNames.join(', ') + ')' : ''}`);
       });
+      if (p.g) out.push('+ Bebida de 1L GRATIS — ' + (nomeBebida(p.g) || '(por escolher)'));
       out.push('');
       out.push('Modo: ' + (p.m === 'E' ? 'Entrega' : 'Levantamento'));
       if (p.z && ZONES[p.z]) out.push('Entrega: ' + ZONES[p.z].label + ' — ' + fmt(ZONES[p.z].fee));
@@ -983,22 +1154,48 @@
     document.getElementById('codeResult').textContent = decodeCode(val);
   }
 
+  // ---- SENHA DO PEDIDO ----
+  // Gerada no telemovel do cliente, por isso nao e sequencial: e uma
+  // marca de hora (dia, hora, minuto, segundo) mais 2 letras. Serve para
+  // ordenar os pedidos pela hora a que sairam e para falar do pedido sem
+  // ler a conversa toda. O numero de fila a serio sai do painel.
+  let senhaAtual = null;
+
+  function novaSenha() {
+    const d = new Date();
+    const z = n => String(n).padStart(2, '0');
+    const L = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const r = L[Math.floor(Math.random() * L.length)] + L[Math.floor(Math.random() * L.length)];
+    return z(d.getDate()) + z(d.getMonth() + 1) + "-" + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + "-" + r;
+  }
+
   function buildMessage() {
-    let lines = ["Oi! Gostaria de fazer o seguinte pedido:", ""];
+    if (!senhaAtual) senhaAtual = novaSenha();
+    let lines = ["Oi! Gostaria de fazer o seguinte pedido:", "", "Senha: " + senhaAtual, ""];
     units.forEach((u, idx) => {
       const item = itemById(u.itemId);
       if (isCombo(u.itemId)) {
-        const nomes = u.sabores.map(id => (MENU.salgadas.find(s => s.id === id) || {}).name).filter(Boolean);
-        const beb = u.bebida ? (MENU.bebidas.find(b => b.id === u.bebida) || {}).name : "(bebida por escolher)";
-        lines.push(`${idx + 1}. ${item.name} — ${fmt(COMBO.price)}`);
-        lines.push(`   Salgadas: ${nomes.length ? nomes.join(", ") : "(por escolher)"}`);
-        lines.push(`   Bebida: ${beb}`);
+        lines.push(`${idx + 1}. ${item.name} — ${fmt(unitPrice(u))}`);
+        ['salgada', 'doce'].forEach(t => {
+          const arr = picksDe(u, t);
+          if (!arr.length) return;
+          lines.push(`   ${t === 'doce' ? 'Doces' : 'Salgadas'}:`);
+          arr.forEach((pk, i) => {
+            const ex = extrasDoPick(t).filter(e => pk.extras[e.id]).map(e => e.name);
+            lines.push(`     ${i + 1}) ${nomeSabor(pk.sid)}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}`);
+          });
+        });
+        const bebs = u.bebidas.map(nomeBebida).filter(Boolean);
+        lines.push(`   Bebidas: ${bebs.length ? bebs.join(", ") : "(por escolher)"}`);
         return;
       }
       const ex = extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name);
       const exTxt = ex.length ? ` (com ${ex.join(", ")})` : "";
       lines.push(`${idx + 1}. ${item.name}${exTxt} — ${fmt(unitPrice(u))}`);
     });
+    if (temBrinde()) {
+      lines.push(`${units.length + 1}. Bebida de 1L GRATIS (${PROMO_BRINDE.minEsfihas} esfihas) — ${brindeBebida ? nomeBebida(brindeBebida) : "(por escolher)"}`);
+    }
     lines.push("");
     lines.push(orderType === 'entrega' ? "Modo: Entrega" : "Modo: Retirada");
     if (orderType === 'entrega') {
@@ -1102,10 +1299,16 @@
 
   function refreshLink() {
     const btn = document.getElementById('sendBtn');
+    if (ESGOTADO) {
+      btn.href = '#';
+      btn.classList.add('disabled');
+      btn.textContent = 'Esgotado por hoje';
+      return;
+    }
     if (PRE_LANCAMENTO) {
       btn.href = '#';
       btn.classList.add('disabled');
-      btn.textContent = '🗓️ Pedidos abrem a 10 de outubro';
+      btn.textContent = '🗓️ Pedidos abrem a 11 de outubro';
       return;
     }
     const text = encodeURIComponent(buildMessage());
@@ -1137,7 +1340,7 @@
     let isOpen = false;
     if (PRE_LANCAMENTO) {
       badge.className = 'status closed';
-      text.textContent = 'Abrimos a 10 de outubro';
+      text.textContent = 'Abrimos a 11 de outubro';
       return;
     }
     if (h && h.open) {
@@ -1152,6 +1355,14 @@
     text.textContent = isOpen ? 'Aberto agora' : 'Fechado agora';
   }
 
+  function applyEsgotado() {
+    if (!ESGOTADO) return;
+    const b = document.getElementById('esgotadoBanner');
+    if (b) { b.textContent = ESGOTADO_MSG; b.style.display = 'block'; }
+    const promo = document.getElementById('promoBanner');
+    if (promo) promo.style.display = 'none';
+  }
+
   function applyPreLancamento() {
     if (!PRE_LANCAMENTO) return;
     const b = document.getElementById('preBanner');
@@ -1162,8 +1373,8 @@
 
   function updatePromo() {
     const now = new Date();
-    const start = new Date(now.getFullYear(), 9, 10); // 10 outubro
-    const end = new Date(now.getFullYear(), 9, 17, 23, 59);
+    const start = new Date(now.getFullYear(), 9, 11); // 11 outubro
+    const end = new Date(now.getFullYear(), 9, 11, 23, 59); // so no dia da abertura
     const banner = document.getElementById('promoBanner');
     if (now < start || now > end) banner.style.display = 'none';
   }
@@ -1177,6 +1388,7 @@
   updateStatus();
   updatePromo();
   applyPreLancamento();
+  applyEsgotado();
   updateTotal();
   setInterval(updateStatus, 60000);
 </script>
