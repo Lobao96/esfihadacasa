@@ -117,9 +117,10 @@ async function mudarPedido(request, env) {
   const agora = new Date().toISOString();
 
   // O stock so desce quando o pedido entra em preparacao, e uma unica vez:
-  // pedidos abandonados nao gastam massa.
-  const entraEmProducao = estado === 'preparacao' && !p.stock_debitado && !p.ensaio;
-  const saiDeProducao = estado === 'cancelado' && p.stock_debitado && !p.ensaio;
+  // pedidos abandonados nao gastam massa. Os pedidos de ensaio descontam
+  // tal e qual, para o ensaio ser fiel; o "Apagar ensaios" devolve tudo.
+  const entraEmProducao = estado === 'preparacao' && !p.stock_debitado;
+  const saiDeProducao = estado === 'cancelado' && p.stock_debitado;
 
   const lote = [
     env.DB.prepare('UPDATE pedidos SET estado = ?, pago = ?, atualizado_em = ?, stock_debitado = ? WHERE id = ?')
@@ -152,8 +153,17 @@ async function mudarStock(request, env) {
 }
 
 async function limparEnsaio(request, env) {
-  const r = await env.DB.prepare('DELETE FROM pedidos WHERE ensaio = 1').run();
-  return j({ ok: true, apagados: r.meta ? r.meta.changes : null });
+  // Devolve ao contador as esfihas que os ensaios tinham consumido, dia a dia,
+  // e so depois apaga os pedidos.
+  const { results } = await env.DB.prepare(
+    `SELECT dia, SUM(n_esfihas) AS n FROM pedidos
+      WHERE ensaio = 1 AND stock_debitado = 1 GROUP BY dia`
+  ).all();
+  const lote = (results || []).map(r =>
+    env.DB.prepare('UPDATE stock SET usado = MAX(0, usado - ?) WHERE dia = ?').bind(r.n || 0, r.dia));
+  lote.push(env.DB.prepare('DELETE FROM pedidos WHERE ensaio = 1'));
+  await env.DB.batch(lote);
+  return j({ ok: true, estado: await estadoDoDia(env.DB, diaLisboa()) });
 }
 
 // ---------------------------------------------------------------- entrada

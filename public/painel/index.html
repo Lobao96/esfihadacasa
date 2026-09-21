@@ -359,7 +359,9 @@
       return;
     }
     b.dataset.armado = '0'; b.textContent = 'Apagar ensaios';
-    await api('/painel/limpar-ensaio', { method: 'POST', body: '{}' });
+    const d = await api('/painel/limpar-ensaio', { method: 'POST', body: '{}' });
+    if (d && d.estado) est = d.estado;
+    vistos = new Set();
     await carregar();
   }
 
