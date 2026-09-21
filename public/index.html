@@ -1665,6 +1665,10 @@
     btn.textContent = textoOriginal;
     const texto = encodeURIComponent(buildMessage());
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${texto}`, '_blank', 'noopener');
+    // Pedido enviado: o proximo comeca com senha e numero proprios, mesmo que
+    // o cliente nao feche a pagina.
+    senhaAtual = null;
+    numeroFila = null;
     return false;
   }
 

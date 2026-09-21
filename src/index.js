@@ -163,7 +163,19 @@ export default {
     const url = new URL(request.url);
     const p = url.pathname;
 
-    if (!p.startsWith('/api/')) return env.ASSETS.fetch(request);
+    // Paginas: o browser pode guardar, mas tem de confirmar com o servidor
+    // se ha versao nova antes de a reutilizar. Sem isto, quem deixa a loja
+    // aberta fica preso a uma versao antiga sem dar por nada.
+    if (!p.startsWith('/api/')) {
+      const r = await env.ASSETS.fetch(request);
+      const tipo = r.headers.get('content-type') || '';
+      if (tipo.includes('text/html')) {
+        const h = new Headers(r.headers);
+        h.set('cache-control', 'no-cache, must-revalidate');
+        return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+      }
+      return r;
+    }
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
 
