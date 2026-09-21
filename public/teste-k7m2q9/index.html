@@ -588,7 +588,7 @@
         <span class="amount" id="totalAmount">0,00€</span>
       </div>
 
-      <a class="send-btn" id="sendBtn" href="#" target="_blank" rel="noopener">
+      <a class="send-btn" id="sendBtn" href="#" target="_blank" rel="noopener" onclick="return enviarPedido(event)">
         📲 Enviar pedido no WhatsApp
       </a>
       <button class="copy-btn" id="copyBtn" onclick="copyOrder()">Copiar pedido</button>
@@ -703,7 +703,6 @@
   // Quando a producao do dia acabar, poe ESGOTADO = true e faz commit.
   // O site deixa de aceitar pedidos e mostra a mensagem abaixo.
   const ESGOTADO = false;
-
   // Esta copia e so para o ensaio com amigos e familia. Nao esta ligada
   // a partir do site publico e os motores de busca nao a indexam.
   const MODO_TESTE = true;
@@ -1045,6 +1044,7 @@
     units = [];
     brindeBebida = null;
     senhaAtual = null;
+    numeroFila = null;
     syncCounts();
     renderOrderList();
     updateTotal();
@@ -1357,9 +1357,10 @@
 
   function buildMessage() {
     if (!senhaAtual) senhaAtual = novaSenha();
+    const cabecalho = numeroFila ? ('Pedido #' + numeroFila + '  ·  Senha: ' + senhaAtual) : ('Senha: ' + senhaAtual);
     let lines = MODO_TESTE
-      ? ["*** PEDIDO DE TESTE (ensaio) ***", "", "Senha: " + senhaAtual, ""]
-      : ["Oi! Gostaria de fazer o seguinte pedido:", "", "Senha: " + senhaAtual, ""];
+      ? ["*** PEDIDO DE TESTE (ensaio) ***", "", cabecalho, ""]
+      : ["Oi! Gostaria de fazer o seguinte pedido:", "", cabecalho, ""];
     units.forEach((u, idx) => {
       const item = itemById(u.itemId);
       if (isCombo(u.itemId)) {
@@ -1505,6 +1506,111 @@
     btn.classList.toggle('disabled', empty);
   }
 
+  // ---------------------------------------------------------------
+  // Ligacao ao painel. O pedido e gravado no servidor (que devolve o
+  // numero de fila) e so depois abre o WhatsApp. Se o servidor nao
+  // responder, o WhatsApp abre na mesma com a senha de hora: um pedido
+  // nunca se perde por causa disto.
+  // ---------------------------------------------------------------
+  const API = '/api';
+  let numeroFila = null;
+  let estadoLoja = null;
+
+  function contaEsfihasTotal() {
+    let n = 0;
+    units.forEach(u => {
+      const c = comboById(u.itemId);
+      if (c) { n += (c.nSalgadas || 0) + (c.nDoces || 0); }
+      else if (isSalgada(u.itemId) || isDoce(u.itemId)) n += 1;
+    });
+    return n;
+  }
+
+  function linhasDoPedido() {
+    const linhas = [];
+    units.forEach((u, idx) => {
+      const item = itemById(u.itemId);
+      if (isCombo(u.itemId)) {
+        linhas.push(`${item.name} — ${fmt(unitPrice(u))}`);
+        ['salgada', 'doce'].forEach(t => {
+          picksDe(u, t).forEach(pk => {
+            const ex = extrasDoPick(t).filter(e => pk.extras[e.id]).map(e => e.name);
+            linhas.push(`   ${nomeSabor(pk.sid)}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}`);
+          });
+        });
+        const bebs = u.bebidas.map(nomeBebida).filter(Boolean);
+        if (bebs.length) linhas.push('   Bebidas: ' + bebs.join(', '));
+        return;
+      }
+      const ex = extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name);
+      linhas.push(`${item.name}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''} — ${fmt(unitPrice(u))}`);
+    });
+    if (temBrinde()) {
+      linhas.push(`Bebida de 1L GRATIS — ${brindeBebida ? nomeBebida(brindeBebida) : '(por escolher)'}`);
+    }
+    return linhas;
+  }
+
+  async function verEstadoLoja() {
+    try {
+      const r = await fetch(API + '/estado', { cache: 'no-store' });
+      const d = await r.json();
+      if (d && d.ok) {
+        estadoLoja = d.estado;
+        if (!estadoLoja.aberto && !PRE_LANCAMENTO) aplicarEsgotadoServidor();
+      }
+    } catch (e) { /* sem servidor: o site continua a funcionar como antes */ }
+  }
+
+  function aplicarEsgotadoServidor() {
+    const b = document.getElementById('esgotadoBanner');
+    if (b) { b.textContent = ESGOTADO_MSG; b.style.display = 'block'; }
+    const btn = document.getElementById('sendBtn');
+    if (btn) { btn.classList.add('disabled'); btn.textContent = 'Esgotado por hoje'; }
+  }
+
+  async function enviarPedido(ev) {
+    const btn = document.getElementById('sendBtn');
+    if (btn.classList.contains('disabled')) { ev.preventDefault(); return false; }
+    if (itemCount() === 0) { ev.preventDefault(); return false; }
+    ev.preventDefault();
+
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'A enviar…';
+
+    if (!senhaAtual) senhaAtual = novaSenha();
+
+    try {
+      const r = await fetch(API + '/pedido', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          senha: senhaAtual,
+          ensaio: MODO_TESTE ? 1 : 0,
+          modo: orderType === 'entrega' ? 'entrega' : 'retirada',
+          localidade: orderType === 'entrega' ? (localidade || '') : '',
+          morada: orderType === 'entrega' ? document.getElementById('addrInput').value.trim() : '',
+          total_cent: Math.round(computeTotal() * 100),
+          n_esfihas: contaEsfihasTotal(),
+          itens: linhasDoPedido(),
+          mensagem: buildMessage(),
+        }),
+      });
+      const d = await r.json();
+      if (d && d.ok) numeroFila = d.numero;
+      else if (d && d.erro === 'esgotado') {
+        btn.textContent = textoOriginal;
+        aplicarEsgotadoServidor();
+        return false;
+      }
+    } catch (e) { /* segue para o WhatsApp na mesma */ }
+
+    btn.textContent = textoOriginal;
+    const texto = encodeURIComponent(buildMessage());
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${texto}`, '_blank', 'noopener');
+    return false;
+  }
+
   function copyOrder() {
     const msg = buildMessage();
     const ta = document.createElement('textarea');
@@ -1583,6 +1689,8 @@
   applyPreLancamento();
   applyEsgotado();
   updateTotal();
+  verEstadoLoja();
+  setInterval(verEstadoLoja, 120000);
   setInterval(updateStatus, 60000);
 </script>
 

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Painel — Esfiha da Casa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --red:#C8232B; --red-dark:#9E1B22; --cream:#FFF3DC; --white:#fff;
+    --ink:#3A1F12; --ink-soft:#6B4A38; --gold:#F4B942;
+    --verde:#1E8E4A; --azul:#2D6FB8; --cinza:#EFE7D8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Nunito',-apple-system,sans-serif;background:#F6EFE1;color:var(--ink);padding-bottom:40px}
+
+  header{background:var(--ink);color:var(--cream);padding:14px 18px;position:sticky;top:0;z-index:10;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-family:'Baloo 2',sans-serif;font-size:1.15rem;font-weight:800;color:var(--gold)}
+  .hora{margin-left:auto;font-weight:700;font-size:.85rem;opacity:.85}
+
+  .wrap{max-width:900px;margin:0 auto;padding:16px}
+
+  /* entrada */
+  .login{max-width:360px;margin:16vh auto;background:var(--white);border-radius:16px;padding:26px;
+    box-shadow:0 8px 28px rgba(58,31,18,.12)}
+  .login h2{font-family:'Baloo 2',sans-serif;font-size:1.35rem;margin-bottom:6px}
+  .login p{font-size:.86rem;color:var(--ink-soft);margin-bottom:16px}
+  input[type=password],input[type=number]{width:100%;font-family:inherit;font-size:1rem;font-weight:700;
+    padding:11px 13px;border:1.5px solid rgba(58,31,18,.2);border-radius:10px;background:var(--white);color:var(--ink)}
+  input:focus{outline:none;border-color:var(--red)}
+  .btn{font-family:inherit;font-weight:800;font-size:.92rem;padding:11px 18px;border-radius:999px;
+    border:none;background:var(--red);color:#fff;cursor:pointer;width:100%;margin-top:12px}
+  .btn.sec{background:transparent;border:1.5px solid var(--red);color:var(--red)}
+  .erro{color:var(--red-dark);font-weight:700;font-size:.85rem;margin-top:10px;display:none}
+
+  /* barra de stock */
+  .stock{background:var(--white);border-radius:14px;padding:14px 16px;margin-bottom:14px;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .stock .n{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.9rem;line-height:1}
+  .stock .lbl{font-size:.78rem;color:var(--ink-soft);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .stock .campo{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .stock input{width:92px}
+  .stock .mini{font-family:inherit;font-weight:800;font-size:.8rem;padding:8px 14px;border-radius:999px;
+    border:1.5px solid var(--red);background:transparent;color:var(--red);cursor:pointer;white-space:nowrap}
+  .stock .mini.on{background:var(--red);color:#fff}
+  .barra{width:100%;height:8px;border-radius:999px;background:var(--cinza);overflow:hidden}
+  .barra i{display:block;height:100%;background:var(--verde)}
+  .barra i.pouco{background:var(--gold)}
+  .barra i.nada{background:var(--red)}
+
+  .filtros{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .filtro{font-family:inherit;font-weight:800;font-size:.8rem;padding:7px 14px;border-radius:999px;
+    border:1.5px solid rgba(58,31,18,.2);background:var(--white);color:var(--ink-soft);cursor:pointer}
+  .filtro.on{background:var(--ink);border-color:var(--ink);color:var(--cream)}
+
+  /* cartao de pedido */
+  .p{background:var(--white);border-radius:14px;padding:14px 16px;margin-bottom:12px;
+    border-left:6px solid var(--cinza)}
+  .p.novo{border-left-color:var(--red)}
+  .p.preparacao{border-left-color:var(--gold)}
+  .p.caminho{border-left-color:var(--azul)}
+  .p.entregue{border-left-color:var(--verde);opacity:.62}
+  .p.cancelado{opacity:.45}
+  .p-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .num{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.5rem;color:var(--red-dark)}
+  .modo{font-weight:800;font-size:.76rem;text-transform:uppercase;letter-spacing:.05em;
+    padding:3px 10px;border-radius:999px;background:var(--cinza);color:var(--ink-soft)}
+  .modo.entrega{background:#E4EEF8;color:var(--azul)}
+  .tag-ensaio{font-weight:800;font-size:.7rem;padding:3px 9px;border-radius:999px;background:#2B2B2B;color:var(--gold)}
+  .tot{margin-left:auto;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.25rem;color:var(--red)}
+  .meta{font-size:.8rem;color:var(--ink-soft);margin-top:3px;font-weight:600}
+  .linhas{margin-top:9px;font-size:.88rem;line-height:1.5;white-space:pre-wrap}
+  .acoes{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+  .ac{font-family:inherit;font-weight:800;font-size:.8rem;padding:8px 14px;border-radius:999px;
+    border:1.5px solid rgba(58,31,18,.22);background:var(--white);color:var(--ink);cursor:pointer}
+  .ac.destaque{background:var(--red);border-color:var(--red);color:#fff}
+  .ac.pago{border-color:var(--verde);color:var(--verde)}
+  .ac.pago.on{background:var(--verde);color:#fff}
+  .ac.wa{border-color:var(--verde);color:var(--verde)}
+  .vazio{text-align:center;color:var(--ink-soft);font-weight:700;padding:40px 10px}
+  .aviso{background:#FDECEC;color:var(--red-dark);border-radius:10px;padding:10px 14px;
+    font-weight:700;font-size:.84rem;margin-bottom:12px;display:none}
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <h2>Painel de pedidos</h2>
+  <p>Esfiha da Casa &middot; entrada reservada</p>
+  <input type="password" id="pass" placeholder="Palavra-passe" autocomplete="current-password">
+  <button class="btn" onclick="entrar()">Entrar</button>
+  <div class="erro" id="loginErro">Palavra-passe errada.</div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>🫓 Pedidos de hoje</h1>
+    <span class="hora" id="hora"></span>
+  </header>
+
+  <div class="wrap">
+    <div class="aviso" id="aviso"></div>
+
+    <div class="stock">
+      <div>
+        <div class="n" id="stockN">—</div>
+        <div class="lbl">esfihas por vender</div>
+      </div>
+      <div class="campo">
+        <input type="number" id="stockTotal" min="0" max="2000" placeholder="feitas hoje">
+        <button class="mini" onclick="guardarStock()">Guardar</button>
+        <button class="mini" id="btnAberto" onclick="alternarLoja()">—</button>
+      </div>
+      <div class="barra"><i id="barra" style="width:0%"></i></div>
+    </div>
+
+    <div class="filtros">
+      <button class="filtro on" data-f="ativos" onclick="filtrar(this)">Por fazer</button>
+      <button class="filtro" data-f="todos" onclick="filtrar(this)">Todos</button>
+      <button class="filtro" data-f="entregues" onclick="filtrar(this)">Entregues</button>
+      <button class="filtro" data-f="ensaio" onclick="filtrar(this)">Ensaio</button>
+      <button class="filtro" style="margin-left:auto" onclick="limparEnsaio()">Apagar ensaios</button>
+    </div>
+
+    <div id="lista"></div>
+  </div>
+</div>
+
+<script>
+  const API = '/api';
+  let pass = '';
+  let pedidos = [];
+  let est = null;
+  let f = 'ativos';
+  let vistos = new Set();
+  let primeiraCarga = true;
+
+  function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + '€'; }
+
+  async function api(caminho, opcoes) {
+    const o = Object.assign({ headers: {} }, opcoes || {});
+    o.headers['x-painel-pass'] = pass;
+    if (o.body) o.headers['content-type'] = 'application/json';
+    const r = await fetch(API + caminho, o);
+    if (r.status === 401) throw new Error('401');
+    return r.json();
+  }
+
+  async function entrar() {
+    pass = document.getElementById('pass').value;
+    try {
+      await api('/painel/pedidos');
+      try { localStorage.setItem('painelPass', pass); } catch (e) {}
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      carregar();
+      setInterval(carregar, 10000);
+      setInterval(relogio, 1000);
+      relogio();
+    } catch (e) {
+      document.getElementById('loginErro').style.display = 'block';
+    }
+  }
+
+  function relogio() {
+    document.getElementById('hora').textContent =
+      new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function carregar() {
+    let d;
+    try { d = await api('/painel/pedidos'); }
+    catch (e) { mostrarAviso('Sem ligação ao servidor. A tentar outra vez…'); return; }
+    esconderAviso();
+    pedidos = d.pedidos || [];
+    est = d.estado;
+    pintarStock();
+    pintarLista();
+    avisarNovos();
+  }
+
+  function mostrarAviso(t) { const a = document.getElementById('aviso'); a.textContent = t; a.style.display = 'block'; }
+  function esconderAviso() { document.getElementById('aviso').style.display = 'none'; }
+
+  function avisarNovos() {
+    const novos = pedidos.filter(p => p.estado === 'novo' && !vistos.has(p.id));
+    pedidos.forEach(p => vistos.add(p.id));
+    if (primeiraCarga) { primeiraCarga = false; return; }
+    if (novos.length) {
+      apitar();
+      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+      document.title = '(' + novos.length + ') Pedidos — Esfiha da Casa';
+    }
+  }
+
+  // Aviso sonoro curto, sem ficheiro de som.
+  function apitar() {
+    try {
+      const c = new (window.AudioContext || window.webkitAudioContext)();
+      const o = c.createOscillator(), g = c.createGain();
+      o.connect(g); g.connect(c.destination);
+      o.frequency.value = 880; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, c.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.5);
+      o.start(); o.stop(c.currentTime + 0.5);
+    } catch (e) {}
+  }
+
+  function pintarStock() {
+    const n = document.getElementById('stockN');
+    const b = document.getElementById('barra');
+    const bt = document.getElementById('btnAberto');
+    if (!est) return;
+    if (est.ilimitado) {
+      n.textContent = '∞';
+      b.style.width = '100%'; b.className = '';
+    } else {
+      n.textContent = est.restante;
+      const pc = est.total ? Math.round(est.restante / est.total * 100) : 0;
+      b.style.width = pc + '%';
+      b.className = pc === 0 ? 'nada' : (pc <= 20 ? 'pouco' : '');
+    }
+    if (document.activeElement !== document.getElementById('stockTotal')) {
+      document.getElementById('stockTotal').value = est.total || '';
+    }
+    bt.textContent = est.aberto ? 'Loja aberta' : 'Loja fechada';
+    bt.classList.toggle('on', !est.aberto);
+  }
+
+  async function guardarStock() {
+    const t = parseInt(document.getElementById('stockTotal').value, 10) || 0;
+    const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ total: t }) });
+    est = d.estado; pintarStock();
+  }
+
+  async function alternarLoja() {
+    const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ aberto: est.aberto ? 0 : 1 }) });
+    est = d.estado; pintarStock();
+  }
+
+  function filtrar(b) {
+    document.querySelectorAll('.filtro[data-f]').forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); f = b.dataset.f; pintarLista();
+  }
+
+  function visiveis() {
+    if (f === 'todos') return pedidos;
+    if (f === 'entregues') return pedidos.filter(p => p.estado === 'entregue');
+    if (f === 'ensaio') return pedidos.filter(p => p.ensaio);
+    return pedidos.filter(p => p.estado !== 'entregue' && p.estado !== 'cancelado');
+  }
+
+  function horaDe(iso) {
+    try { return new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { return ''; }
+  }
+
+  function linhasDe(p) {
+    let itens = [];
+    try { itens = JSON.parse(p.itens || '[]'); } catch (e) {}
+    if (!itens.length) return '<em>(sem detalhe)</em>';
+    return itens.map(i => '• ' + i).join('\n');
+  }
+
+  function pintarLista() {
+    const el = document.getElementById('lista');
+    const v = visiveis();
+    if (!v.length) { el.innerHTML = '<div class="vazio">Nada por aqui.</div>'; return; }
+    el.innerHTML = v.map(p => {
+      const entrega = p.modo === 'entrega';
+      const prox = p.estado === 'novo' ? ['preparacao', 'Começar a fazer']
+                 : p.estado === 'preparacao' ? (entrega ? ['caminho', 'Saiu para entrega'] : ['entregue', 'Foi levantado'])
+                 : p.estado === 'caminho' ? ['entregue', 'Entregue'] : null;
+      const travado = entrega && p.estado === 'novo' && !p.pago;
+      return `
+      <div class="p ${p.estado}">
+        <div class="p-top">
+          <span class="num">#${p.numero}</span>
+          <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega' : 'Retirada'}</span>
+          ${p.ensaio ? '<span class="tag-ensaio">ENSAIO</span>' : ''}
+          <span class="tot">${eur(p.total_cent)}</span>
+        </div>
+        <div class="meta">
+          ${horaDe(p.criado_em)} · ${p.n_esfihas || 0} esfiha${p.n_esfihas === 1 ? '' : 's'}
+          ${p.senha ? ' · senha ' + p.senha : ''}
+          ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}
+          ${entrega && p.morada ? '<br>' + p.morada : ''}
+        </div>
+        <div class="linhas">${linhasDe(p)}</div>
+        <div class="acoes">
+          <button class="ac pago ${p.pago ? 'on' : ''}" onclick="marcar(${p.id}, {pago: ${p.pago ? 0 : 1}})">
+            ${p.pago ? '✓ Pago' : 'Marcar pago'}
+          </button>
+          ${prox ? `<button class="ac ${travado ? '' : 'destaque'}" ${travado ? 'disabled title="Na entrega, marque pago primeiro"' : ''}
+              onclick="marcar(${p.id}, {estado: '${prox[0]}'})">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
+          <button class="ac" onclick="marcar(${p.id}, {estado: 'cancelado'})">Cancelar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function marcar(id, campos) {
+    const d = await api('/painel/pedido', { method: 'POST', body: JSON.stringify(Object.assign({ id }, campos)) });
+    if (d.estado) est = d.estado;
+    await carregar();
+  }
+
+  async function limparEnsaio() {
+    const b = event.target;
+    if (b.dataset.armado !== '1') {
+      b.dataset.armado = '1'; b.textContent = 'Confirmar?';
+      setTimeout(() => { b.dataset.armado = '0'; b.textContent = 'Apagar ensaios'; }, 4000);
+      return;
+    }
+    b.dataset.armado = '0'; b.textContent = 'Apagar ensaios';
+    await api('/painel/limpar-ensaio', { method: 'POST', body: '{}' });
+    await carregar();
+  }
+
+  // Se já entrou neste telemóvel, entra sozinho.
+  try {
+    const g = localStorage.getItem('painelPass');
+    if (g) { document.getElementById('pass').value = g; entrar(); }
+  } catch (e) {}
+  document.getElementById('pass').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+</script>
+</body>
+</html>
