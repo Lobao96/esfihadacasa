@@ -66,7 +66,9 @@ async function novoPedido(request, env) {
   }
 
   const agora = new Date().toISOString();
-  const itens = JSON.stringify(Array.isArray(b.itens) ? b.itens.slice(0, 200) : []);
+  // b.itens pode ser a lista simples (formato antigo) ou o objecto com
+  // linhas, producao e bebidas (formato novo). Guarda-se tal como vem.
+  const itens = JSON.stringify(b.itens && typeof b.itens === 'object' ? b.itens : []);
 
   // O numero da fila sai do maximo do proprio dia, numa so instrucao,
   // para dois pedidos ao mesmo segundo nao apanharem o mesmo numero.

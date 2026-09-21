@@ -73,7 +73,19 @@
   .tag-ensaio{font-weight:800;font-size:.7rem;padding:3px 9px;border-radius:999px;background:#2B2B2B;color:var(--gold)}
   .tot{margin-left:auto;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.25rem;color:var(--red)}
   .meta{font-size:.8rem;color:var(--ink-soft);margin-top:3px;font-weight:600}
-  .linhas{margin-top:9px;font-size:.88rem;line-height:1.5;white-space:pre-wrap}
+  .linhas{margin-top:9px;font-size:.88rem;line-height:1.5}
+  .prod-lista{margin-top:10px}
+  .prod{display:flex;gap:11px;align-items:flex-start;padding:8px 0;
+    border-top:1px solid rgba(58,31,18,.08)}
+  .prod:first-child{border-top:none;padding-top:2px}
+  .prod-n{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.25rem;
+    color:var(--red-dark);min-width:34px;text-align:right;line-height:1.2}
+  .prod-txt{flex:1}
+  .prod-nome{font-weight:800;font-size:1rem;line-height:1.25}
+  .prod-ing{font-size:.82rem;color:var(--ink-soft);line-height:1.35;margin-top:1px}
+  .prod-extra{font-size:.82rem;font-weight:800;color:var(--red);margin-top:2px}
+  .prod-bebs{margin-top:9px;padding-top:8px;border-top:1px solid rgba(58,31,18,.08);
+    font-size:.85rem;font-weight:700;color:var(--ink-soft)}
   .acoes{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
   .ac{font-family:inherit;font-weight:800;font-size:.8rem;padding:8px 14px;border-radius:999px;
     border:1.5px solid rgba(58,31,18,.22);background:var(--white);color:var(--ink);cursor:pointer}
@@ -260,11 +272,40 @@
     catch (e) { return ''; }
   }
 
-  function linhasDe(p) {
-    let itens = [];
-    try { itens = JSON.parse(p.itens || '[]'); } catch (e) {}
-    if (!itens.length) return '<em>(sem detalhe)</em>';
-    return itens.map(i => '• ' + i).join('\n');
+  function dadosDe(p) {
+    let d = null;
+    try { d = JSON.parse(p.itens || 'null'); } catch (e) {}
+    if (Array.isArray(d)) return { linhas: d, producao: null, bebidas: null };   // formato antigo
+    return d || { linhas: [], producao: null, bebidas: null };
+  }
+
+  function esc(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Vista de produção: as esfihas iguais aparecem juntas, com a quantidade
+  // à frente e os ingredientes por baixo, para se fazerem em série.
+  function producaoHtml(d) {
+    if (!d.producao || !d.producao.length) {
+      const l = d.linhas || [];
+      return l.length ? '<div class="linhas">' + l.map(i => '• ' + esc(i)).join('<br>') + '</div>'
+                      : '<div class="linhas"><em>(sem detalhe)</em></div>';
+    }
+    const esfihas = d.producao.map(x => `
+      <div class="prod">
+        <span class="prod-n">${x.n}&times;</span>
+        <div class="prod-txt">
+          <div class="prod-nome">${esc(x.sabor)}</div>
+          ${x.ing ? `<div class="prod-ing">${esc(x.ing)}</div>` : ''}
+          ${x.extras && x.extras.length
+              ? `<div class="prod-extra">+ ${x.extras.map(esc).join(', ')}</div>` : ''}
+        </div>
+      </div>`).join('');
+    const bebs = (d.bebidas && d.bebidas.length)
+      ? `<div class="prod-bebs">🥤 ${d.bebidas.map(b => (b.n > 1 ? b.n + '× ' : '') + esc(b.nome)).join(' · ')}</div>`
+      : '';
+    return esfihas + bebs;
   }
 
   function pintarLista() {
@@ -291,7 +332,7 @@
           ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}
           ${entrega && p.morada ? '<br>' + p.morada : ''}
         </div>
-        <div class="linhas">${linhasDe(p)}</div>
+        <div class="prod-lista">${producaoHtml(dadosDe(p))}</div>
         <div class="acoes">
           <button class="ac pago ${p.pago ? 'on' : ''}" onclick="marcar(${p.id}, {pago: ${p.pago ? 0 : 1}})">
             ${p.pago ? '✓ Pago' : 'Marcar pago'}

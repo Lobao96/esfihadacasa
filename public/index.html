@@ -1507,6 +1507,52 @@
     return n;
   }
 
+  function ingDe(id) {
+    const i = [...MENU.salgadas, ...MENU.doces].find(x => x.id === id);
+    return i ? (i.ing || '') : '';
+  }
+
+  function listaProducao() {
+    const mapa = new Map();
+    const juntar = (sid, extras) => {
+      const chave = sid + '|' + extras.slice().sort().join(',');
+      if (!mapa.has(chave)) {
+        mapa.set(chave, { sabor: nomeSabor(sid), ing: ingDe(sid), extras: extras, n: 0,
+                          doce: isDoce(sid) ? 1 : 0 });
+      }
+      mapa.get(chave).n++;
+    };
+    units.forEach(u => {
+      const c = comboById(u.itemId);
+      if (c) {
+        ['salgada', 'doce'].forEach(t => {
+          picksDe(u, t).forEach(pk => {
+            juntar(pk.sid, extrasDoPick(t).filter(e => pk.extras[e.id]).map(e => e.name));
+          });
+        });
+        return;
+      }
+      if (isSalgada(u.itemId) || isDoce(u.itemId)) {
+        juntar(u.itemId, extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name));
+      }
+    });
+    // salgadas primeiro, depois doces, por nome
+    return [...mapa.values()].sort((a, b) =>
+      a.doce - b.doce || a.sabor.localeCompare(b.sabor, 'pt') || a.extras.length - b.extras.length);
+  }
+
+  function bebidasDoPedido() {
+    const conta = {};
+    const juntar = id => { if (id) conta[id] = (conta[id] || 0) + 1; };
+    units.forEach(u => {
+      if (comboById(u.itemId)) { u.bebidas.forEach(juntar); return; }
+      if (isBebida(u.itemId)) juntar(u.itemId);
+    });
+    const fora = Object.keys(conta).map(id => ({ nome: nomeBebida(id), n: conta[id] }));
+    if (temBrinde() && brindeBebida) fora.push({ nome: nomeBebida(brindeBebida) + ' (grátis)', n: 1 });
+    return fora;
+  }
+
   function linhasDoPedido() {
     const linhas = [];
     units.forEach((u, idx) => {
@@ -1603,7 +1649,7 @@
           morada: orderType === 'entrega' ? document.getElementById('addrInput').value.trim() : '',
           total_cent: Math.round(computeTotal() * 100),
           n_esfihas: contaEsfihasTotal(),
-          itens: linhasDoPedido(),
+          itens: { linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido() },
           mensagem: buildMessage(),
         }),
       });
