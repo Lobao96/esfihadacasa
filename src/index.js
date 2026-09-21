@@ -211,58 +211,104 @@ async function limparEnsaio(request, env) {
 
 // ---------------------------------------------------------------- analise
 
+// Aceita ?dias=N ou ?de=AAAA-MM-DD&ate=AAAA-MM-DD.
+function intervalo(url) {
+  const fmt = /^\d{4}-\d{2}-\d{2}$/;
+  let de = url.searchParams.get('de') || '';
+  let ate = url.searchParams.get('ate') || '';
+  if (fmt.test(de) && fmt.test(ate)) {
+    if (de > ate) { const x = de; de = ate; ate = x; }
+    return { de, ate };
+  }
+  const dias = Math.min(731, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 30));
+  const hoje = diaLisboa();
+  const inicio = diaLisboa(new Date(Date.now() - (dias - 1) * 864e5));
+  return { de: inicio, ate: hoje };
+}
+
+// Hora de Lisboa a partir do instante gravado, sem truques de fuso.
+function horaDe(iso) {
+  try {
+    return parseInt(new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Lisbon', hour: '2-digit', hour12: false,
+    }).format(new Date(iso)), 10);
+  } catch (e) { return null; }
+}
+
 async function analise(request, env) {
   const url = new URL(request.url);
-  const dias = Math.min(365, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 30));
-  const desde = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
-  const F = 'ensaio = 0 AND estado <> \'cancelado\' AND dia >= ?';
+  const { de, ate } = intervalo(url);
 
-  const q = sql => env.DB.prepare(sql).bind(desde);
-
-  const [resumo, porDia, porHora, porZona, porOrigem, visitas] = await env.DB.batch([
-    q(`SELECT COUNT(*) AS pedidos, COALESCE(SUM(total_cent),0) AS receita,
-              COALESCE(SUM(n_esfihas),0) AS esfihas,
-              COALESCE(AVG(total_cent),0) AS medio,
-              SUM(CASE WHEN modo = 'entrega' THEN 1 ELSE 0 END) AS entregas
-         FROM pedidos WHERE ${F}`),
-    q(`SELECT dia, COUNT(*) AS pedidos, SUM(total_cent) AS receita, SUM(n_esfihas) AS esfihas
-         FROM pedidos WHERE ${F} GROUP BY dia ORDER BY dia`),
-    q(`SELECT CAST(strftime('%H', criado_em, '+1 hour') AS INTEGER) AS hora,
-              COUNT(*) AS pedidos, SUM(total_cent) AS receita
-         FROM pedidos WHERE ${F} GROUP BY hora ORDER BY hora`),
-    q(`SELECT COALESCE(localidade, '(retirada)') AS zona, COUNT(*) AS pedidos,
-              SUM(total_cent) AS receita
-         FROM pedidos WHERE ${F} GROUP BY zona ORDER BY pedidos DESC`),
-    q(`SELECT COALESCE(NULLIF(origem, ''), 'direto') AS origem, COUNT(*) AS pedidos,
-              SUM(total_cent) AS receita
-         FROM pedidos WHERE ${F} GROUP BY origem ORDER BY pedidos DESC`),
-    q(`SELECT COALESCE(NULLIF(origem, ''), 'direto') AS origem, COUNT(*) AS visitas
-         FROM visitas WHERE dia >= ? GROUP BY origem ORDER BY visitas DESC`),
-  ]);
-
-  // O que mais se vende sai da lista de producao guardada em cada pedido.
   const { results: linhas } = await env.DB.prepare(
-    `SELECT itens FROM pedidos WHERE ${F}`
-  ).bind(desde).all();
+    `SELECT dia, criado_em, modo, localidade, origem, total_cent, n_esfihas, itens
+       FROM pedidos
+      WHERE ensaio = 0 AND estado <> 'cancelado' AND dia >= ? AND dia <= ?
+      ORDER BY criado_em LIMIT 5000`
+  ).bind(de, ate).all();
 
+  const { results: vis } = await env.DB.prepare(
+    `SELECT COALESCE(NULLIF(origem, ''), 'direto') AS origem, COUNT(*) AS visitas
+       FROM visitas WHERE dia >= ? AND dia <= ? GROUP BY origem ORDER BY visitas DESC`
+  ).bind(de, ate).all();
+
+  const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
+  const dias = {}, horas = {}, zonas = {}, origens = {};
   const sabores = {}, extras = {}, bebidas = {};
+  let receita = 0, esfihas = 0, entregas = 0;
+
   for (const r of linhas || []) {
-    let d = null;
-    try { d = JSON.parse(r.itens || 'null'); } catch (e) { continue; }
-    if (!d || Array.isArray(d)) continue;
-    for (const x of d.producao || []) {
-      sabores[x.sabor] = (sabores[x.sabor] || 0) + (x.n || 0);
-      for (const e of x.extras || []) extras[e] = (extras[e] || 0) + (x.n || 0);
+    receita += r.total_cent || 0;
+    esfihas += r.n_esfihas || 0;
+    if (r.modo === 'entrega') entregas++;
+
+    const d = dias[r.dia] || (dias[r.dia] = { dia: r.dia, pedidos: 0, receita: 0, esfihas: 0 });
+    d.pedidos++; d.receita += r.total_cent || 0; d.esfihas += r.n_esfihas || 0;
+
+    const h = horaDe(r.criado_em);
+    if (h !== null) {
+      const x = horas[h] || (horas[h] = { hora: h, pedidos: 0, receita: 0 });
+      x.pedidos++; x.receita += r.total_cent || 0;
     }
-    for (const b of d.bebidas || []) bebidas[b.nome] = (bebidas[b.nome] || 0) + (b.n || 0);
+
+    const zona = r.modo === 'entrega' ? (r.localidade || '(por confirmar)') : '(retirada)';
+    const z = zonas[zona] || (zonas[zona] = { zona, pedidos: 0, receita: 0 });
+    z.pedidos++; z.receita += r.total_cent || 0;
+
+    const orig = r.origem || 'direto';
+    const o = origens[orig] || (origens[orig] = { origem: orig, pedidos: 0, receita: 0 });
+    o.pedidos++; o.receita += r.total_cent || 0;
+
+    let it = null;
+    try { it = JSON.parse(r.itens || 'null'); } catch (e) {}
+    if (it && !Array.isArray(it)) {
+      for (const x of it.producao || []) {
+        somar(sabores, x.sabor, x.n || 0);
+        for (const e of x.extras || []) somar(extras, e, x.n || 0);
+      }
+      for (const b of it.bebidas || []) somar(bebidas, b.nome, b.n || 0);
+    }
   }
+
+  // Todos os dias do intervalo, mesmo os que nao tiveram pedidos.
+  const serie = [];
+  for (let x = new Date(de + 'T12:00:00Z'); diaLisboa(x) <= ate; x = new Date(+x + 864e5)) {
+    const k = diaLisboa(x);
+    serie.push(dias[k] || { dia: k, pedidos: 0, receita: 0, esfihas: 0 });
+    if (serie.length > 800) break;
+  }
+
   const ordenar = o => Object.keys(o).map(k => ({ nome: k, n: o[k] })).sort((a, b) => b.n - a.n);
+  const valores = o => Object.keys(o).map(k => o[k]);
+  const pedidos = (linhas || []).length;
 
   return j({
-    ok: true, dias, desde,
-    resumo: resumo.results[0] || {},
-    porDia: porDia.results, porHora: porHora.results, porZona: porZona.results,
-    porOrigem: porOrigem.results, visitas: visitas.results,
+    ok: true, de, ate,
+    resumo: { pedidos, receita, esfihas, entregas, medio: pedidos ? receita / pedidos : 0 },
+    porDia: serie,
+    porHora: valores(horas).sort((a, b) => a.hora - b.hora),
+    porZona: valores(zonas).sort((a, b) => b.pedidos - a.pedidos),
+    porOrigem: valores(origens).sort((a, b) => b.pedidos - a.pedidos),
+    visitas: vis || [],
     sabores: ordenar(sabores), extras: ordenar(extras), bebidas: ordenar(bebidas),
   });
 }

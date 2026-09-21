@@ -38,6 +38,13 @@
     border:1.5px solid rgba(58,31,18,.2);background:var(--white);color:var(--ink-soft);cursor:pointer}
   .pb.on{background:var(--ink);border-color:var(--ink);color:var(--cream)}
 
+  .datas{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:-6px 0 14px}
+  .datas label{font-size:.8rem;font-weight:800;color:var(--ink-soft);display:flex;
+    align-items:center;gap:6px}
+  .datas input[type=date]{font-family:inherit;font-weight:700;font-size:.85rem;padding:7px 10px;
+    border:1.5px solid rgba(58,31,18,.2);border-radius:10px;background:var(--white);color:var(--ink)}
+  .datas input:focus{outline:none;border-color:var(--red)}
+  .intervalo{font-size:.78rem;color:var(--ink-mudo);font-weight:700;margin:-8px 0 14px}
   .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
   .tile{background:var(--white);border-radius:14px;padding:15px 16px}
   .tile .v{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.9rem;line-height:1.05;color:var(--ink)}
@@ -94,17 +101,25 @@
   </header>
   <div class="wrap">
     <div class="periodo">
-      <button class="pb" data-d="7" onclick="periodo(this)">7 dias</button>
-      <button class="pb on" data-d="30" onclick="periodo(this)">30 dias</button>
-      <button class="pb" data-d="90" onclick="periodo(this)">90 dias</button>
-      <button class="pb" data-d="365" onclick="periodo(this)">Um ano</button>
+      <button class="pb" data-d="1" onclick="periodo(this)">Hoje</button>
+      <button class="pb" data-d="7" onclick="periodo(this)">Semana</button>
+      <button class="pb on" data-d="30" onclick="periodo(this)">Mês</button>
+      <button class="pb" data-d="90" onclick="periodo(this)">Trimestre</button>
+      <button class="pb" data-d="365" onclick="periodo(this)">Ano</button>
+      <button class="pb" id="pbDatas" onclick="abrirDatas()">De… a…</button>
     </div>
+    <div class="datas" id="datas" style="display:none">
+      <label>De <input type="date" id="de"></label>
+      <label>a <input type="date" id="ate"></label>
+      <button class="pb" onclick="aplicarDatas()">Ver</button>
+    </div>
+    <p class="intervalo" id="intervalo"></p>
     <div id="conteudo"></div>
   </div>
 </div>
 
 <script>
-  let pass = '', dias = 30, D = null;
+  let pass = '', consulta = 'dias=30', D = null;
 
   const eur = c => ((c || 0) / 100).toFixed(2).replace('.', ',') + '€';
   const eur0 = c => Math.round((c || 0) / 100).toLocaleString('pt-PT') + '€';
@@ -129,12 +144,42 @@
 
   function periodo(b) {
     document.querySelectorAll('.pb').forEach(x => x.classList.remove('on'));
-    b.classList.add('on'); dias = parseInt(b.dataset.d, 10); carregar();
+    b.classList.add('on');
+    document.getElementById('datas').style.display = 'none';
+    consulta = 'dias=' + b.dataset.d;
+    carregar();
+  }
+
+  function abrirDatas() {
+    const el = document.getElementById('datas');
+    const abrir = el.style.display === 'none';
+    el.style.display = abrir ? 'flex' : 'none';
+    if (abrir && D) {
+      document.getElementById('de').value = D.de;
+      document.getElementById('ate').value = D.ate;
+    }
+  }
+
+  function aplicarDatas() {
+    const de = document.getElementById('de').value;
+    const ate = document.getElementById('ate').value;
+    if (!de || !ate) return;
+    document.querySelectorAll('.pb').forEach(x => x.classList.remove('on'));
+    document.getElementById('pbDatas').classList.add('on');
+    consulta = 'de=' + de + '&ate=' + ate;
+    carregar();
   }
 
   async function carregar() {
-    D = await api('/painel/analise?dias=' + dias);
+    D = await api('/painel/analise?' + consulta);
     pintar();
+  }
+
+  function dataLonga(d) {
+    try {
+      return new Date(d + 'T12:00:00').toLocaleDateString('pt-PT',
+        { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch (e) { return d; }
   }
 
   // ---- peças ----
@@ -176,10 +221,14 @@
     // visitas por origem, para cruzar com pedidos
     const vis = {}; (D.visitas || []).forEach(x => { vis[x.origem] = x.visitas; });
 
+    const nDias = (D.porDia || []).length || 1;
+    document.getElementById('intervalo').textContent =
+      D.de === D.ate ? dataLonga(D.de) : (dataLonga(D.de) + ' a ' + dataLonga(D.ate));
+
     document.getElementById('conteudo').innerHTML = `
       <div class="tiles">
         <div class="tile"><div class="v destaque">${eur0(r.receita)}</div><div class="k">Receita</div>
-          <div class="extra">${dias} dias</div></div>
+          <div class="extra">${nDias} dia${nDias === 1 ? '' : 's'} · ${eur0(r.receita / nDias)} por dia</div></div>
         <div class="tile"><div class="v">${pedidos}</div><div class="k">Pedidos</div>
           <div class="extra">${entregas} entrega${entregas === 1 ? '' : 's'} · ${pedidos - entregas} retirada${pedidos - entregas === 1 ? '' : 's'}</div></div>
         <div class="tile"><div class="v">${eur(r.medio)}</div><div class="k">Valor médio</div>

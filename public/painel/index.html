@@ -56,6 +56,11 @@
   .filtro{font-family:inherit;font-weight:800;font-size:.8rem;padding:7px 14px;border-radius:999px;
     border:1.5px solid rgba(58,31,18,.2);background:var(--white);color:var(--ink-soft);cursor:pointer}
   .filtro.on{background:var(--ink);border-color:var(--ink);color:var(--cream)}
+  #diaSel{width:auto;font-size:.82rem;font-weight:800;padding:6px 10px;
+    border:1.5px solid rgba(58,31,18,.2);border-radius:999px;background:var(--white);color:var(--ink)}
+  #diaSel:focus{outline:none;border-color:var(--red)}
+  .passado{background:var(--gold);color:var(--ink);border-radius:10px;padding:9px 14px;
+    font-weight:800;font-size:.84rem;margin-bottom:12px;display:none}
 
   /* cartao de pedido */
   .p{background:var(--white);border-radius:14px;padding:14px 16px;margin-bottom:12px;
@@ -117,6 +122,7 @@
 
   <div class="wrap">
     <div class="aviso" id="aviso"></div>
+    <div class="passado" id="passado"></div>
 
     <div class="stock">
       <div>
@@ -132,6 +138,8 @@
     </div>
 
     <div class="filtros">
+      <input type="date" id="diaSel" onchange="mudarDia()" aria-label="Ver os pedidos deste dia">
+      <button class="filtro" id="btnHoje" onclick="voltarAHoje()" style="display:none">Voltar a hoje</button>
       <button class="filtro on" data-f="ativos" onclick="filtrar(this)">Por fazer</button>
       <button class="filtro" data-f="todos" onclick="filtrar(this)">Todos</button>
       <button class="filtro" data-f="entregues" onclick="filtrar(this)">Entregues</button>
@@ -148,6 +156,7 @@
   let pass = '';
   let pedidos = [];
   let est = null;
+  let diaVisto = null;      // null = hoje
   let f = 'ativos';
   let vistos = new Set();
   let primeiraCarga = true;
@@ -224,14 +233,23 @@
 
   async function carregar() {
     let d;
-    try { d = await api('/painel/pedidos'); }
+    try { d = await api('/painel/pedidos' + (diaVisto ? '?dia=' + diaVisto : '')); }
     catch (e) { mostrarAviso('Sem ligação ao servidor. A tentar outra vez…'); return; }
     esconderAviso();
     pedidos = d.pedidos || [];
     est = d.estado;
+    const aviso = document.getElementById('passado');
+    if (diaVisto) {
+      aviso.textContent = 'A ver os pedidos de ' + diaVisto + '. Não é hoje.';
+      aviso.style.display = 'block';
+      document.getElementById('btnHoje').style.display = '';
+    } else {
+      aviso.style.display = 'none';
+      document.getElementById('btnHoje').style.display = 'none';
+    }
     pintarStock();
     pintarLista();
-    avisarNovos();
+    if (!diaVisto) avisarNovos();
   }
 
   function mostrarAviso(t) { const a = document.getElementById('aviso'); a.textContent = t; a.style.display = 'block'; }
@@ -292,6 +310,20 @@
   async function alternarLoja() {
     const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ aberto: est.aberto ? 0 : 1 }) });
     est = d.estado; pintarStock();
+  }
+
+  function mudarDia() {
+    const v = document.getElementById('diaSel').value;
+    const hoje = new Date().toLocaleDateString('en-CA');
+    diaVisto = (!v || v === hoje) ? null : v;
+    vistos = new Set();
+    carregar();
+  }
+
+  function voltarAHoje() {
+    diaVisto = null;
+    document.getElementById('diaSel').value = '';
+    carregar();
   }
 
   function filtrar(b) {
