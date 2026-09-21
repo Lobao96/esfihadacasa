@@ -1,7 +1,16 @@
 {
   "name": "esfihadacasa-site",
   "compatibility_date": "2026-09-18",
+  "main": "src/index.js",
   "assets": {
-    "directory": "./public"
-  }
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "esfiha-pedidos",
+      "database_id": "4590db9d-7a3c-4722-a0fc-12fb407bf653"
+    }
+  ]
 }
