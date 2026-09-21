@@ -1,0 +1,14 @@
+{
+  "name": "Esfiha da Casa",
+  "short_name": "Esfiha da Casa",
+  "description": "Esfihas brasileiras artesanais em Portimão. Delivery e retirada.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF3DC",
+  "theme_color": "#C8232B",
+  "lang": "pt-PT",
+  "icons": [
+    { "src": "/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
