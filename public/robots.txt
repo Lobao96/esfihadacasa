@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /teste-k7m2q9/
 
 Sitemap: https://esfihadacasa.com/sitemap.xml

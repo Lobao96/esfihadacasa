@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Esfiha da Casa — Esfihas brasileiras em Portimão | Delivery e Retirada</title>
 <meta name="description" content="Esfihas brasileiras artesanais em Portimão. Salgadas 2,50€ e doces 2,60€. Delivery em Portimão, Parchal, Praia da Rocha, Alvor e Ferragudo. Peça pelo WhatsApp.">
+<meta name="robots" content="noindex, nofollow">
 <link rel="canonical" href="https://esfihadacasa.com/">
 <meta property="og:title" content="Esfiha da Casa — Portimão">
 <meta property="og:description" content="Esfihas artesanais, salgadas e doces. Delivery e retirada combinada em Portimão.">
@@ -355,6 +356,11 @@
     background: rgba(244,185,66,0.18); border: 1px dashed var(--gold);
     font-size: 0.85rem; font-weight: 600; color: var(--ink-soft);
   }
+  .teste-bar {
+    background: #2B2B2B; color: #FFE9A8; text-align: center;
+    padding: 12px 16px; font-weight: 700; font-size: 0.82rem; line-height: 1.4;
+    letter-spacing: 0.02em;
+  }
   .esgotado-banner {
     margin: 0; padding: 18px 20px; text-align: center;
     background: var(--ink); color: var(--cream);
@@ -492,6 +498,10 @@
     </button>
   </div>
 </section>
+
+<div class="teste-bar">
+  ENSAIO FECHADO &middot; Esta e a versao de teste da loja. Faz o pedido como farias a serio — nada e cobrado.
+</div>
 
 <div class="promo" id="promoBanner">
   🎉 Compra 1, leva 2 — só no dia da abertura
@@ -657,12 +667,16 @@
 
   // Antes da inauguração: mantém o site em modo "em breve" (sem aceitar pedidos).
   // Mudar para false no dia 11 de outubro para abrir os pedidos.
-  const PRE_LANCAMENTO = true;
+  const PRE_LANCAMENTO = false;
 
   // ---- ESGOTADO DO DIA ----
   // Quando a producao do dia acabar, poe ESGOTADO = true e faz commit.
   // O site deixa de aceitar pedidos e mostra a mensagem abaixo.
   const ESGOTADO = false;
+
+  // Esta copia e so para o ensaio com amigos e familia. Nao esta ligada
+  // a partir do site publico e os motores de busca nao a indexam.
+  const MODO_TESTE = true;
   const ESGOTADO_MSG = "Acabou a massa de hoje! Foi tudo mais rapido do que a gente imaginava e ficamos sem palavras. Obrigado de coracao a quem pediu. Amanha tem fornada nova — a gente te espera.";
 
   const MENU = {
@@ -1229,7 +1243,9 @@
 
   function buildMessage() {
     if (!senhaAtual) senhaAtual = novaSenha();
-    let lines = ["Oi! Gostaria de fazer o seguinte pedido:", "", "Senha: " + senhaAtual, ""];
+    let lines = MODO_TESTE
+      ? ["*** PEDIDO DE TESTE (ensaio) ***", "", "Senha: " + senhaAtual, ""]
+      : ["Oi! Gostaria de fazer o seguinte pedido:", "", "Senha: " + senhaAtual, ""];
     units.forEach((u, idx) => {
       const item = itemById(u.itemId);
       if (isCombo(u.itemId)) {
@@ -1390,6 +1406,11 @@
   }
 
   function updateStatus() {
+    if (MODO_TESTE) {
+      document.getElementById('statusBadge').className = 'status open';
+      document.getElementById('statusText').textContent = 'Modo teste — aberto';
+      return;
+    }
     const now = new Date();
     const day = now.getDay();
     const h = HOURS[day];
