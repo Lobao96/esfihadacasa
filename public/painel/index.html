@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Painel — Esfiha da Casa</title>
+<link rel="manifest" href="/painel/painel.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+<meta name="theme-color" content="#3A1F12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pedidos">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -101,6 +108,18 @@
   .vazio{text-align:center;color:var(--ink-soft);font-weight:700;padding:40px 10px}
   .aviso{background:#FDECEC;color:var(--red-dark);border-radius:10px;padding:10px 14px;
     font-weight:700;font-size:.84rem;margin-bottom:12px;display:none}
+
+  /* barra de navegacao fixa em baixo */
+  body{padding-bottom:86px}
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--ink);
+    display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom));gap:2px}
+  .nav-i{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+    padding:8px 2px;border:none;background:transparent;cursor:pointer;
+    font-family:inherit;font-weight:800;font-size:.68rem;color:rgba(255,243,220,.62);
+    text-decoration:none;border-radius:12px}
+  .nav-i span{font-size:1.25rem;line-height:1}
+  .nav-i.on{color:var(--gold);background:rgba(255,255,255,.07)}
+  .nav-i.alerta{color:var(--gold)}
 </style>
 </head>
 <body>
@@ -116,7 +135,6 @@
 <div id="app" style="display:none">
   <header>
     <h1>🫓 Pedidos de hoje</h1>
-    <a href="/admin/" style="color:var(--gold);font-weight:800;font-size:.82rem;text-decoration:none">Análise →</a>
     <span class="hora" id="hora"></span>
   </header>
 
@@ -149,6 +167,13 @@
 
     <div id="lista"></div>
   </div>
+
+  <nav class="nav">
+    <a class="nav-i on" href="/painel/"><span>🫓</span>Pedidos</a>
+    <a class="nav-i" href="/admin/"><span>📊</span>Análise</a>
+    <a class="nav-i" href="https://wa.me/351938211480" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>
+    <button class="nav-i" id="navAvisos" onclick="pedirAvisos()"><span>🔔</span>Avisos</button>
+  </nav>
 </div>
 
 <script>
@@ -221,6 +246,8 @@
       setInterval(carregar, 10000);
       setInterval(relogio, 1000);
       relogio();
+      estadoAvisos();
+      religarAvisos();
     } catch (e) {
       document.getElementById('loginErro').style.display = 'block';
     }
@@ -264,6 +291,85 @@
       if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
       document.title = '(' + novos.length + ') Pedidos — Esfiha da Casa';
     }
+  }
+
+  // ---- avisos no telemovel (Web Push) ----
+  // Mesmo com a app fechada e o telemovel bloqueado, chega uma notificacao
+  // quando entra um pedido. No iPhone so funciona com a pagina adicionada
+  // ao ecra principal, que e exactamente como a tens.
+
+  function b64ToU8(s) {
+    const pad = '='.repeat((4 - s.length % 4) % 4);
+    const b = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...b].map(c => c.charCodeAt(0)));
+  }
+
+  function estadoAvisos() {
+    const b = document.getElementById('navAvisos');
+    if (!b) return;
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      b.style.opacity = '.4'; b.title = 'Este telemóvel não suporta avisos'; return;
+    }
+    const p = Notification.permission;
+    b.classList.toggle('alerta', p !== 'granted');
+    b.querySelector('span').textContent = p === 'granted' ? '🔔' : '🔕';
+  }
+
+  async function pedirAvisos() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      mostrarAviso('Este telemóvel não suporta avisos. No iPhone, adicione o painel ao ecrã principal e abra por aí.');
+      return;
+    }
+    try {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') {
+        mostrarAviso('Avisos recusados. Pode ativar nas definições do telemóvel, em Notificações.');
+        estadoAvisos();
+        return;
+      }
+      const reg = await navigator.serviceWorker.register('/painel/sw.js', { scope: '/painel/' });
+      await navigator.serviceWorker.ready;
+      const d = await api('/painel/chave');
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: b64ToU8(d.chave),
+        });
+      }
+      const js = sub.toJSON();
+      await api('/painel/subscrever', {
+        method: 'POST',
+        body: JSON.stringify({
+          endpoint: sub.endpoint,
+          p256dh: js.keys && js.keys.p256dh,
+          auth: js.keys && js.keys.auth,
+        }),
+      });
+      estadoAvisos();
+      mostrarAviso('Avisos ligados neste telemóvel. A enviar um de teste…');
+      await api('/painel/testar-aviso', { method: 'POST', body: '{}' });
+      setTimeout(esconderAviso, 6000);
+    } catch (e) {
+      mostrarAviso('Não consegui ligar os avisos: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // Se já foram ligados, volta a registar em silêncio a cada abertura.
+  async function religarAvisos() {
+    try {
+      if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+      const reg = await navigator.serviceWorker.register('/painel/sw.js', { scope: '/painel/' });
+      await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return;
+      const js = sub.toJSON();
+      await api('/painel/subscrever', {
+        method: 'POST',
+        body: JSON.stringify({ endpoint: sub.endpoint,
+          p256dh: js.keys && js.keys.p256dh, auth: js.keys && js.keys.auth }),
+      });
+    } catch (e) {}
   }
 
   // Aviso sonoro curto, sem ficheiro de som.

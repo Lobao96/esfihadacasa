@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Análise — Esfiha da Casa</title>
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+<meta name="theme-color" content="#3A1F12">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -80,6 +83,15 @@
     color:var(--ink-mudo);padding:5px 0;border-bottom:1px solid var(--grelha)}
   td{padding:6px 0;border-bottom:1px solid rgba(58,31,18,.05);font-weight:700}
   td.n{text-align:right;font-variant-numeric:tabular-nums}
+  body{padding-bottom:86px}
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--ink);
+    display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom));gap:2px}
+  .nav-i{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+    padding:8px 2px;border:none;background:transparent;cursor:pointer;
+    font-family:inherit;font-weight:800;font-size:.68rem;color:rgba(255,243,220,.62);
+    text-decoration:none;border-radius:12px}
+  .nav-i span{font-size:1.25rem;line-height:1}
+  .nav-i.on{color:var(--gold);background:rgba(255,255,255,.07)}
   .duas{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media (max-width:640px){ .duas{grid-template-columns:1fr} }
 </style>
@@ -97,7 +109,6 @@
 <div id="app" style="display:none">
   <header>
     <h1>📊 Análise</h1>
-    <a href="/painel/">← Pedidos</a>
   </header>
   <div class="wrap">
     <div class="periodo">
@@ -116,6 +127,12 @@
     <p class="intervalo" id="intervalo"></p>
     <div id="conteudo"></div>
   </div>
+
+  <nav class="nav">
+    <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
+    <a class="nav-i on" href="/admin/"><span>📊</span>Análise</a>
+    <a class="nav-i" href="https://wa.me/351938211480" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>
+  </nav>
 </div>
 
 <script>

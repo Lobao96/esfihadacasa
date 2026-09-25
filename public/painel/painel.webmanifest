@@ -1,0 +1,15 @@
+{
+  "name": "Pedidos — Esfiha da Casa",
+  "short_name": "Pedidos",
+  "description": "Painel de pedidos da Esfiha da Casa.",
+  "start_url": "/painel/",
+  "scope": "/painel/",
+  "display": "standalone",
+  "background_color": "#F6EFE1",
+  "theme_color": "#3A1F12",
+  "lang": "pt-PT",
+  "icons": [
+    { "src": "/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

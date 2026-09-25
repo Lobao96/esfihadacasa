@@ -66,9 +66,90 @@ function limpar(v, max = 400) {
   return String(v).slice(0, max);
 }
 
+// ---------------------------------------------------------------- avisos
+// Notificacoes no telemovel (Web Push). Enviamos um aviso sem conteudo:
+// o telemovel mostra "Novo pedido" e, ao tocar, abre o painel. Assim nao
+// e preciso cifrar nada e o aviso chega mesmo com a app fechada.
+
+const VAPID_PUBLIC = 'BPwKdY9BLSbv8m5X1wSHI2xDApg4faHlpEZmjCgC3Qp8HawDrnhXsG7rJcw66c2bj7HEmvc9O4YWHcZlhLz5rqg';
+const VAPID_X = '_Ap1j0EtJu_yblfXBIcjbEMCmDh9oeWkRmaMKALdCnw';
+const VAPID_Y = 'HawDrnhXsG7rJcw66c2bj7HEmvc9O4YWHcZlhLz5rqg';
+const VAPID_SUB = 'mailto:96miguelsantos@gmail.com';
+
+function b64url(buf) {
+  let s = '';
+  const a = new Uint8Array(buf);
+  for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function jwtVapid(aud, env) {
+  const chave = await crypto.subtle.importKey(
+    'jwk',
+    { kty: 'EC', crv: 'P-256', x: VAPID_X, y: VAPID_Y, d: env.VAPID_PRIVATE, ext: true },
+    { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']
+  );
+  const cab = b64url(new TextEncoder().encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
+  const corpo = b64url(new TextEncoder().encode(JSON.stringify({
+    aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: VAPID_SUB,
+  })));
+  const dados = new TextEncoder().encode(cab + '.' + corpo);
+  const ass = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, chave, dados);
+  return cab + '.' + corpo + '.' + b64url(ass);
+}
+
+async function avisarTelemovel(env) {
+  if (!env.VAPID_PRIVATE) return;
+  const { results } = await env.DB.prepare('SELECT endpoint FROM subscricoes').all();
+  if (!results || !results.length) return;
+
+  const porOrigem = {};
+  for (const r of results) {
+    try { (porOrigem[new URL(r.endpoint).origin] ||= []).push(r.endpoint); } catch (e) {}
+  }
+  for (const origem of Object.keys(porOrigem)) {
+    let jwt;
+    try { jwt = await jwtVapid(origem, env); } catch (e) { continue; }
+    for (const endpoint of porOrigem[origem]) {
+      try {
+        const r = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'TTL': '600',
+            'Urgency': 'high',
+            'Content-Length': '0',
+            'Authorization': `vapid t=${jwt}, k=${VAPID_PUBLIC}`,
+          },
+        });
+        // 404 ou 410: o telemovel desinstalou ou revogou. Limpa-se.
+        if (r.status === 404 || r.status === 410) {
+          await env.DB.prepare('DELETE FROM subscricoes WHERE endpoint = ?').bind(endpoint).run();
+        }
+      } catch (e) { /* um aviso falhado nao pode partir o pedido */ }
+    }
+  }
+}
+
+async function subscrever(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false }, 400); }
+  if (!b.endpoint) return j({ ok: false, erro: 'sem endpoint' }, 400);
+  await env.DB.prepare(
+    `INSERT INTO subscricoes (endpoint, p256dh, auth, criado_em) VALUES (?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`
+  ).bind(limpar(b.endpoint, 700), limpar(b.p256dh, 200), limpar(b.auth, 100),
+         new Date().toISOString()).run();
+  return j({ ok: true });
+}
+
+async function testarAviso(request, env, ctx) {
+  ctx.waitUntil(avisarTelemovel(env));
+  return j({ ok: true });
+}
+
 // ---------------------------------------------------------------- pedidos
 
-async function novoPedido(request, env) {
+async function novoPedido(request, env, ctx) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
 
@@ -101,6 +182,8 @@ async function novoPedido(request, env) {
     token, soDigitos(b.telefone), limpar(b.origem, 60), limpar(b.campanha, 80),
     dia, ensaio
   ).first();
+
+  if (ctx && ctx.waitUntil) ctx.waitUntil(avisarTelemovel(env));
 
   return j({ ok: true, id: res.id, numero: res.numero, token: res.token, dia,
              estado: await estadoDoDia(env.DB, dia) });
@@ -320,6 +403,25 @@ export default {
     const url = new URL(request.url);
     const p = url.pathname;
 
+    // Atalhos curtos e limpos para divulgacao. Guardam a origem num cookie
+    // e mandam o visitante para o endereco normal, sem parametros a vista.
+    const ATALHOS = {
+      '/ig': 'instagram', '/story': 'instagram-stories', '/meta': 'meta',
+      '/fb': 'facebook', '/g': 'google-perfil', '/gr': 'grupos', '/papel': 'papel',
+    };
+    const atalho = ATALHOS[p.replace(/\/$/, '')];
+    if (atalho) {
+      const campanha = url.searchParams.get('c') || '';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          'Location': '/',
+          'Set-Cookie': `origem=${encodeURIComponent(atalho)}|${encodeURIComponent(campanha)}; Path=/; Max-Age=2592000; SameSite=Lax`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+
     // Paginas: o browser pode guardar, mas tem de confirmar com o servidor
     // se ha versao nova antes de a reutilizar. Sem isto, quem deixa a loja
     // aberta fica preso a uma versao antiga sem dar por nada.
@@ -341,7 +443,7 @@ export default {
         return j({ ok: true, estado: await estadoDoDia(env.DB, diaLisboa()), hora: horaLisboa() });
       }
       if (p === '/api/pedido' && request.method === 'POST') {
-        return await novoPedido(request, env);
+        return await novoPedido(request, env, ctx);
       }
       if (p === '/api/acompanhar' && request.method === 'GET') {
         return await acompanhar(request, env);
@@ -357,6 +459,9 @@ export default {
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
+        if (p === '/api/painel/subscrever' && request.method === 'POST') return await subscrever(request, env);
+        if (p === '/api/painel/testar-aviso' && request.method === 'POST') return await testarAviso(request, env, ctx);
+        if (p === '/api/painel/chave' && request.method === 'GET') return j({ ok: true, chave: VAPID_PUBLIC });
       }
 
       return j({ ok: false, erro: 'nao existe' }, 404);

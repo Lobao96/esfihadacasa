@@ -1543,6 +1543,12 @@
       const q = new URLSearchParams(location.search);
       const utm = (q.get('utm_source') || '').toLowerCase().slice(0, 40);
       if (utm) return { origem: utm, campanha: (q.get('utm_campaign') || '').slice(0, 80) };
+      // Atalho curto (/ig, /meta…): a origem vem num cookie posto pelo servidor.
+      const ck = (document.cookie.match(/(?:^|; )origem=([^;]*)/) || [])[1];
+      if (ck) {
+        const par = decodeURIComponent(ck).split('|');
+        if (par[0]) return { origem: par[0].slice(0, 40), campanha: (par[1] || '').slice(0, 80) };
+      }
       const r = document.referrer;
       if (!r) return { origem: 'direto', campanha: '' };
       const h = new URL(r).hostname.replace(/^www\./, '').toLowerCase();

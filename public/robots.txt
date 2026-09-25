@@ -1,7 +1,7 @@
 User-agent: *
 Allow: /
 
-Disallow: /teste-k7m2q9/
+Disallow: /teste/
 Disallow: /painel/
 Disallow: /admin/
 Disallow: /pedido/
