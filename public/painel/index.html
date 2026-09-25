@@ -248,6 +248,15 @@
       relogio();
       estadoAvisos();
       religarAvisos();
+      limparContador();
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) { limparContador(); carregar(); }
+      });
+      if (navigator.serviceWorker) {
+        navigator.serviceWorker.addEventListener('message', ev => {
+          if (ev.data && ev.data.tipo === 'pedido-novo') carregar();
+        });
+      }
     } catch (e) {
       document.getElementById('loginErro').style.display = 'block';
     }
@@ -353,6 +362,17 @@
     } catch (e) {
       mostrarAviso('Não consegui ligar os avisos: ' + (e && e.message ? e.message : e));
     }
+  }
+
+  // Sempre que o painel fica à vista, limpa o número por cima do ícone:
+  // se estás a olhar para a lista, já não há nada "por ver".
+  function limparContador() {
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ tipo: 'limpar-contador' });
+      }
+      if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+    } catch (e) {}
   }
 
   // Se já foram ligados, volta a registar em silêncio a cada abertura.
