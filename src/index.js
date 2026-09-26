@@ -176,16 +176,16 @@ async function tokenUber(env) {
   return tokenCache.valor;
 }
 
-// O que o cliente paga = o que o Uber cobra, arredondado a subir para os
-// 10 centimos, com um acrescimo que cobre embalagem e imprevistos.
-const ENTREGA_ACRESCIMO_CENT = 0;
-const ENTREGA_MINIMO_CENT = 0;
+// O cliente paga sempre um valor fixo, seja qual for o custo real do Uber
+// (mesmo quando o Uber oferece entrega mais barata ou gratis) — esse valor
+// fixo é o que subsidia as zonas mais caras. O custo real e os minutos
+// ficam registados no pedido só para analise interna.
+const ENTREGA_FIXA_CENT = 399;
 
-function precoAoCliente(feeCent) {
-  let v = (feeCent || 0) + ENTREGA_ACRESCIMO_CENT;
-  v = Math.ceil(v / 10) * 10;
-  return Math.max(ENTREGA_MINIMO_CENT, v);
-}
+// Se o Uber demorar mais do que isto a entregar, não aceitamos o pedido
+// para essa morada — é a fronteira que decide "fazemos/não fazemos
+// entrega ali", em vez de um raio fixo no mapa.
+const ENTREGA_ETA_MAX_MIN = 15;
 
 async function cotacao(request, env) {
   if (!env.UBER_CLIENT_SECRET || !env.UBER_PICKUP) {
@@ -225,9 +225,15 @@ async function cotacao(request, env) {
   if (!r.ok) {
     return j({ ok: false, erro: 'sem cotacao', detalhe: d && (d.code || d.message) || r.status }, 200);
   }
+
+  const minutos = d.duration || null;
+  if (minutos && minutos > ENTREGA_ETA_MAX_MIN) {
+    return j({ ok: false, erro: 'fora_de_alcance', minutos }, 200);
+  }
+
   return j({
     ok: true,
-    fee_cent: precoAoCliente(d.fee),
+    fee_cent: ENTREGA_FIXA_CENT,
     custo_cent: d.fee || 0,
     quote_id: d.id || null,
     minutos: d.duration || null,

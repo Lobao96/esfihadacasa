@@ -1462,7 +1462,7 @@
       lines.push("Endereço: " + (addr || "(mando em seguida)") + (cp ? ", " + cp : ""));
       lines.push("Localidade: " + (localidade === '__outra' ? "(fora da lista — a confirmar)" : (localidade || "(a informar)")));
       if (moradaConfirmada) lines.push("Morada confirmada pelo cliente ✔");
-      if (entregaCotada) lines.push("Taxa de entrega: " + fmt(deliveryFee()) + " (calculada para a morada)");
+      if (entregaCotada) lines.push("Taxa de entrega: " + fmt(deliveryFee()));
       else if (currentZone()) lines.push("Taxa de entrega: " + fmt(deliveryFee()) + " (" + currentZone().label + ")");
     }
     lines.push("");
@@ -1713,6 +1713,7 @@
   // ---- preço real da entrega, vindo do Uber ----
   let entregaCotada = null;      // { fee_cent, quote_id } quando o Uber responde
   let temporizadorCotacao = null;
+  let foraDeAlcance = false;     // true = esta morada fica fora da zona de entrega
 
   // A confirmação vale para a morada que o cliente leu. Se ele mexer no
   // texto depois de confirmar, o visto cai e tem de confirmar outra vez.
@@ -1769,6 +1770,7 @@
   }
 
   async function pedirCotacao() {
+    foraDeAlcance = false;
     if (orderType !== 'entrega') { caixaCotacao('', ''); return; }
     const morada = (document.getElementById('addrInput') || {}).value || '';
     const cp = (document.getElementById('cpInput') || {}).value || '';
@@ -1785,17 +1787,26 @@
       const d = await r.json();
       if (d && d.ok) {
         entregaCotada = { fee_cent: d.fee_cent, quote_id: d.quote_id };
-        const min = d.minutos ? ` · cerca de ${d.minutos} min` : '';
-        caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>${min}`);
-      } else {
+        caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>`);
+      } else if (d && d.erro === 'fora_de_alcance') {
         entregaCotada = null;
+        foraDeAlcance = true;
         caixaCotacao('falha',
-          'Não consegui calcular a entrega para essa morada agora. ' +
-          'Fica o valor da sua zona; se houver diferença, a gente avisa no WhatsApp.');
+          '<strong>Ainda não entregamos nessa morada</strong> — fica longe demais da nossa cozinha ' +
+          'para chegar quente e a tempo. Pode escolher <strong>levantamento no local</strong>, se quiser.');
+      } else {
+        // falha tecnica (sem ser distancia): mantem-se o valor fixo da
+        // entrega, o pedido segue e confirma-se tudo pelo WhatsApp.
+        entregaCotada = { fee_cent: 399, quote_id: null };
+        caixaCotacao('falha',
+          'Não consegui confirmar o tempo de entrega agora, mas o valor da entrega é sempre ' +
+          `<strong>${fmt(3.99)}</strong>. Vamos confirmar tudo consigo pelo WhatsApp.`);
       }
     } catch (e) {
-      entregaCotada = null;
-      caixaCotacao('falha', 'Sem ligação para calcular a entrega. Fica o valor da sua zona.');
+      entregaCotada = { fee_cent: 399, quote_id: null };
+      caixaCotacao('falha',
+        `Sem ligação para confirmar o tempo de entrega, mas o valor é sempre ${fmt(3.99)}. ` +
+        'Vamos confirmar tudo consigo pelo WhatsApp.');
     }
     updateTotal();
   }
@@ -1835,6 +1846,7 @@
     if (orderType === 'entrega') {
       const m = moradaEscrita();
       if (m.length < 6) faltas.push('Entrega: falta escrever a morada e o código postal.');
+      else if (foraDeAlcance) faltas.push('Entrega: não fazemos entrega para essa morada. Escolha levantamento no local.');
       else if (moradaConfirmada !== m) faltas.push('Entrega: falta confirmar a morada na caixa amarela.');
     }
     return faltas;
