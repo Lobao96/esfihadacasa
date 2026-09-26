@@ -284,6 +284,19 @@
     color: var(--ink); background: rgba(244,185,66,0.2);
     padding: 8px 10px; border-radius: 8px; font-weight: 600;
   }
+  #cpInput {
+    width: 100%; font-family: inherit; font-size: 1rem; font-weight: 700;
+    padding: 11px 13px; margin-top: 8px; border: 1.5px solid rgba(58,31,18,0.18);
+    border-radius: 10px; background: var(--white); color: var(--ink);
+  }
+  #cpInput:focus { outline: none; border-color: var(--red); }
+  .cotacao {
+    margin-top: 10px; padding: 11px 13px; border-radius: 10px;
+    font-size: 0.86rem; font-weight: 700; line-height: 1.45; display: none;
+  }
+  .cotacao.ok { background: rgba(30,142,74,0.10); color: #146634; border: 1.5px solid #1E8E4A; }
+  .cotacao.espera { background: rgba(58,31,18,0.05); color: var(--ink-soft); }
+  .cotacao.falha { background: rgba(244,185,66,0.18); color: var(--ink); border: 1.5px dashed var(--gold); }
   .zone-note { font-size: 0.74rem; color: var(--ink-soft); margin: 8px 0 0; }
 
   .legal { margin-top: 28px; }
@@ -615,7 +628,11 @@
       </div>
       <div class="addr-field" id="addrField" style="display:none;">
         <div id="zoneList" class="zone-list"></div>
-        <input type="text" id="addrInput" placeholder="Endereço de entrega">
+        <input type="text" id="addrInput" placeholder="Rua, número e andar"
+               oninput="agendarCotacao()">
+        <input type="text" id="cpInput" placeholder="Código postal (ex.: 8500-692)"
+               inputmode="numeric" maxlength="9" oninput="agendarCotacao()">
+        <div class="cotacao" id="cotacao"></div>
         <p class="zone-note">Entregamos até 10 km de Portimão: Portimão centro, Parchal, Praia da Rocha, Praia do Vau, Alvor, Estômbar, Ferragudo e Mexilhoeira Grande.</p>
       </div>
 
@@ -1422,9 +1439,11 @@
     lines.push(orderType === 'entrega' ? "Modo: Entrega" : "Modo: Retirada");
     if (orderType === 'entrega') {
       const addr = document.getElementById('addrInput').value.trim();
-      lines.push("Endereço: " + (addr || "(mando em seguida)"));
+      const cp = (document.getElementById('cpInput') || {}).value.trim();
+      lines.push("Endereço: " + (addr || "(mando em seguida)") + (cp ? ", " + cp : ""));
       lines.push("Localidade: " + (localidade === '__outra' ? "(fora da lista — a confirmar)" : (localidade || "(a informar)")));
-      if (currentZone()) lines.push("Taxa de entrega: " + fmt(deliveryFee()) + " (" + currentZone().label + ")");
+      if (entregaCotada) lines.push("Taxa de entrega: " + fmt(deliveryFee()) + " (calculada para a morada)");
+      else if (currentZone()) lines.push("Taxa de entrega: " + fmt(deliveryFee()) + " (" + currentZone().label + ")");
     }
     lines.push("");
     lines.push("Total estimado: " + fmt(computeTotal()));
@@ -1443,6 +1462,7 @@
   }
 
   function deliveryFee() {
+    if (orderType === 'entrega' && entregaCotada) return entregaCotada.fee_cent / 100;
     const z = currentZone();
     return z ? z.fee : 0;
   }
@@ -1451,6 +1471,7 @@
     localidade = val;
     renderZoneInfo();
     updateTotal();
+    agendarCotacao();
   }
 
   function renderZones() {
@@ -1667,6 +1688,58 @@
     return linhas;
   }
 
+  // ---- preço real da entrega, vindo do Uber ----
+  let entregaCotada = null;      // { fee_cent, quote_id } quando o Uber responde
+  let temporizadorCotacao = null;
+
+  function agendarCotacao() {
+    clearTimeout(temporizadorCotacao);
+    entregaCotada = null;
+    updateTotal();
+    temporizadorCotacao = setTimeout(pedirCotacao, 900);
+  }
+
+  function caixaCotacao(classe, texto) {
+    const el = document.getElementById('cotacao');
+    if (!el) return;
+    if (!texto) { el.style.display = 'none'; return; }
+    el.className = 'cotacao ' + classe;
+    el.innerHTML = texto;
+    el.style.display = 'block';
+  }
+
+  async function pedirCotacao() {
+    if (orderType !== 'entrega') { caixaCotacao('', ''); return; }
+    const morada = (document.getElementById('addrInput') || {}).value || '';
+    const cp = (document.getElementById('cpInput') || {}).value || '';
+    if (morada.trim().length < 6) { caixaCotacao('', ''); return; }
+
+    caixaCotacao('espera', 'A calcular a entrega para a sua morada…');
+    try {
+      const r = await fetch(API + '/cotacao', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ morada: morada.trim(), codigo_postal: cp.trim(),
+                               localidade: localidade || '' }),
+      });
+      const d = await r.json();
+      if (d && d.ok) {
+        entregaCotada = { fee_cent: d.fee_cent, quote_id: d.quote_id };
+        const min = d.minutos ? ` · cerca de ${d.minutos} min` : '';
+        caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>${min}`);
+      } else {
+        entregaCotada = null;
+        caixaCotacao('falha',
+          'Não consegui calcular a entrega para essa morada agora. ' +
+          'Fica o valor da sua zona; se houver diferença, a gente avisa no WhatsApp.');
+      }
+    } catch (e) {
+      entregaCotada = null;
+      caixaCotacao('falha', 'Sem ligação para calcular a entrega. Fica o valor da sua zona.');
+    }
+    updateTotal();
+  }
+
   async function verEstadoLoja() {
     try {
       const r = await fetch(API + '/estado', { cache: 'no-store' });
@@ -1741,7 +1814,15 @@
           campanha: ORIGEM.campanha,
           total_cent: Math.round(computeTotal() * 100),
           n_esfihas: contaEsfihasTotal(),
-          itens: { linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido() },
+          itens: {
+            linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido(),
+            entrega: orderType === 'entrega'
+              ? { cent: Math.round(deliveryFee() * 100),
+                  cotado: !!entregaCotada,
+                  quote_id: entregaCotada ? entregaCotada.quote_id : null,
+                  codigo_postal: (document.getElementById('cpInput') || {}).value || '' }
+              : null,
+          },
           mensagem: buildMessage(),
         }),
       });

@@ -147,6 +147,94 @@ async function testarAviso(request, env, ctx) {
   return j({ ok: true });
 }
 
+// ---------------------------------------------------------------- entregas
+// Cotacao real do Uber Direct: o cliente escreve a morada e o site pergunta
+// ao Uber quanto custa levar ate la. A morada de recolha vive so aqui no
+// servidor, nunca na pagina.
+
+let tokenCache = { valor: null, expira: 0 };
+
+async function tokenUber(env) {
+  if (tokenCache.valor && Date.now() < tokenCache.expira) return tokenCache.valor;
+  const corpo = new URLSearchParams({
+    client_id: env.UBER_CLIENT_ID || '',
+    client_secret: env.UBER_CLIENT_SECRET || '',
+    grant_type: 'client_credentials',
+    scope: 'eats.deliveries',
+  });
+  const r = await fetch('https://auth.uber.com/oauth/v2/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: corpo.toString(),
+  });
+  if (!r.ok) throw new Error('uber auth ' + r.status);
+  const d = await r.json();
+  tokenCache = {
+    valor: d.access_token,
+    expira: Date.now() + Math.max(60, (d.expires_in || 3600) - 300) * 1000,
+  };
+  return tokenCache.valor;
+}
+
+// O que o cliente paga = o que o Uber cobra, arredondado a subir para os
+// 10 centimos, com um acrescimo que cobre embalagem e imprevistos.
+const ENTREGA_ACRESCIMO_CENT = 0;
+const ENTREGA_MINIMO_CENT = 0;
+
+function precoAoCliente(feeCent) {
+  let v = (feeCent || 0) + ENTREGA_ACRESCIMO_CENT;
+  v = Math.ceil(v / 10) * 10;
+  return Math.max(ENTREGA_MINIMO_CENT, v);
+}
+
+async function cotacao(request, env) {
+  if (!env.UBER_CLIENT_SECRET || !env.UBER_PICKUP) {
+    return j({ ok: false, erro: 'sem ligacao ao uber' }, 503);
+  }
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+
+  const rua = limpar(b.morada, 200);
+  if (!rua || rua.length < 5) return j({ ok: false, erro: 'morada curta' }, 400);
+
+  const destino = {
+    street_address: [rua],
+    city: limpar(b.localidade, 60) || 'Portimão',
+    state: 'Faro',
+    zip_code: limpar(b.codigo_postal, 12) || '8500',
+    country: 'PT',
+  };
+
+  let token;
+  try { token = await tokenUber(env); }
+  catch (e) { return j({ ok: false, erro: 'auth' }, 502); }
+
+  const r = await fetch(
+    `https://api.uber.com/v1/customers/${env.UBER_CUSTOMER_ID}/delivery_quotes`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        pickup_address: env.UBER_PICKUP,
+        dropoff_address: JSON.stringify(destino),
+      }),
+    }
+  );
+
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    return j({ ok: false, erro: 'sem cotacao', detalhe: d && (d.code || d.message) || r.status }, 200);
+  }
+  return j({
+    ok: true,
+    fee_cent: precoAoCliente(d.fee),
+    custo_cent: d.fee || 0,
+    quote_id: d.id || null,
+    minutos: d.duration || null,
+    expira: d.expires || null,
+  });
+}
+
 // ---------------------------------------------------------------- pedidos
 
 async function novoPedido(request, env, ctx) {
@@ -450,6 +538,9 @@ export default {
       }
       if (p === '/api/visita' && request.method === 'POST') {
         return await registarVisita(request, env);
+      }
+      if (p === '/api/cotacao' && request.method === 'POST') {
+        return await cotacao(request, env);
       }
 
       if (p.startsWith('/api/painel/')) {
