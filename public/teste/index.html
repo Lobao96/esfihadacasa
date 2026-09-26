@@ -301,7 +301,6 @@
   .confirma em { display: block; font-style: normal; font-weight: 800; color: var(--red-dark); margin-top: 3px; }
   .confirma small { display: block; font-weight: 600; color: var(--ink-soft); margin-top: 5px; font-size: 0.78rem; }
   .confirma.feito { background: rgba(30,142,74,0.10); border-color: #1E8E4A; }
-  .zone-note { font-size: 0.74rem; color: var(--ink-soft); margin: 8px 0 0; }
 
   .legal { margin-top: 28px; }
   .legal-links {
@@ -631,7 +630,7 @@
         <button id="btnLevantamento" onclick="setOrderType('levantamento')">🧺 Retirada</button>
       </div>
       <div class="addr-field" id="addrField" style="display:none;">
-        <div class="zone-info ok">Taxa de entrega fixa: 3,99€</div>
+        <div class="zone-info ok">Taxa de entrega: 3,99€</div>
         <input type="text" id="addrInput" placeholder="Rua, número e andar"
                oninput="agendarCotacao()">
         <input type="text" id="cpInput" placeholder="Código postal (ex.: 8500-692)"
@@ -744,7 +743,7 @@
   // Zonas de entrega a partir da cozinha, em Portimão
   // TODO: afinar as taxas quando souberes o custo real do Uber Direct por distância
   // Taxa de entrega única e fixa (Portimão e arredores até 10 km).
-  const TAXA_ENTREGA_FIXA = 3.99;
+  const TAXA_ENTREGA = 3.99;
 
   // Mantido só para decodificar códigos de pedidos antigos (feitos quando
   // a taxa ainda variava por zona) no leitor do painel — não é mais usado
@@ -1457,7 +1456,7 @@
 
   function deliveryFee() {
     if (orderType === 'entrega' && entregaCotada) return entregaCotada.fee_cent / 100;
-    return orderType === 'entrega' ? TAXA_ENTREGA_FIXA : 0;
+    return orderType === 'entrega' ? TAXA_ENTREGA : 0;
   }
 
   function subtotal() {
@@ -1732,16 +1731,16 @@
       } else {
         // falha tecnica (sem ser distancia): mantem-se o valor fixo da
         // entrega, o pedido segue e confirma-se tudo pelo WhatsApp.
-        entregaCotada = { fee_cent: 399, quote_id: null };
+        entregaCotada = { fee_cent: Math.round(TAXA_ENTREGA * 100), quote_id: null };
         caixaCotacao('falha',
-          'Não consegui confirmar o tempo de entrega agora, mas o valor da entrega é sempre ' +
-          `<strong>${fmt(3.99)}</strong>. Vamos confirmar tudo consigo pelo WhatsApp.`);
+          'Não consegui confirmar a entrega agora, mas o pedido segue à mesma — ' +
+          'vamos confirmar tudo consigo pelo WhatsApp.');
       }
     } catch (e) {
-      entregaCotada = { fee_cent: 399, quote_id: null };
+      entregaCotada = { fee_cent: Math.round(TAXA_ENTREGA * 100), quote_id: null };
       caixaCotacao('falha',
-        `Sem ligação para confirmar o tempo de entrega, mas o valor é sempre ${fmt(3.99)}. ` +
-        'Vamos confirmar tudo consigo pelo WhatsApp.');
+        'Sem ligação para confirmar a entrega agora, mas o pedido segue à mesma — ' +
+        'vamos confirmar tudo consigo pelo WhatsApp.');
     }
     updateTotal();
   }
