@@ -1669,13 +1669,19 @@
     mostrarFaltas([]);
   }
 
+  function cpValido(cp) {
+    return /^\d{4}-\d{3}$/.test((cp || '').trim());
+  }
+
   function renderConfirmacao() {
     const cor = document.getElementById('confirmaCaixa');
     const cx = document.getElementById('confirmaMorada');
     const txt = document.getElementById('confirmaTexto');
     if (!cor || !cx || !txt) return;
+    const addr = ((document.getElementById('addrInput') || {}).value || '').trim();
+    const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
     const m = moradaEscrita();
-    if (orderType !== 'entrega' || m.length < 6) {
+    if (orderType !== 'entrega' || addr.length < 6 || !cpValido(cp)) {
       cor.style.display = 'none'; cx.checked = false; moradaConfirmada = null;
       cor.classList.remove('feito');
       return;
@@ -1732,15 +1738,11 @@
         // falha tecnica (sem ser distancia): mantem-se o valor fixo da
         // entrega, o pedido segue e confirma-se tudo pelo WhatsApp.
         entregaCotada = { fee_cent: Math.round(TAXA_ENTREGA * 100), quote_id: null };
-        caixaCotacao('falha',
-          'Não consegui confirmar a entrega agora, mas o pedido segue à mesma — ' +
-          'vamos confirmar tudo consigo pelo WhatsApp.');
+        caixaCotacao('', '');
       }
     } catch (e) {
       entregaCotada = { fee_cent: Math.round(TAXA_ENTREGA * 100), quote_id: null };
-      caixaCotacao('falha',
-        'Sem ligação para confirmar a entrega agora, mas o pedido segue à mesma — ' +
-        'vamos confirmar tudo consigo pelo WhatsApp.');
+      caixaCotacao('', '');
     }
     updateTotal();
   }
@@ -1778,8 +1780,11 @@
     });
     if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
     if (orderType === 'entrega') {
+      const addr = ((document.getElementById('addrInput') || {}).value || '').trim();
+      const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
       const m = moradaEscrita();
-      if (m.length < 6) faltas.push('Entrega: falta escrever a morada e o código postal.');
+      if (addr.length < 6) faltas.push('Entrega: falta escrever a morada completa (rua, número e andar).');
+      else if (!cpValido(cp)) faltas.push('Entrega: falta o código postal, no formato 0000-000.');
       else if (foraDeAlcance) faltas.push('Entrega: não fazemos entrega para essa morada. Escolha levantamento no local.');
       else if (moradaConfirmada !== m) faltas.push('Entrega: falta confirmar a morada na caixa amarela.');
     }
