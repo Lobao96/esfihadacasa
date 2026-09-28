@@ -189,21 +189,6 @@
 
   function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + '€'; }
 
-  // Recibo em texto (mesmos dados da página /painel/recibos.html) para
-  // mandar ao cliente pelo WhatsApp assim que o pedido é marcado como pago.
-  function reciboTexto(p) {
-    const d = dadosDe(p);
-    const linhas = (d.linhas && d.linhas.length) ? d.linhas : [];
-    const entregaCent = (d.entrega && d.entrega.cent) ? d.entrega.cent : 0;
-    const subtotalCent = Math.max(0, (p.total_cent || 0) - entregaCent);
-    let txt = `🧾 *Recibo — Pedido #${p.numero}*\nEsfiha da Casa\n\n`;
-    txt += linhas.map(l => l.trim()).join('\n');
-    txt += `\n—\nSubtotal: ${eur(subtotalCent)}`;
-    if (entregaCent) txt += `\nTaxa de entrega: ${eur(entregaCent)}`;
-    txt += `\n*Total: ${eur(p.total_cent)}*`;
-    return txt;
-  }
-
   // Mensagens prontas para o cliente. Abrem o WhatsApp já escritas; basta enviar.
   function mensagemPara(p, momento) {
     const link = location.origin + '/pedido/?t=' + p.token;
@@ -215,7 +200,7 @@
           ? `Pra gente começar, falta só o pagamento por MB Way de ${eur(p.total_cent)} para o 938 211 480.\n\n`
           : '') +
         `Você pode acompanhar tudo por aqui:\n${link}`,
-      pago: `Pagamento recebido, obrigado! 🙌\n\n${reciboTexto(p)}\n\nJá vamos colocar seu pedido ${n} na bancada.\n\n${link}`,
+      pago: `Pagamento recebido, obrigado! 🙌\nAqui está o seu recibo digital:\n${link}\n\nJá vamos colocar seu pedido ${n} na bancada.`,
       preparacao: `Seu pedido ${n} já está sendo feito 🔥\n\n${link}`,
       caminho: `Seu pedido ${n} saiu para entrega 🛵\nFica de olho no telemóvel!\n\n${link}`,
       pronto: `Seu pedido ${n} está pronto pra retirada 🫓\nQuando puder vir, é só avisar aqui.`,

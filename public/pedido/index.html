@@ -59,6 +59,28 @@
   .erro p{font-size:.9rem;color:var(--ink-soft);line-height:1.5}
   .ensaio{background:#2B2B2B;color:var(--gold);text-align:center;padding:10px;
     font-weight:800;font-size:.78rem;letter-spacing:.03em}
+
+  .recibo{background:var(--white);border-radius:18px;padding:22px 20px;margin-top:16px;
+    box-shadow:0 6px 22px rgba(58,31,18,.08)}
+  .recibo .cab{text-align:center;margin-bottom:10px}
+  .recibo .cab img{width:52px;height:52px;border-radius:12px;display:block;margin:0 auto 6px}
+  .recibo .cab .marca2{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.1rem}
+  .recibo .cab .sub2{font-size:.78rem;color:var(--ink-soft);margin-top:2px}
+  table.ritens{width:100%;border-collapse:collapse;margin:10px 0 4px}
+  table.ritens th{text-align:left;font-weight:800;font-size:.85rem;border-bottom:2px solid var(--ink);padding:0 0 6px}
+  table.ritens th.pr,table.ritens td.pr{text-align:right;white-space:nowrap}
+  table.ritens td{padding:6px 0;font-size:.86rem;border-bottom:1px dashed rgba(58,31,18,.14);vertical-align:top}
+  table.ritens td.pr{font-weight:700}
+  table.ritens tr.sub td{border-bottom:none;padding:1px 0 1px 12px;font-size:.76rem;color:var(--ink-soft)}
+  .rlinha{display:flex;justify-content:space-between;font-size:.86rem;padding:4px 0;color:var(--ink-soft)}
+  .rtotal{display:flex;justify-content:space-between;border-top:2px solid var(--ink);margin-top:4px;padding-top:8px;font-weight:800;font-size:1.05rem}
+  .rrodape{text-align:center;font-size:.76rem;color:var(--ink-soft);margin-top:14px;padding-top:10px;border-top:1px dashed rgba(58,31,18,.14)}
+  .rrodape .num{font-weight:800;color:var(--ink)}
+  @media print{
+    header,.wa,.rodape,#ensaio{display:none !important}
+    body{background:#fff}
+    .passos{display:none}
+  }
 </style>
 </head>
 <body>
@@ -109,6 +131,59 @@
        <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a></div>`;
   }
 
+  function dadosDe(p) {
+    let d = null;
+    try { d = JSON.parse(p.itens || 'null'); } catch (e) {}
+    if (Array.isArray(d)) return { linhas: d, entrega: null };
+    return d || { linhas: [], entrega: null };
+  }
+
+  function linhasTabela(d) {
+    const linhas = (d.linhas && d.linhas.length) ? d.linhas : [];
+    return linhas.map(l => {
+      const indentada = /^\s{2,}/.test(l);
+      const m = l.match(/^(.*?)\s—\s([\d,]+€)\s*$/);
+      if (m) return { texto: m[1].trim(), preco: m[2], sub: indentada };
+      return { texto: l.trim(), preco: '', sub: indentada };
+    });
+  }
+
+  function itensTabelaHtml(d) {
+    const linhas = linhasTabela(d);
+    if (!linhas.length) return '';
+    const corpo = linhas.map(l => `
+      <tr${l.sub ? ' class="sub"' : ''}><td>${esc(l.texto)}</td><td class="pr">${l.preco ? esc(l.preco) : ''}</td></tr>`).join('');
+    return `<table class="ritens"><thead><tr><th>Itens</th><th class="pr">Preço</th></tr></thead><tbody>${corpo}</tbody></table>`;
+  }
+
+  // Recibo digital: só aparece depois de o pagamento ser confirmado, como
+  // prova de pagamento que o cliente pode voltar a abrir a qualquer altura
+  // (o link é o mesmo que já recebe no WhatsApp).
+  function reciboHtml(p) {
+    if (!p.pago) return '';
+    const d = dadosDe(p);
+    const entregaCent = (d.entrega && d.entrega.cent) ? d.entrega.cent : 0;
+    const subtotalCent = Math.max(0, (p.total_cent || 0) - entregaCent);
+    let dataHora = '';
+    try {
+      const dt = new Date(p.criado_em);
+      dataHora = dt.toLocaleDateString('pt-PT') + ', ' + dt.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {}
+    return `
+      <div class="recibo">
+        <div class="cab">
+          <img src="/icon-512.png" alt="Esfiha da Casa">
+          <div class="marca2">Esfiha da Casa</div>
+          <div class="sub2">Recibo de consumidor final · Pedido #${p.numero}</div>
+        </div>
+        ${itensTabelaHtml(d)}
+        <div class="rlinha"><span>Subtotal</span><span>${eur(subtotalCent)}</span></div>
+        ${entregaCent ? `<div class="rlinha"><span>Taxa de entrega</span><span>${eur(entregaCent)}</span></div>` : ''}
+        <div class="rtotal"><span>Total pago</span><span>${eur(p.total_cent)}</span></div>
+        <div class="rrodape">${dataHora}<br><span class="num">Recibo: #${p.numero}</span></div>
+      </div>`;
+  }
+
   function pintar(p) {
     if (p.ensaio) document.getElementById('ensaio').style.display = 'block';
     const entrega = p.modo === 'entrega';
@@ -148,6 +223,8 @@
         </div>
         <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>
       </div>
+      ${reciboHtml(p)}
+      ${p.pago ? `<button class="wa" style="background:var(--ink-soft);border:none;font:inherit;cursor:pointer;width:100%" onclick="window.print()">🖨️ Guardar / imprimir recibo</button>` : ''}
       <p class="rodape">Esta página atualiza sozinha.<br>Pode deixá-la aberta e ir vendo.</p>`;
   }
 
