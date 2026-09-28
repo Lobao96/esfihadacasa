@@ -187,6 +187,25 @@ const ENTREGA_FIXA_CENT = 399;
 // entrega ali", em vez de um raio fixo no mapa.
 const ENTREGA_ETA_MAX_MIN = 15;
 
+// Lista fixa das localidades onde entregamos. Isto corre sempre, mesmo
+// que o Uber diga que uma morada fica a menos de 15 min (o transito varia
+// e a Google pode devolver o codigo postal errado se a morada estiver mal
+// escrita) -- por isso nunca e so o tempo do Uber a decidir "entregamos
+// aqui", tem sempre de bater certo com esta lista tambem. Cobre Portimao,
+// Praia da Rocha, Alvor, Ferragudo e Parchal; exclui de proposito Estombar,
+// Lagoa, Mexilhoeira Grande, Silves e qualquer outra localidade.
+const LOCALIDADES_SEGURAS = new Set([
+  'portimao', 'praia da rocha', 'alvor', 'ferragudo', 'parchal',
+]);
+
+function normalizarTexto(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function localidadeSegura(loc) {
+  return LOCALIDADES_SEGURAS.has(normalizarTexto(loc));
+}
+
 // Rede de seguranca por codigo postal. So entra em jogo quando o Uber falha
 // tecnicamente (nao responde, erro de rede, etc.) ou quando o autocomplete
 // de moradas nao estiver disponivel: nunca decide enquanto o Uber conseguir
@@ -325,6 +344,15 @@ async function cotacao(request, env) {
   const rua = limpar(b.morada, 200);
   if (!rua || rua.length < 5) return j({ ok: false, erro: 'morada curta' }, 400);
   const cp = limpar(b.codigo_postal, 12) || '';
+  const localidade = limpar(b.localidade, 60) || '';
+
+  // Filtro fixo por localidade: corre sempre, antes de perguntar ao Uber
+  // seja o que for. Uma morada fora desta lista nunca e aceite, nem que o
+  // Uber diga que da tempo -- e a localidade que decide a zona, o Uber so
+  // decide se dentro da zona ainda vale a pena por causa do transito.
+  if (!localidadeSegura(localidade)) {
+    return j({ ok: false, erro: 'fora_de_alcance' }, 200);
+  }
 
   // Uber nao respondeu (config em falta, falha de autenticacao, erro de
   // rede ou resposta invalida): cai-se na rede de seguranca do codigo

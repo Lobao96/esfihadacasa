@@ -1818,10 +1818,14 @@
         const principal = (pred.structuredFormat && pred.structuredFormat.mainText && pred.structuredFormat.mainText.text) || pred.text.text;
         addrEl.value = [rua || principal, numero].filter(Boolean).join(', ');
       }
+      // limpa sempre primeiro -- se a nova morada nao tiver localidade ou
+      // codigo postal, NUNCA se pode ficar com o valor antigo (de uma
+      // morada anterior) por preencher: isso ja fez uma morada em Silves
+      // ser aceite com o codigo postal antigo de Parchal ainda no campo.
       const locEl = document.getElementById('locInput');
-      if (locEl && localidade) locEl.value = localidade;
+      if (locEl) locEl.value = localidade || '';
       const cpEl = document.getElementById('cpInput');
-      if (cpEl && codigoPostal) cpEl.value = codigoPostal;
+      if (cpEl) cpEl.value = codigoPostal || '';
       // o numero pode ser escrito logo na rua (o autocomplete refina a
       // sugestao a medida que se escreve, tal como no Google Maps, e assim
       // a Google devolve o codigo postal certo para esse numero). So falta
