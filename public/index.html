@@ -235,6 +235,22 @@
     border: 1.5px solid var(--line); background: var(--bg); color: var(--text);
     font-family: 'Nunito', sans-serif; font-size: 0.92rem;
   }
+  .addr-wrap { position: relative; }
+  .addr-suggest {
+    list-style: none; margin: 0; padding: 0; position: absolute;
+    left: 0; right: 0; top: 100%; z-index: 40; background: var(--white);
+    border: 1.5px solid var(--line); border-top: none; border-radius: 0 0 10px 10px;
+    max-height: 220px; overflow-y: auto; box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+    display: none;
+  }
+  .addr-suggest.show { display: block; }
+  .addr-suggest li {
+    padding: 10px 12px; font-size: 0.85rem; cursor: pointer;
+    border-bottom: 1px solid rgba(58,31,18,0.06); color: var(--text);
+  }
+  .addr-suggest li:last-child { border-bottom: none; }
+  .addr-suggest li:active, .addr-suggest li:hover { background: rgba(58,31,18,0.06); }
+  .addr-suggest li small { display: block; color: var(--ink-soft); font-weight: 600; margin-top: 2px; }
 
   .card.drink { padding: 14px; }
   .drink-top { margin-bottom: 12px; }
@@ -626,8 +642,11 @@
       </div>
       <div class="addr-field" id="addrField" style="display:none;">
         <div class="zone-info ok">Taxa de entrega: 3,99€</div>
-        <input type="text" id="addrInput" placeholder="Rua, número e andar"
-               oninput="agendarCotacao()">
+        <div class="addr-wrap">
+          <input type="text" id="addrInput" placeholder="Rua, número e andar"
+                 autocomplete="off" oninput="onAddrInput()">
+          <ul class="addr-suggest" id="addrSuggest"></ul>
+        </div>
         <input type="text" id="locInput" placeholder="Localidade"
                oninput="agendarCotacao()">
         <input type="text" id="cpInput" placeholder="Código postal"
@@ -1676,6 +1695,125 @@
       ? digitos.slice(0, 4) + '-' + digitos.slice(4)
       : digitos;
   }
+
+  // Google Places (New) - autocomplete de moradas. A chave esta restrita por
+  // dominio (esfihadacasa.com) e por API (so Places API (New)), por isso e
+  // seguro ela aparecer no codigo do site. Se a Places API falhar por
+  // qualquer razao (rede, quota, chave bloqueada), desliga-se sozinha e o
+  // site cai para os 3 campos manuais de sempre, sem mostrar erro nenhum
+  // ao cliente.
+  const PLACES_API_KEY = 'AIzaSyDx-0Y0h2m5p_4yjsxjhuMjqJOZrqQOHNY';
+  const PORTIMAO_LAT = 37.1395, PORTIMAO_LNG = -8.5383;
+  let placesDisponivel = true;
+  let placesSessionToken = null;
+  let temporizadorSugestoes = null;
+
+  function novoSessionToken() {
+    try { return crypto.randomUUID(); }
+    catch (e) { return 'st-' + Date.now() + '-' + Math.random().toString(36).slice(2); }
+  }
+
+  function onAddrInput() {
+    agendarCotacao();
+    clearTimeout(temporizadorSugestoes);
+    const texto = (document.getElementById('addrInput') || {}).value || '';
+    if (!placesDisponivel || texto.trim().length < 4) { esconderSugestoes(); return; }
+    temporizadorSugestoes = setTimeout(() => buscarSugestoes(texto.trim()), 300);
+  }
+
+  function esconderSugestoes() {
+    const ul = document.getElementById('addrSuggest');
+    if (ul) { ul.classList.remove('show'); ul.innerHTML = ''; }
+  }
+
+  async function buscarSugestoes(texto) {
+    if (!placesSessionToken) placesSessionToken = novoSessionToken();
+    try {
+      const r = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': PLACES_API_KEY,
+        },
+        body: JSON.stringify({
+          input: texto,
+          sessionToken: placesSessionToken,
+          includedRegionCodes: ['pt'],
+          languageCode: 'pt-PT',
+          locationBias: {
+            circle: { center: { latitude: PORTIMAO_LAT, longitude: PORTIMAO_LNG }, radius: 30000.0 },
+          },
+        }),
+      });
+      if (!r.ok) { placesDisponivel = false; esconderSugestoes(); return; }
+      const d = await r.json();
+      const sugestoes = (d.suggestions || []).map(s => s.placePrediction).filter(Boolean).slice(0, 5);
+      renderSugestoes(sugestoes);
+    } catch (e) {
+      placesDisponivel = false;
+      esconderSugestoes();
+    }
+  }
+
+  function renderSugestoes(sugestoes) {
+    const ul = document.getElementById('addrSuggest');
+    if (!ul) return;
+    ul.innerHTML = '';
+    if (!sugestoes.length) { esconderSugestoes(); return; }
+    sugestoes.forEach(s => {
+      const principal = (s.structuredFormat && s.structuredFormat.mainText && s.structuredFormat.mainText.text) || s.text.text;
+      const secundario = (s.structuredFormat && s.structuredFormat.secondaryText && s.structuredFormat.secondaryText.text) || '';
+      const li = document.createElement('li');
+      li.textContent = principal;
+      if (secundario) {
+        const sm = document.createElement('small');
+        sm.textContent = secundario;
+        li.appendChild(sm);
+      }
+      li.addEventListener('mousedown', ev => { ev.preventDefault(); escolherSugestao(s); });
+      ul.appendChild(li);
+    });
+    ul.classList.add('show');
+  }
+
+  async function escolherSugestao(pred) {
+    esconderSugestoes();
+    const addrEl = document.getElementById('addrInput');
+    if (addrEl) addrEl.value = pred.text.text;
+    try {
+      const r = await fetch(
+        `https://places.googleapis.com/v1/${pred.placeId}?languageCode=pt-PT&sessionToken=${encodeURIComponent(placesSessionToken || '')}`,
+        { headers: { 'X-Goog-Api-Key': PLACES_API_KEY, 'X-Goog-FieldMask': 'addressComponents,formattedAddress' } }
+      );
+      placesSessionToken = null; // a sessao termina depois do Place Details
+      if (!r.ok) { agendarCotacao(); return; }
+      const d = await r.json();
+      const comps = d.addressComponents || [];
+      const porTipo = t => { const c = comps.find(c => (c.types || []).includes(t)); return c ? c.longText : ''; };
+      const numero = porTipo('street_number');
+      const rua = porTipo('route');
+      const localidade = porTipo('locality') || porTipo('postal_town') || porTipo('administrative_area_level_3') || '';
+      const cp = porTipo('postal_code');
+      const cpSufixo = porTipo('postal_code_suffix');
+      const codigoPostal = cp && cpSufixo ? (cp + '-' + cpSufixo) : cp;
+
+      if (addrEl) addrEl.value = [rua, numero].filter(Boolean).join(', ') || pred.text.text;
+      const locEl = document.getElementById('locInput');
+      if (locEl && localidade) locEl.value = localidade;
+      const cpEl = document.getElementById('cpInput');
+      if (cpEl && codigoPostal) cpEl.value = codigoPostal;
+    } catch (e) {
+      // morada escolhida mas os detalhes falharam: fica o texto que o
+      // cliente ja via na sugestao, ele pode corrigir os outros campos
+      // a mao -- nunca bloqueia o cliente.
+    }
+    agendarCotacao();
+  }
+
+  document.addEventListener('click', ev => {
+    const wrap = document.querySelector('.addr-wrap');
+    if (wrap && !wrap.contains(ev.target)) esconderSugestoes();
+  });
 
   function renderConfirmacao() {
     const cor = document.getElementById('confirmaCaixa');
