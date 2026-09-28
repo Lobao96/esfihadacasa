@@ -334,15 +334,19 @@ async function cotacao(request, env) {
 
   // Uber nao respondeu (config em falta, falha de autenticacao, erro de
   // rede ou resposta invalida): cai-se na rede de seguranca do codigo
-  // postal em vez de aceitar as cegas.
-  function semUber() {
+  // postal em vez de aceitar as cegas. "motivo" e so para diagnostico
+  // (nunca aparece para o cliente, so quem consultar a resposta a mao) --
+  // ajuda a perceber ONDE a chamada ao Uber esta a falhar.
+  function semUber(motivo, detalhe) {
     if (codigoPostalSeguro(cp)) {
-      return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT, custo_cent: 0, quote_id: null, minutos: null, expira: null });
+      return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT, custo_cent: 0, quote_id: null, minutos: null, expira: null, uber_motivo: motivo, uber_detalhe: detalhe });
     }
-    return j({ ok: false, erro: 'fora_de_alcance' }, 200);
+    return j({ ok: false, erro: 'fora_de_alcance', uber_motivo: motivo, uber_detalhe: detalhe }, 200);
   }
 
-  if (!env.UBER_CLIENT_SECRET || !env.UBER_PICKUP) return semUber();
+  if (!env.UBER_CLIENT_ID || !env.UBER_CLIENT_SECRET || !env.UBER_CUSTOMER_ID || !env.UBER_PICKUP) {
+    return semUber('sem_config');
+  }
 
   const destino = {
     street_address: [rua],
@@ -354,7 +358,7 @@ async function cotacao(request, env) {
 
   let token;
   try { token = await tokenUber(env); }
-  catch (e) { return semUber(); }
+  catch (e) { return semUber('falha_autenticacao', String(e && e.message || e)); }
 
   let r, d;
   try {
@@ -371,9 +375,9 @@ async function cotacao(request, env) {
     );
     d = await r.json().catch(() => ({}));
   } catch (e) {
-    return semUber();
+    return semUber('erro_de_rede', String(e && e.message || e));
   }
-  if (!r.ok) return semUber();
+  if (!r.ok) return semUber('uber_recusou_' + r.status, (d && (d.message || d.error || JSON.stringify(d))) || null);
 
   const minutos = d.duration || null;
   if (minutos && minutos > ENTREGA_ETA_MAX_MIN) {
