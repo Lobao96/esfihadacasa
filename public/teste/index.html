@@ -1901,7 +1901,7 @@
       });
       const d = await r.json();
       if (d && d.ok) {
-        entregaCotada = { fee_cent: d.fee_cent, quote_id: d.quote_id };
+        entregaCotada = { fee_cent: d.fee_cent, quote_id: d.quote_id, minutos: d.minutos || null, custo_cent: d.custo_cent || null };
         caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>`);
       } else {
         // fora de alcance, ou o Uber falhou e o codigo postal nao e da
@@ -2015,6 +2015,8 @@
               ? { cent: Math.round(deliveryFee() * 100),
                   cotado: !!entregaCotada,
                   quote_id: entregaCotada ? entregaCotada.quote_id : null,
+                  minutos: entregaCotada ? entregaCotada.minutos : null,
+                  custo_cent: entregaCotada ? entregaCotada.custo_cent : null,
                   codigo_postal: (document.getElementById('cpInput') || {}).value || '',
                   morada_confirmada: moradaConfirmada,
                   confirmada_em: moradaConfirmada ? new Date().toISOString() : null }

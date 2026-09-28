@@ -511,6 +511,8 @@
     if (!v.length) { el.innerHTML = '<div class="vazio">Nada por aqui.</div>'; return; }
     el.innerHTML = v.map(p => {
       const entrega = p.modo === 'entrega';
+      const dados = dadosDe(p);
+      const infoEntrega = entrega ? (dados.entrega || {}) : null;
       const prox = p.estado === 'novo' ? ['preparacao', 'Começar a fazer']
                  : p.estado === 'preparacao' ? (entrega ? ['caminho', 'Saiu para entrega'] : ['entregue', 'Foi levantado'])
                  : p.estado === 'caminho' ? ['entregue', 'Entregue'] : null;
@@ -528,10 +530,11 @@
           ${p.senha ? ' · senha ' + p.senha : ''}
           ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}
           ${entrega && p.morada ? '<br>' + p.morada : ''}
+          ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo Uber ' + eur(infoEntrega.custo_cent) : '') : ''}
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
         </div>
-        <div class="prod-lista">${producaoHtml(dadosDe(p))}</div>
+        <div class="prod-lista">${producaoHtml(dados)}</div>
         <div class="acoes">
           <button class="ac pago ${p.pago ? 'on' : ''}" onclick="marcar(${p.id}, {pago: ${p.pago ? 0 : 1}})">
             ${p.pago ? '✓ Pago' : 'Marcar pago'}
