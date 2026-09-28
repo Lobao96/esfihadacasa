@@ -185,14 +185,20 @@ async function tokenUber(env) {
 // ficam registados no pedido só para analise interna.
 const ENTREGA_FIXA_CENT = 399; // o que o cliente paga pela entrega
 
-// Quem decide se se entrega numa morada e o proprio Uber, com dois
-// limites: o tempo estimado (com uma margem -- 15 min e o alvo, mas ate
-// 20 min tudo bem se for so o transito a atrasar um pouco) e o custo que
-// o Uber cobra (o cliente paga sempre ENTREGA_FIXA_CENT, por isso o custo
-// do Uber nao pode ultrapassar isto em mais do que a margem que se aceita
-// perder por entrega). Uma morada so e recusada se ultrapassar um destes
-// dois limites -- nunca por estar numa localidade em vez de outra.
-const ENTREGA_ETA_MAX_MIN = 20;
+// Quem decide se se entrega numa morada e o proprio Uber, e o criterio
+// principal e o CUSTO: o cliente paga sempre ENTREGA_FIXA_CENT, por isso
+// o custo do Uber nao pode ultrapassar isto em mais do que a margem que
+// se aceita perder por entrega. Testado ao vivo: o custo do Uber sobe de
+// forma consistente com a distancia real (ex.: 3,94€ na propria rua da
+// cozinha, 6,09€ a ~1,5km), por isso e um bom filtro de zona.
+//
+// O campo "duration" da cotacao (usado antes como limite de 20min) NAO
+// serve para isto: testado ao vivo, tem sempre um piso de ~40min mesmo
+// para distancia zero (o Uber ainda nao despachou ninguem, e so uma
+// cotacao) -- nao reflete o tempo real da entrega. Fica como so uma rede
+// de seguranca contra casos verdadeiramente extremos; quem faz o corte
+// de zona e mesmo o custo.
+const ENTREGA_ETA_MAX_MIN = 60;
 const ENTREGA_MARGEM_MAX_CENT = 200; // perde-se no maximo 2€ por entrega
 const ENTREGA_CUSTO_MAX_CENT = ENTREGA_FIXA_CENT + ENTREGA_MARGEM_MAX_CENT; // 5,99€
 
