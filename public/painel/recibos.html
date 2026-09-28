@@ -34,7 +34,9 @@
 
   /* --- Recibo (estilo talão, uma folha por encomenda) --- */
   .recibo { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 26px 20px; margin-bottom: 20px; }
-  .recibo .loja { text-align: center; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.01em; margin-bottom: 2px; }
+  .recibo .cabecalho { text-align: center; margin-bottom: 2px; }
+  .recibo .cabecalho img { width: 56px; height: 56px; border-radius: 12px; display: block; margin: 0 auto 6px; }
+  .recibo .loja { font-size: 1.4rem; font-weight: 800; letter-spacing: 0.01em; }
   .recibo .subloja { text-align: center; font-size: 0.78rem; color: var(--ink-soft); margin-bottom: 14px; }
   table.itens { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
   table.itens th { text-align: left; font-weight: 700; font-size: 0.95rem; border-bottom: 2px solid var(--ink); padding: 0 0 6px; }
@@ -201,7 +203,10 @@
       const subtotalCent = Math.max(0, (p.total_cent || 0) - entregaCent);
       html += `
         <div class="recibo">
-          <div class="loja">Esfiha da Casa</div>
+          <div class="cabecalho">
+            <img src="/icon-512.png" alt="Esfiha da Casa">
+            <div class="loja">Esfiha da Casa</div>
+          </div>
           <div class="subloja">Recibo de consumidor final · Pedido #${p.numero}</div>
           ${enderecoHtml(p)}
           ${itensTabela(d)}
