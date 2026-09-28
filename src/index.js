@@ -373,6 +373,11 @@ async function cotacao(request, env) {
         body: JSON.stringify({
           pickup_address: env.UBER_PICKUP,
           dropoff_address: JSON.stringify(destino),
+          // Sem isto o Uber assume que a comida ainda nao esta pronta e
+          // devolve uma estimativa com uma folga grande por omissao (~30min)
+          // mesmo para moradas muito perto. Ao dizer que a recolha pode ser
+          // "agora", a estimativa reflete so o tempo real de despacho + estrada.
+          pickup_ready_dt: new Date().toISOString(),
         }),
       }
     );
