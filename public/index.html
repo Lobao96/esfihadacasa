@@ -277,7 +277,7 @@
     color: var(--ink); background: rgba(244,185,66,0.2);
     padding: 8px 10px; border-radius: 8px; font-weight: 600;
   }
-  #cpInput {
+  #cpInput, #locInput {
     width: 100%; font-family: inherit; font-size: 1rem; font-weight: 700;
     padding: 11px 13px; margin-top: 8px; border: 1.5px solid rgba(58,31,18,0.18);
     border-radius: 10px; background: var(--white); color: var(--ink);
@@ -627,6 +627,8 @@
       <div class="addr-field" id="addrField" style="display:none;">
         <div class="zone-info ok">Taxa de entrega: 3,99€</div>
         <input type="text" id="addrInput" placeholder="Rua, número e andar"
+               oninput="agendarCotacao()">
+        <input type="text" id="locInput" placeholder="Localidade (ex.: Portimão, Alvor, Ferragudo)"
                oninput="agendarCotacao()">
         <input type="text" id="cpInput" placeholder="Código postal (ex.: 8500-692)"
                inputmode="numeric" maxlength="9" oninput="agendarCotacao()">
@@ -1434,8 +1436,9 @@
     lines.push(orderType === 'entrega' ? "Modo: Entrega" : "Modo: Retirada");
     if (orderType === 'entrega') {
       const addr = document.getElementById('addrInput').value.trim();
+      const loc = ((document.getElementById('locInput') || {}).value || '').trim();
       const cp = (document.getElementById('cpInput') || {}).value.trim();
-      lines.push("Endereço: " + (addr || "(mando em seguida)") + (cp ? ", " + cp : ""));
+      lines.push("Endereço: " + (addr || "(mando em seguida)") + (loc ? ", " + loc : "") + (cp ? ", " + cp : ""));
       if (moradaConfirmada) lines.push("Morada confirmada pelo cliente ✔");
       lines.push("Taxa de entrega: " + fmt(deliveryFee()));
     }
@@ -1648,8 +1651,9 @@
 
   function moradaEscrita() {
     const r = ((document.getElementById('addrInput') || {}).value || '').trim();
+    const loc = ((document.getElementById('locInput') || {}).value || '').trim();
     const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
-    return [r, cp].filter(Boolean).join(', ');
+    return [r, loc, cp].filter(Boolean).join(', ');
   }
 
   function marcarConfirmacao() {
@@ -1670,9 +1674,10 @@
     const txt = document.getElementById('confirmaTexto');
     if (!cor || !cx || !txt) return;
     const addr = ((document.getElementById('addrInput') || {}).value || '').trim();
+    const loc = ((document.getElementById('locInput') || {}).value || '').trim();
     const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
     const m = moradaEscrita();
-    if (orderType !== 'entrega' || addr.length < 6 || !cpValido(cp)) {
+    if (orderType !== 'entrega' || addr.length < 6 || loc.length < 2 || !cpValido(cp)) {
       cor.style.display = 'none'; cx.checked = false; moradaConfirmada = null;
       cor.classList.remove('feito');
       return;
@@ -1705,15 +1710,16 @@
     foraDeAlcance = false;
     if (orderType !== 'entrega') { caixaCotacao('', ''); return; }
     const morada = (document.getElementById('addrInput') || {}).value || '';
+    const loc = (document.getElementById('locInput') || {}).value || '';
     const cp = (document.getElementById('cpInput') || {}).value || '';
-    if (morada.trim().length < 6) { caixaCotacao('', ''); return; }
+    if (morada.trim().length < 6 || loc.trim().length < 2) { caixaCotacao('', ''); return; }
 
     caixaCotacao('espera', 'A calcular a entrega para a sua morada…');
     try {
       const r = await fetch(API + '/cotacao', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ morada: morada.trim(), codigo_postal: cp.trim() }),
+        body: JSON.stringify({ morada: morada.trim(), localidade: loc.trim(), codigo_postal: cp.trim() }),
       });
       const d = await r.json();
       if (d && d.ok) {
@@ -1772,9 +1778,11 @@
     if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
     if (orderType === 'entrega') {
       const addr = ((document.getElementById('addrInput') || {}).value || '').trim();
+      const loc = ((document.getElementById('locInput') || {}).value || '').trim();
       const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
       const m = moradaEscrita();
       if (addr.length < 6) faltas.push('Entrega: falta escrever a morada completa (rua, número e andar).');
+      else if (loc.length < 2) faltas.push('Entrega: falta escrever a localidade.');
       else if (!cpValido(cp)) faltas.push('Entrega: falta o código postal, no formato 0000-000.');
       else if (foraDeAlcance) faltas.push('Entrega: não fazemos entrega para essa morada. Escolha levantamento no local.');
       else if (moradaConfirmada !== m) faltas.push('Entrega: falta confirmar a morada na caixa amarela.');
@@ -1815,6 +1823,7 @@
           ensaio: MODO_TESTE ? 1 : 0,
           modo: orderType === 'entrega' ? 'entrega' : 'retirada',
           morada: orderType === 'entrega' ? document.getElementById('addrInput').value.trim() : '',
+          localidade: orderType === 'entrega' ? ((document.getElementById('locInput') || {}).value || '').trim() : '',
           telefone: (document.getElementById('telInput') || {}).value || '',
           origem: ORIGEM.origem,
           campanha: ORIGEM.campanha,
