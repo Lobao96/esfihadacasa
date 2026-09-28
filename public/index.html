@@ -1262,7 +1262,7 @@
       return `
         ${comboSecao(u, 'salgada', MENU.salgadas, c.nSalgadas)}
         ${comboSecao(u, 'doce', MENU.doces, c.nDoces)}
-        <p class="combo-step">🎁 Oferta de ${rotuloFixo} ${tipoTexto} <span style="opacity:.7;font-weight:400">(a casa escolhe conforme o stock)</span></p>`;
+        <p class="combo-step">🎁 Oferta de ${rotuloFixo} ${tipoTexto} <span style="opacity:.7;font-weight:400">Basta colocar (conforme o stock existente)</span></p>`;
     }
     const beb = bebidasDoCombo(c).map(b =>
       `<button class="ex-chip${u.bebidas.indexOf(b.id) >= 0 ? ' on' : ''}" onclick="comboToggleBebida(${u.uid}, '${b.id}')">${b.name}</button>`
@@ -1951,6 +1951,7 @@
       if (d && d.ok) {
         estadoLoja = d.estado;
         if (!estadoLoja.aberto && !PRE_LANCAMENTO) aplicarEsgotadoServidor();
+        updateStatus();
       }
     } catch (e) { /* sem servidor: o site continua a funcionar como antes */ }
   }
@@ -2132,8 +2133,12 @@
       const nowMin = now.getHours() * 60 + now.getMinutes();
       isOpen = nowMin >= openMin && nowMin <= closeMin;
     }
+    // O horario diz quando costumamos abrir, mas a loja fechada manualmente ou
+    // sem stock (estadoLoja) manda sempre mais que o horario.
+    const fechadaPelaLoja = !!(estadoLoja && !estadoLoja.aberto);
+    if (fechadaPelaLoja) isOpen = false;
     badge.className = 'status ' + (isOpen ? 'open' : 'closed');
-    text.textContent = isOpen ? 'Aberto agora' : 'Fechado agora';
+    text.textContent = isOpen ? 'Aberto agora' : (fechadaPelaLoja ? 'Loja fechada' : 'Fechado agora');
   }
 
   function applyEsgotado() {

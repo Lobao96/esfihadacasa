@@ -1269,7 +1269,7 @@
       return `
         ${comboSecao(u, 'salgada', MENU.salgadas, c.nSalgadas)}
         ${comboSecao(u, 'doce', MENU.doces, c.nDoces)}
-        <p class="combo-step">🎁 Oferta de ${rotuloFixo} ${tipoTexto} <span style="opacity:.7;font-weight:400">(a casa escolhe conforme o stock)</span></p>`;
+        <p class="combo-step">🎁 Oferta de ${rotuloFixo} ${tipoTexto} <span style="opacity:.7;font-weight:400">Basta colocar (conforme o stock existente)</span></p>`;
     }
     const beb = bebidasDoCombo(c).map(b =>
       `<button class="ex-chip${u.bebidas.indexOf(b.id) >= 0 ? ' on' : ''}" onclick="comboToggleBebida(${u.uid}, '${b.id}')">${b.name}</button>`
@@ -1960,6 +1960,7 @@
       if (d && d.ok) {
         estadoLoja = d.estado;
         if (!estadoLoja.aberto && !PRE_LANCAMENTO) aplicarEsgotadoServidor();
+        updateStatus();
       }
     } catch (e) { /* sem servidor: o site continua a funcionar como antes */ }
   }
@@ -2123,8 +2124,9 @@
 
   function updateStatus() {
     if (MODO_TESTE) {
-      document.getElementById('statusBadge').className = 'status open';
-      document.getElementById('statusText').textContent = 'Modo teste — aberto';
+      const aberta = !estadoLoja || estadoLoja.aberto;
+      document.getElementById('statusBadge').className = 'status ' + (aberta ? 'open' : 'closed');
+      document.getElementById('statusText').textContent = aberta ? 'Modo teste — aberto' : 'Modo teste — loja fechada';
       return;
     }
     const now = new Date();
