@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recibos — Esfiha da Casa</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --red: #C8232B; --cream: #FFF3DC; --ink: #3A1F12; --ink-soft: #6B4A38;
+    --line: rgba(58,31,18,0.14); --card: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--cream); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.5; padding-bottom: 70px;
+  }
+  header { position: sticky; top: 0; z-index: 5; background: var(--cream); border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.15rem; margin: 0; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 14px 16px 30px; }
+  .login { max-width: 320px; margin: 80px auto; text-align: center; }
+  .login input { width: 100%; padding: 12px; border-radius: 10px; border: 1.5px solid var(--line); margin-bottom: 10px; font-size: 1rem; }
+  .login button, .filtros input, .filtros button { font-family: inherit; }
+  button.primario { background: var(--red); color: #fff; border: none; border-radius: 10px; padding: 11px 18px; font-weight: 700; cursor: pointer; }
+  .filtros { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .filtros input[type="date"] { padding: 9px 10px; border-radius: 8px; border: 1.5px solid var(--line); }
+  .filtros button { border: 1.5px solid var(--line); background: transparent; border-radius: 8px; padding: 9px 12px; cursor: pointer; font-weight: 700; color: var(--ink-soft); }
+  .filtros button.on, .filtros button:hover { background: var(--red); border-color: var(--red); color: #fff; }
+  .resumo { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.9rem; display: flex; gap: 18px; flex-wrap: wrap; }
+  .resumo b { display: block; font-size: 1.15rem; }
+  .vazio { text-align: center; color: var(--ink-soft); padding: 40px 0; }
+
+  /* --- Recibo (estilo talão, uma folha por encomenda) --- */
+  .recibo { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 26px 20px; margin-bottom: 20px; }
+  .recibo .loja { text-align: center; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.01em; margin-bottom: 2px; }
+  .recibo .subloja { text-align: center; font-size: 0.78rem; color: var(--ink-soft); margin-bottom: 14px; }
+  table.itens { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  table.itens th { text-align: left; font-weight: 700; font-size: 0.95rem; border-bottom: 2px solid var(--ink); padding: 0 0 6px; }
+  table.itens th.preco, table.itens td.preco { text-align: right; white-space: nowrap; }
+  table.itens td { padding: 7px 0; font-size: 0.92rem; border-bottom: 1px dashed var(--line); vertical-align: top; }
+  table.itens td.preco { font-weight: 700; }
+  table.itens tr.sub td { border-bottom: none; padding: 1px 0 1px 14px; font-size: 0.8rem; color: var(--ink-soft); }
+  table.itens tr.sub td.preco { font-weight: 400; }
+  .linha-resumo { display: flex; justify-content: space-between; font-size: 0.88rem; padding: 5px 0; color: var(--ink-soft); }
+  .linha-total { display: flex; justify-content: space-between; border-top: 2px solid var(--ink); margin-top: 4px; padding-top: 8px; font-weight: 800; font-size: 1.05rem; }
+  .linha-pago { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid var(--ink); margin-top: 10px; padding-top: 10px; font-size: 0.88rem; }
+  .linha-pago .metodo b { display: block; font-size: 0.95rem; }
+  .linha-pago .valor { font-weight: 700; }
+  .endereco { font-size: 0.82rem; color: var(--ink-soft); margin: -6px 0 12px; }
+  .rodape { text-align: center; font-size: 0.82rem; color: var(--ink-soft); margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .rodape .num { font-weight: 700; color: var(--ink); }
+
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); display: flex; z-index: 10; }
+  .nav-i { flex: 1; text-align: center; padding: 9px 0 7px; color: var(--ink-soft); text-decoration: none; font-size: 0.72rem; font-weight: 700; border: none; background: none; font-family: inherit; }
+  .nav-i span { display: block; font-size: 1.2rem; }
+  .nav-i.on { color: var(--red); }
+  @media print {
+    header, .filtros, .nav, .no-print { display: none !important; }
+    body { background: #fff; padding-bottom: 0; }
+    .recibo { break-inside: avoid; border: 1px solid #999; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <h1>🧾 Recibos</h1>
+  <p style="color:var(--ink-soft);font-size:0.9rem;">Mesma palavra-passe do painel.</p>
+  <input type="password" id="pass" placeholder="Palavra-passe">
+  <button class="primario" onclick="entrar()" style="width:100%">Entrar</button>
+  <p id="erro" style="color:var(--red);font-size:0.85rem;"></p>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>🧾 Recibos do dia</h1>
+    <span class="hora" id="hora" style="font-size:0.85rem;color:var(--ink-soft)"></span>
+  </header>
+  <div class="wrap">
+    <div class="filtros no-print">
+      <input type="date" id="diaSel" onchange="carregar()">
+      <button onclick="hoje()">Hoje</button>
+      <button onclick="ontem()">Ontem</button>
+      <button onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+    <div class="resumo" id="resumo"></div>
+    <div id="lista"></div>
+  </div>
+  <nav class="nav no-print">
+    <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
+    <a class="nav-i" href="/admin/"><span>📊</span>Análise</a>
+    <a class="nav-i on" href="/painel/recibos.html"><span>🧾</span>Recibos</a>
+  </nav>
+</div>
+
+<script>
+  const API = '/api';
+  let pass = '';
+
+  function eur(v) { return (v || 0).toFixed(2).replace('.', ',') + '€'; }
+  function eurCent(c) { return eur((c || 0) / 100); }
+  function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function horaDe(iso) { try { return new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+  function dataHoraDe(iso) { try { return new Date(iso).toLocaleDateString('pt-PT') + ', ' + horaDe(iso); } catch (e) { return ''; } }
+  function diaLisboaHoje(offsetDias = 0) {
+    const d = new Date(Date.now() + offsetDias * 86400000);
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon' }).format(d); // AAAA-MM-DD
+  }
+  function dadosDe(p) {
+    let d = null;
+    try { d = JSON.parse(p.itens || 'null'); } catch (e) {}
+    if (Array.isArray(d)) return { linhas: d, producao: null, bebidas: null, entrega: null };
+    return d || { linhas: [], producao: null, bebidas: null, entrega: null };
+  }
+
+  async function api(caminho) {
+    const r = await fetch(API + caminho, { headers: { 'x-painel-pass': pass } });
+    if (r.status === 401) throw new Error('401');
+    return r.json();
+  }
+
+  async function entrar() {
+    pass = document.getElementById('pass').value;
+    try {
+      await api('/painel/pedidos');
+      try { localStorage.setItem('painelPass', pass); } catch (e) {}
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      document.getElementById('diaSel').value = diaLisboaHoje();
+      relogio(); setInterval(relogio, 1000);
+      carregar();
+    } catch (e) {
+      document.getElementById('erro').textContent = 'Palavra-passe errada.';
+    }
+  }
+
+  function relogio() {
+    document.getElementById('hora').textContent = new Date().toLocaleTimeString('pt-PT');
+  }
+
+  function hoje() { document.getElementById('diaSel').value = diaLisboaHoje(); carregar(); }
+  function ontem() { document.getElementById('diaSel').value = diaLisboaHoje(-1); carregar(); }
+
+  // As linhas guardadas em cada pedido já vêm com o preço certo de cada
+  // item (ex.: "A Tradicional — 2,50€"), incluindo combos com o preço do
+  // pacote na linha principal e os sabores/bebidas incluídos por baixo,
+  // sem preço próprio (porque já vêm embutidos no preço do combo).
+  function linhasTabela(d) {
+    const linhas = (d.linhas && d.linhas.length) ? d.linhas : [];
+    return linhas.map(l => {
+      const indentada = /^\s{2,}/.test(l);
+      const m = l.match(/^(.*?)\s—\s([\d,]+€)\s*$/);
+      if (m) return { texto: m[1].trim(), preco: m[2], sub: indentada };
+      return { texto: l.trim(), preco: '', sub: indentada };
+    });
+  }
+
+  function itensTabela(d) {
+    const linhas = linhasTabela(d);
+    if (!linhas.length) {
+      return '<table class="itens"><thead><tr><th>Itens</th><th class="preco">Preço</th></tr></thead>' +
+             '<tbody><tr><td colspan="2">(sem detalhe)</td></tr></tbody></table>';
+    }
+    const corpo = linhas.map(l => `
+      <tr${l.sub ? ' class="sub"' : ''}><td>${esc(l.texto)}</td><td class="preco">${l.preco ? esc(l.preco) : ''}</td></tr>`).join('');
+    return `<table class="itens"><thead><tr><th>Itens</th><th class="preco">Preço</th></tr></thead><tbody>${corpo}</tbody></table>`;
+  }
+
+  function enderecoHtml(p) {
+    if (p.modo === 'entrega') {
+      const partes = [p.morada, p.localidade].filter(Boolean).map(esc).join(', ');
+      return `<p class="endereco">🛵 Entrega — ${partes || 'morada não indicada'}${p.telefone ? ' · Tel: ' + esc(p.telefone) : ''}</p>`;
+    }
+    return `<p class="endereco">🧺 Retirada no local${p.telefone ? ' · Tel: ' + esc(p.telefone) : ''}</p>`;
+  }
+
+  async function carregar() {
+    const dia = document.getElementById('diaSel').value;
+    const r = await api('/painel/pedidos?dia=' + encodeURIComponent(dia));
+    const pedidos = (r.pedidos || [])
+      .filter(p => !p.ensaio && p.pago && p.estado !== 'cancelado')
+      .sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || ''));
+
+    const lista = document.getElementById('lista');
+    const resumo = document.getElementById('resumo');
+
+    if (!pedidos.length) {
+      lista.innerHTML = '<div class="vazio">Sem pedidos pagos neste dia.</div>';
+      resumo.innerHTML = '';
+      return;
+    }
+
+    let total = 0;
+    let html = '';
+    pedidos.forEach((p, i) => {
+      const d = dadosDe(p);
+      total += p.total_cent || 0;
+      const entregaCent = (d.entrega && d.entrega.cent) ? d.entrega.cent : 0;
+      const subtotalCent = Math.max(0, (p.total_cent || 0) - entregaCent);
+      html += `
+        <div class="recibo">
+          <div class="loja">Esfiha da Casa</div>
+          <div class="subloja">Recibo de consumidor final · Pedido #${p.numero}</div>
+          ${enderecoHtml(p)}
+          ${itensTabela(d)}
+          <div class="linha-resumo"><span>Subtotal</span><span>${eurCent(subtotalCent)}</span></div>
+          ${entregaCent ? `<div class="linha-resumo"><span>Taxa de entrega</span><span>${eurCent(entregaCent)}</span></div>` : ''}
+          <div class="linha-total"><span>Total</span><span>${eurCent(p.total_cent)}</span></div>
+          <div class="linha-pago">
+            <span class="metodo">Pago<b>${dataHoraDe(p.criado_em)}</b></span>
+            <span class="valor">${eurCent(p.total_cent)}</span>
+          </div>
+          <div class="rodape">${dataHoraDe(p.criado_em)}<br><span class="num">Recibo: #${p.numero}</span></div>
+        </div>`;
+    });
+    lista.innerHTML = html;
+    resumo.innerHTML = `
+      <div><b>${pedidos.length}</b>recibos</div>
+      <div><b>${eurCent(total)}</b>total do dia</div>`;
+  }
+
+  (function () {
+    const g = localStorage.getItem('painelPass');
+    if (g) {
+      pass = g;
+      api('/painel/pedidos').then(() => {
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('app').style.display = '';
+        document.getElementById('diaSel').value = diaLisboaHoje();
+        relogio(); setInterval(relogio, 1000);
+        carregar();
+      }).catch(() => {});
+    }
+  })();
+</script>
+</body>
+</html>
