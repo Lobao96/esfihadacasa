@@ -1806,7 +1806,17 @@
       const cpSufixo = porTipo('postal_code_suffix');
       const codigoPostal = cp && cpSufixo ? (cp + '-' + cpSufixo) : cp;
 
-      if (addrEl) addrEl.value = [rua, numero].filter(Boolean).join(', ') || pred.text.text;
+      if (addrEl) {
+        const principal = (pred.structuredFormat && pred.structuredFormat.mainText && pred.structuredFormat.mainText.text) || pred.text.text;
+        const base = [rua || principal, numero].filter(Boolean).join(', ');
+        // deixa sempre uma virgula e espaco no fim para o cliente escrever o
+        // numero (se a Google nao o tiver dado) e o andar (a Google nunca
+        // devolve o andar, por isso isto e sempre preciso escrever a mao).
+        addrEl.value = base + ', ';
+        addrEl.focus();
+        const pos = addrEl.value.length;
+        addrEl.setSelectionRange(pos, pos);
+      }
       const locEl = document.getElementById('locInput');
       if (locEl && localidade) locEl.value = localidade;
       const cpEl = document.getElementById('cpInput');
