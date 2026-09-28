@@ -1976,6 +1976,9 @@
       if (f.length) faltas.push(c.name + ': falta escolher ' + f.join(', '));
     });
     if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
+    if (estadoLoja && !estadoLoja.ilimitado && contaEsfihasTotal() > (estadoLoja.restante || 0)) {
+      faltas.push('Não temos esfihas suficientes em stock para este pedido (restam ' + estadoLoja.restante + ', este pedido precisa de ' + contaEsfihasTotal() + ').');
+    }
     if (orderType === 'entrega') {
       const addr = ruaCompleta();
       const loc = ((document.getElementById('locInput') || {}).value || '').trim();
@@ -2005,6 +2008,7 @@
     if (itemCount() === 0) { ev.preventDefault(); return false; }
     ev.preventDefault();
 
+    await verEstadoLoja();
     const faltas = combosPorAcabar();
     if (faltas.length) { mostrarFaltas(faltas); return false; }
     mostrarFaltas([]);
@@ -2050,6 +2054,12 @@
       else if (d && d.erro === 'esgotado') {
         btn.textContent = textoOriginal;
         aplicarEsgotadoServidor();
+        return false;
+      }
+      else if (d && d.erro === 'sem_stock') {
+        btn.textContent = textoOriginal;
+        if (d.estado) estadoLoja = d.estado;
+        mostrarFaltas(['Não temos esfihas suficientes em stock para este pedido (restam ' + (d.estado ? d.estado.restante : 0) + ').']);
         return false;
       }
     } catch (e) { /* segue para o WhatsApp na mesma */ }

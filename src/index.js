@@ -43,6 +43,10 @@ async function estadoDoDia(db, dia) {
     usado: r.usado,
     restante,
     ilimitado,
+    // abertoManual e o que o dono escolheu no botao do painel (fechar/abrir loja).
+    // aberto e o estado real que bloqueia pedidos: so fica aberto se o dono
+    // quis abrir E ainda houver stock (ou for ilimitado).
+    abertoManual: !!r.aberto,
     aberto: !!r.aberto && (ilimitado || restante > 0),
   };
 }
@@ -435,6 +439,13 @@ async function novoPedido(request, env, ctx) {
   const st = await estadoDoDia(env.DB, dia);
   if (!ensaio && !st.aberto) {
     return j({ ok: false, erro: 'esgotado', estado: st }, 409);
+  }
+  // Mesmo com a loja aberta, um pedido individual pode pedir mais esfihas do
+  // que o stock que resta (ex: restam 10 e o pedido tem um combo de 20).
+  // Isso tem de ser travado aqui, nao so quando o stock geral chega a zero.
+  const nEsfihasPedidas = Math.max(0, parseInt(b.n_esfihas, 10) || 0);
+  if (!ensaio && !st.ilimitado && nEsfihasPedidas > st.restante) {
+    return j({ ok: false, erro: 'sem_stock', estado: st }, 409);
   }
 
   const agora = new Date().toISOString();

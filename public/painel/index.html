@@ -153,6 +153,7 @@
         <button class="mini" id="btnAberto" onclick="alternarLoja()">—</button>
       </div>
       <div class="barra"><i id="barra" style="width:0%"></i></div>
+      <div id="stockAviso" style="display:none;flex-basis:100%;font-size:.8rem;font-weight:700;color:var(--red);margin-top:4px"></div>
     </div>
 
     <div class="filtros">
@@ -507,8 +508,20 @@
     if (document.activeElement !== document.getElementById('stockTotal')) {
       document.getElementById('stockTotal').value = est.total || '';
     }
-    bt.textContent = est.aberto ? 'Loja aberta' : 'Loja fechada';
-    bt.classList.toggle('on', !est.aberto);
+    // O botao reflete sempre o que o dono escolheu (abertoManual), nao o
+    // calculo com o stock -- assim nunca parece "nao funcionar" so porque
+    // o stock chegou a zero.
+    bt.textContent = est.abertoManual ? 'Loja aberta' : 'Loja fechada';
+    bt.classList.toggle('on', !est.abertoManual);
+    const aviso = document.getElementById('stockAviso');
+    if (aviso) {
+      if (est.abertoManual && !est.aberto) {
+        aviso.textContent = '⚠️ Fechada automaticamente para novos pedidos: sem stock suficiente.';
+        aviso.style.display = 'block';
+      } else {
+        aviso.style.display = 'none';
+      }
+    }
   }
 
   async function guardarStock() {
@@ -518,7 +531,12 @@
   }
 
   async function alternarLoja() {
-    const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ aberto: est.aberto ? 0 : 1 }) });
+    const vaiAbrir = !est.abertoManual;
+    const pergunta = vaiAbrir
+      ? 'Quer mesmo abrir a loja agora e aceitar novos pedidos?'
+      : 'Quer mesmo fechar a loja agora e bloquear novos pedidos?';
+    if (!confirm(pergunta)) return;
+    const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ aberto: vaiAbrir ? 1 : 0 }) });
     est = d.estado; pintarStock();
   }
 
