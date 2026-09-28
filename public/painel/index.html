@@ -589,10 +589,23 @@
     return esfihas + bebs;
   }
 
+  // Índice do pedido dentro do próprio dia (1.º, 2.º, 3.º...), calculado
+  // a partir dos pedidos reais já carregados para o dia visto no painel.
+  // O número #${p.numero} em si nunca reinicia (é contínuo desde sempre);
+  // este índice é só para uso interno, para percebermos de imediato qual
+  // foi o primeiro pedido de cada dia (aparece "-1").
+  function indiceDoDia() {
+    const reais = pedidos.filter(p => !p.ensaio).slice().sort((a, b) => a.numero - b.numero);
+    const mapa = new Map();
+    reais.forEach((p, i) => mapa.set(p.id, i + 1));
+    return mapa;
+  }
+
   function pintarLista() {
     const el = document.getElementById('lista');
     const v = visiveis();
     if (!v.length) { el.innerHTML = '<div class="vazio">Nada por aqui.</div>'; return; }
+    const idx = indiceDoDia();
     el.innerHTML = v.map(p => {
       const entrega = p.modo === 'entrega';
       const dados = dadosDe(p);
@@ -604,7 +617,7 @@
       return `
       <div class="p ${p.estado}">
         <div class="p-top">
-          <span class="num">#${p.numero}</span>
+          <span class="num">#${p.numero}${!p.ensaio && idx.has(p.id) ? `<small style="opacity:.6;font-weight:700">-${idx.get(p.id)}</small>` : ''}</span>
           <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega' : 'Retirada'}</span>
           ${p.ensaio ? '<span class="tag-ensaio">ENSAIO</span>' : ''}
           <span class="tot">${eur(p.total_cent)}</span>

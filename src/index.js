@@ -443,21 +443,26 @@ async function novoPedido(request, env, ctx) {
   const itens = JSON.stringify(b.itens && typeof b.itens === 'object' ? b.itens : []);
   const token = novoToken();
 
-  // O numero da fila sai do maximo do proprio dia, numa so instrucao,
-  // para dois pedidos ao mesmo segundo nao apanharem o mesmo numero.
+  // O numero dos pedidos reais nunca reinicia -- e continuo desde o
+  // primeiro pedido do site, para nunca mostrar a um cliente que e "o
+  // pedido numero 1" de um dia so porque foi o primeiro a chegar tarde.
+  // Os pedidos de ensaio continuam com numeracao propria, reiniciada a
+  // cada dia (sao so testes, e apagados regularmente pelo "Apagar
+  // ensaios"), para nunca misturar com a numeracao real.
+  const filtroNumero = ensaio ? 'dia = ? AND ensaio = 1' : 'ensaio = 0';
   const res = await env.DB.prepare(
     `INSERT INTO pedidos
        (dia, numero, senha, ensaio, modo, localidade, morada, total_cent, n_esfihas,
         itens, mensagem, criado_em, token, telefone, origem, campanha)
      SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-       FROM pedidos WHERE dia = ? AND ensaio = ?
+       FROM pedidos WHERE ${filtroNumero}
      RETURNING id, numero, token`
   ).bind(
     dia, limpar(b.senha, 40), ensaio, limpar(b.modo, 20), limpar(b.localidade, 80),
     limpar(b.morada, 300), Math.max(0, parseInt(b.total_cent, 10) || 0),
     Math.max(0, parseInt(b.n_esfihas, 10) || 0), itens, limpar(b.mensagem, 4000), agora,
     token, soDigitos(b.telefone), limpar(b.origem, 60), limpar(b.campanha, 80),
-    dia, ensaio
+    ...(ensaio ? [dia] : [])
   ).first();
 
   if (ctx && ctx.waitUntil) ctx.waitUntil(avisarTelemovel(env));
