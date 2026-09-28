@@ -648,10 +648,12 @@
       <div class="addr-field" id="addrField" style="display:none;">
         <div class="zone-info ok">Taxa de entrega: 3,99€</div>
         <div class="addr-wrap">
-          <input type="text" id="addrInput" placeholder="Rua, número e andar"
+          <input type="text" id="addrInput" placeholder="Rua"
                  autocomplete="off" oninput="onAddrInput()">
           <ul class="addr-suggest" id="addrSuggest"></ul>
         </div>
+        <input type="text" id="numAndarInput" placeholder="Número e andar (ex.: 12, 2º Esq)"
+               autocomplete="off" oninput="agendarCotacao()">
         <input type="text" id="locInput" placeholder="Localidade"
                oninput="agendarCotacao()">
         <input type="text" id="cpInput" placeholder="Código postal"
@@ -1463,7 +1465,7 @@
     lines.push("");
     lines.push(orderType === 'entrega' ? "Modo: Entrega" : "Modo: Retirada");
     if (orderType === 'entrega') {
-      const addr = document.getElementById('addrInput').value.trim();
+      const addr = ruaCompleta();
       const loc = ((document.getElementById('locInput') || {}).value || '').trim();
       const cp = (document.getElementById('cpInput') || {}).value.trim();
       lines.push("Endereço: " + (addr || "(mando em seguida)") + (loc ? ", " + loc : "") + (cp ? ", " + cp : ""));
@@ -1677,8 +1679,14 @@
   // texto depois de confirmar, o visto cai e tem de confirmar outra vez.
   let moradaConfirmada = null;
 
-  function moradaEscrita() {
+  function ruaCompleta() {
     const r = ((document.getElementById('addrInput') || {}).value || '').trim();
+    const na = ((document.getElementById('numAndarInput') || {}).value || '').trim();
+    return [r, na].filter(Boolean).join(', ');
+  }
+
+  function moradaEscrita() {
+    const r = ruaCompleta();
     const loc = ((document.getElementById('locInput') || {}).value || '').trim();
     const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
     return [r, loc, cp].filter(Boolean).join(', ');
@@ -1808,19 +1816,17 @@
 
       if (addrEl) {
         const principal = (pred.structuredFormat && pred.structuredFormat.mainText && pred.structuredFormat.mainText.text) || pred.text.text;
-        const base = [rua || principal, numero].filter(Boolean).join(', ');
-        // deixa sempre uma virgula e espaco no fim para o cliente escrever o
-        // numero (se a Google nao o tiver dado) e o andar (a Google nunca
-        // devolve o andar, por isso isto e sempre preciso escrever a mao).
-        addrEl.value = base + ', ';
-        addrEl.focus();
-        const pos = addrEl.value.length;
-        addrEl.setSelectionRange(pos, pos);
+        addrEl.value = [rua || principal, numero].filter(Boolean).join(', ');
       }
       const locEl = document.getElementById('locInput');
       if (locEl && localidade) locEl.value = localidade;
       const cpEl = document.getElementById('cpInput');
       if (cpEl && codigoPostal) cpEl.value = codigoPostal;
+      // depois de escolher a morada, falta so o numero (se a Google nao o
+      // tiver dado) e o andar -- ficam num campo proprio, sem autocomplete,
+      // para escrever nao voltar a abrir a lista de sugestoes.
+      const naEl = document.getElementById('numAndarInput');
+      if (naEl) { naEl.focus(); naEl.select(); }
     } catch (e) {
       // morada escolhida mas os detalhes falharam: fica o texto que o
       // cliente ja via na sugestao, ele pode corrigir os outros campos
@@ -1839,7 +1845,7 @@
     const cx = document.getElementById('confirmaMorada');
     const txt = document.getElementById('confirmaTexto');
     if (!cor || !cx || !txt) return;
-    const addr = ((document.getElementById('addrInput') || {}).value || '').trim();
+    const addr = ruaCompleta();
     const loc = ((document.getElementById('locInput') || {}).value || '').trim();
     const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
     const m = moradaEscrita();
@@ -1875,7 +1881,7 @@
   async function pedirCotacao() {
     foraDeAlcance = false;
     if (orderType !== 'entrega') { caixaCotacao('', ''); return; }
-    const morada = (document.getElementById('addrInput') || {}).value || '';
+    const morada = ruaCompleta();
     const loc = (document.getElementById('locInput') || {}).value || '';
     const cp = (document.getElementById('cpInput') || {}).value || '';
     if (morada.trim().length < 6 || loc.trim().length < 2) { caixaCotacao('', ''); return; }
@@ -1945,7 +1951,7 @@
     });
     if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
     if (orderType === 'entrega') {
-      const addr = ((document.getElementById('addrInput') || {}).value || '').trim();
+      const addr = ruaCompleta();
       const loc = ((document.getElementById('locInput') || {}).value || '').trim();
       const cp = ((document.getElementById('cpInput') || {}).value || '').trim();
       const m = moradaEscrita();
@@ -1990,7 +1996,7 @@
           senha: senhaAtual,
           ensaio: MODO_TESTE ? 1 : 0,
           modo: orderType === 'entrega' ? 'entrega' : 'retirada',
-          morada: orderType === 'entrega' ? document.getElementById('addrInput').value.trim() : '',
+          morada: orderType === 'entrega' ? ruaCompleta() : '',
           localidade: orderType === 'entrega' ? ((document.getElementById('locInput') || {}).value || '').trim() : '',
           telefone: (document.getElementById('telInput') || {}).value || '',
           origem: ORIGEM.origem,
