@@ -1782,7 +1782,7 @@
     if (addrEl) addrEl.value = pred.text.text;
     try {
       const r = await fetch(
-        `https://places.googleapis.com/v1/${pred.placeId}?languageCode=pt-PT&sessionToken=${encodeURIComponent(placesSessionToken || '')}`,
+        `https://places.googleapis.com/v1/places/${pred.placeId}?languageCode=pt-PT&sessionToken=${encodeURIComponent(placesSessionToken || '')}`,
         { headers: { 'X-Goog-Api-Key': PLACES_API_KEY, 'X-Goog-FieldMask': 'addressComponents,formattedAddress' } }
       );
       placesSessionToken = null; // a sessao termina depois do Place Details
