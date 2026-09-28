@@ -186,15 +186,22 @@ async function tokenUber(env) {
 // campo "duration" da cotacao, que tem sempre um piso de ~40min mesmo
 // para distancia zero e nao reflete o tempo real).
 //
-// Por isso ha duas faixas de preco: perto (cobra 3,99€) e zona alargada
-// como Parchal/Alvor (cobra 7,99€, para cobrir o custo mais alto do Uber
-// nessas zonas). Em ambas as faixas perde-se no maximo ~2€ por entrega
-// se o Uber cobrar o maximo permitido nessa faixa. Acima da ultima faixa,
-// a entrega e recusada -- nunca por estar numa localidade em vez de
-// outra, so pelo custo real que o Uber cobra para lá chegar.
+// NOTA (28/09): testado ao vivo, o custo minimo real da Uber ronda
+// 4,80€-5,66€ mesmo para ruas normais dentro da propria Portimao -- ou
+// seja, a faixa "perto" a cobrar 3,99€ ainda perde dinheiro na maioria
+// das entregas, nao so nas mais longe. Fica assim por agora a pedido do
+// dono (decisao consciente, nao um erro), mas precisa de ser revisto:
+// falta calcular o impacto real disto juntando ao resto das despesas do
+// negocio (nao so o custo direto do Uber).
+//
+// Por isso ha duas faixas de preco: perto (cobra 3,99€, custo Uber ate
+// 5,99€) e zona alargada como Parchal/Alvor (cobra 5,99€, custo Uber ate
+// 8€). Acima de 8€ de custo, a entrega e recusada -- nunca por estar
+// numa localidade em vez de outra, so pelo custo real que o Uber cobra
+// para lá chegar.
 const ENTREGA_FAIXAS = [
   { custo_max_cent: 599, cobra_cent: 399 }, // zona perto
-  { custo_max_cent: 999, cobra_cent: 799 }, // zona alargada (ex.: Parchal, Alvor)
+  { custo_max_cent: 800, cobra_cent: 599 }, // zona alargada (ex.: Parchal, Alvor)
 ];
 const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado so na rede de seguranca (ver semUber)
 
