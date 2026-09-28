@@ -187,17 +187,135 @@ const ENTREGA_FIXA_CENT = 399;
 // entrega ali", em vez de um raio fixo no mapa.
 const ENTREGA_ETA_MAX_MIN = 15;
 
-// Prefixo dos codigos postais de Portimao. So entra em jogo quando o Uber
-// falha tecnicamente (nao responde, erro de rede, etc.) e serve so de rede
-// de seguranca: e grosseiro de proposito (pode aceitar uma zona do Alvor
-// que ja fica fora dos 15min, e recusar Parchal/Ferragudo que ficam
-// dentro), mas e melhor do que aceitar qualquer morada as cegas quando nao
-// se consegue perguntar ao Uber. Com o Uber a funcionar, quem decide e
-// sempre o tempo real de entrega, nunca este prefixo.
-const CP_SEGURANCA_PREFIXO = '8500';
+// Rede de seguranca por codigo postal. So entra em jogo quando o Uber falha
+// tecnicamente (nao responde, erro de rede, etc.) ou quando o autocomplete
+// de moradas nao estiver disponivel: nunca decide enquanto o Uber conseguir
+// responder normalmente. Construida a partir dos codigos postais reais dos
+// CTT (base de dados oficial) para Portimao + Praia da Rocha, Alvor,
+// Ferragudo e Parchal -- excluindo deliberadamente Estombar, Lagoa e
+// Mexilhoeira Grande, que ficam fora da zona de entrega de 15 min.
+const CP_SEGURANCA = [
+  { prefixo: '8500', min: 69, max: 69 }, // Portimao
+  { prefixo: '8500', min: 73, max: 73 }, // Portimao
+  { prefixo: '8500', min: 75, max: 78 }, // Portimao
+  { prefixo: '8500', min: 141, max: 141 }, // Portimao
+  { prefixo: '8500', min: 286, max: 286 }, // Portimao
+  { prefixo: '8500', min: 289, max: 294 }, // Portimao
+  { prefixo: '8500', min: 299, max: 300 }, // Portimao
+  { prefixo: '8500', min: 302, max: 303 }, // Portimao
+  { prefixo: '8500', min: 305, max: 305 }, // Portimao
+  { prefixo: '8500', min: 307, max: 311 }, // Portimao
+  { prefixo: '8500', min: 313, max: 314 }, // Portimao
+  { prefixo: '8500', min: 316, max: 316 }, // Portimao
+  { prefixo: '8500', min: 318, max: 319 }, // Portimao
+  { prefixo: '8500', min: 321, max: 321 }, // Portimao
+  { prefixo: '8500', min: 323, max: 323 }, // Portimao
+  { prefixo: '8500', min: 325, max: 325 }, // Portimao
+  { prefixo: '8500', min: 328, max: 328 }, // Portimao
+  { prefixo: '8500', min: 332, max: 333 }, // Portimao
+  { prefixo: '8500', min: 336, max: 336 }, // Portimao
+  { prefixo: '8500', min: 339, max: 341 }, // Portimao
+  { prefixo: '8500', min: 343, max: 345 }, // Portimao
+  { prefixo: '8500', min: 347, max: 348 }, // Portimao
+  { prefixo: '8500', min: 352, max: 353 }, // Portimao
+  { prefixo: '8500', min: 356, max: 356 }, // Portimao
+  { prefixo: '8500', min: 363, max: 363 }, // Portimao
+  { prefixo: '8500', min: 367, max: 367 }, // Portimao
+  { prefixo: '8500', min: 371, max: 372 }, // Portimao
+  { prefixo: '8500', min: 381, max: 384 }, // Portimao
+  { prefixo: '8500', min: 396, max: 396 }, // Portimao
+  { prefixo: '8500', min: 399, max: 399 }, // Portimao
+  { prefixo: '8500', min: 402, max: 402 }, // Portimao
+  { prefixo: '8500', min: 406, max: 406 }, // Portimao
+  { prefixo: '8500', min: 411, max: 411 }, // Portimao
+  { prefixo: '8500', min: 416, max: 427 }, // Portimao
+  { prefixo: '8500', min: 429, max: 444 }, // Portimao
+  { prefixo: '8500', min: 448, max: 449 }, // Portimao
+  { prefixo: '8500', min: 454, max: 456 }, // Portimao
+  { prefixo: '8500', min: 458, max: 461 }, // Portimao
+  { prefixo: '8500', min: 463, max: 467 }, // Portimao
+  { prefixo: '8500', min: 469, max: 469 }, // Portimao
+  { prefixo: '8500', min: 474, max: 478 }, // Portimao
+  { prefixo: '8500', min: 480, max: 480 }, // Portimao
+  { prefixo: '8500', min: 483, max: 486 }, // Portimao
+  { prefixo: '8500', min: 488, max: 494 }, // Portimao
+  { prefixo: '8500', min: 496, max: 504 }, // Portimao
+  { prefixo: '8500', min: 506, max: 515 }, // Portimao
+  { prefixo: '8500', min: 518, max: 521 }, // Portimao
+  { prefixo: '8500', min: 524, max: 527 }, // Portimao
+  { prefixo: '8500', min: 530, max: 531 }, // Portimao
+  { prefixo: '8500', min: 533, max: 540 }, // Portimao
+  { prefixo: '8500', min: 542, max: 544 }, // Portimao
+  { prefixo: '8500', min: 546, max: 576 }, // Portimao
+  { prefixo: '8500', min: 578, max: 588 }, // Portimao
+  { prefixo: '8500', min: 590, max: 590 }, // Portimao
+  { prefixo: '8500', min: 592, max: 612 }, // Portimao
+  { prefixo: '8500', min: 614, max: 635 }, // Portimao
+  { prefixo: '8500', min: 638, max: 643 }, // Portimao
+  { prefixo: '8500', min: 645, max: 657 }, // Portimao
+  { prefixo: '8500', min: 659, max: 687 }, // Portimao
+  { prefixo: '8500', min: 689, max: 699 }, // Portimao
+  { prefixo: '8500', min: 701, max: 712 }, // Portimao
+  { prefixo: '8500', min: 714, max: 716 }, // Portimao
+  { prefixo: '8500', min: 718, max: 720 }, // Portimao
+  { prefixo: '8500', min: 722, max: 725 }, // Portimao
+  { prefixo: '8500', min: 728, max: 757 }, // Portimao
+  { prefixo: '8500', min: 759, max: 761 }, // Portimao
+  { prefixo: '8500', min: 763, max: 764 }, // Portimao
+  { prefixo: '8500', min: 766, max: 766 }, // Portimao
+  { prefixo: '8500', min: 768, max: 769 }, // Portimao
+  { prefixo: '8500', min: 772, max: 772 }, // Portimao
+  { prefixo: '8500', min: 775, max: 776 }, // Portimao
+  { prefixo: '8500', min: 778, max: 778 }, // Portimao
+  { prefixo: '8500', min: 780, max: 780 }, // Portimao
+  { prefixo: '8500', min: 782, max: 782 }, // Portimao
+  { prefixo: '8500', min: 784, max: 802 }, // Portimao
+  { prefixo: '8500', min: 804, max: 815 }, // Portimao
+  { prefixo: '8500', min: 818, max: 820 }, // Portimao
+  { prefixo: '8500', min: 822, max: 824 }, // Portimao
+  { prefixo: '8500', min: 826, max: 827 }, // Portimao
+  { prefixo: '8500', min: 830, max: 833 }, // Portimao
+  { prefixo: '8500', min: 835, max: 835 }, // Portimao
+  { prefixo: '8500', min: 841, max: 844 }, // Portimao
+  { prefixo: '8500', min: 847, max: 847 }, // Portimao
+  { prefixo: '8500', min: 992, max: 992 }, // Portimao
+  { prefixo: '8500', min: 995, max: 995 }, // Portimao
+  { prefixo: '8500', min: 997, max: 998 }, // Portimao
+  { prefixo: '8500', min: 2, max: 3 }, // Alvor
+  { prefixo: '8500', min: 5, max: 23 }, // Alvor
+  { prefixo: '8500', min: 25, max: 35 }, // Alvor
+  { prefixo: '8500', min: 37, max: 37 }, // Alvor
+  { prefixo: '8500', min: 44, max: 45 }, // Alvor
+  { prefixo: '8500', min: 56, max: 58 }, // Alvor
+  { prefixo: '8500', min: 74, max: 74 }, // Alvor
+  { prefixo: '8500', min: 81, max: 81 }, // Alvor
+  { prefixo: '8500', min: 84, max: 84 }, // Alvor
+  { prefixo: '8500', min: 87, max: 87 }, // Alvor
+  { prefixo: '8500', min: 322, max: 322 }, // Alvor
+  { prefixo: '8500', min: 329, max: 329 }, // Alvor
+  { prefixo: '8500', min: 335, max: 335 }, // Alvor
+  { prefixo: '8500', min: 777, max: 777 }, // Alvor
+  { prefixo: '8500', min: 783, max: 783 }, // Alvor
+  { prefixo: '8500', min: 996, max: 996 }, // Alvor
+  { prefixo: '8400', min: 202, max: 215 }, // Ferragudo
+  { prefixo: '8400', min: 219, max: 262 }, // Ferragudo
+  { prefixo: '8400', min: 275, max: 277 }, // Ferragudo
+  { prefixo: '8400', min: 279, max: 279 }, // Ferragudo
+  { prefixo: '8400', min: 282, max: 282 }, // Ferragudo
+  { prefixo: '8400', min: 287, max: 287 }, // Ferragudo
+  { prefixo: '8400', min: 996, max: 996 }, // Ferragudo
+  { prefixo: '8400', min: 600, max: 621 }, // Parchal
+  { prefixo: '8400', min: 623, max: 625 }, // Parchal
+  { prefixo: '8400', min: 651, max: 652 }, // Parchal
+  { prefixo: '8400', min: 655, max: 670 }, // Parchal
+];
 
 function codigoPostalSeguro(cp) {
-  return new RegExp('^' + CP_SEGURANCA_PREFIXO + '-?\\d{3}$').test((cp || '').trim());
+  const m = (cp || '').trim().match(/^(\d{4})-?(\d{3})$/);
+  if (!m) return false;
+  const prefixo = m[1];
+  const sufixo = parseInt(m[2], 10);
+  return CP_SEGURANCA.some(r => r.prefixo === prefixo && sufixo >= r.min && sufixo <= r.max);
 }
 
 async function cotacao(request, env) {
