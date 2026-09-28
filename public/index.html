@@ -628,7 +628,7 @@
         <div class="zone-info ok">Taxa de entrega: 3,99€</div>
         <input type="text" id="addrInput" placeholder="Rua, número e andar"
                oninput="agendarCotacao()">
-        <input type="text" id="locInput" placeholder="Localidade (ex.: Portimão, Alvor, Ferragudo)"
+        <input type="text" id="locInput" placeholder="Localidade"
                oninput="agendarCotacao()">
         <input type="text" id="cpInput" placeholder="Código postal"
                inputmode="numeric" maxlength="8" oninput="formatarCP(this); agendarCotacao()">
@@ -1734,21 +1734,23 @@
       if (d && d.ok) {
         entregaCotada = { fee_cent: d.fee_cent, quote_id: d.quote_id };
         caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>`);
-      } else if (d && d.erro === 'fora_de_alcance') {
+      } else {
+        // fora de alcance, ou o Uber falhou e o codigo postal nao e da
+        // nossa zona: o backend ja decidiu, nao se aceita as cegas.
         entregaCotada = null;
         foraDeAlcance = true;
         caixaCotacao('falha',
           '<strong>Ainda não entregamos nessa morada</strong> — fica longe demais da nossa cozinha ' +
           'para chegar quente e a tempo. Pode escolher <strong>levantamento no local</strong>, se quiser.');
-      } else {
-        // falha tecnica (sem ser distancia): mantem-se o valor fixo da
-        // entrega, o pedido segue e confirma-se tudo pelo WhatsApp.
-        entregaCotada = { fee_cent: Math.round(TAXA_ENTREGA * 100), quote_id: null };
-        caixaCotacao('', '');
       }
     } catch (e) {
-      entregaCotada = { fee_cent: Math.round(TAXA_ENTREGA * 100), quote_id: null };
-      caixaCotacao('', '');
+      // nao foi possivel sequer contactar o nosso servidor: mais vale
+      // pedir para tentar outra vez do que aceitar uma morada as cegas.
+      entregaCotada = null;
+      foraDeAlcance = true;
+      caixaCotacao('falha',
+        '<strong>Não consegui confirmar a entrega agora.</strong> Tente novamente daqui a pouco, ' +
+        'ou escolha <strong>levantamento no local</strong>.');
     }
     updateTotal();
   }

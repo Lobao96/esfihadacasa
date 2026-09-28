@@ -187,44 +187,69 @@ const ENTREGA_FIXA_CENT = 399;
 // entrega ali", em vez de um raio fixo no mapa.
 const ENTREGA_ETA_MAX_MIN = 15;
 
+// Prefixo dos codigos postais de Portimao. So entra em jogo quando o Uber
+// falha tecnicamente (nao responde, erro de rede, etc.) e serve so de rede
+// de seguranca: e grosseiro de proposito (pode aceitar uma zona do Alvor
+// que ja fica fora dos 15min, e recusar Parchal/Ferragudo que ficam
+// dentro), mas e melhor do que aceitar qualquer morada as cegas quando nao
+// se consegue perguntar ao Uber. Com o Uber a funcionar, quem decide e
+// sempre o tempo real de entrega, nunca este prefixo.
+const CP_SEGURANCA_PREFIXO = '8500';
+
+function codigoPostalSeguro(cp) {
+  return new RegExp('^' + CP_SEGURANCA_PREFIXO + '-?\\d{3}$').test((cp || '').trim());
+}
+
 async function cotacao(request, env) {
-  if (!env.UBER_CLIENT_SECRET || !env.UBER_PICKUP) {
-    return j({ ok: false, erro: 'sem ligacao ao uber' }, 503);
-  }
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
 
   const rua = limpar(b.morada, 200);
   if (!rua || rua.length < 5) return j({ ok: false, erro: 'morada curta' }, 400);
+  const cp = limpar(b.codigo_postal, 12) || '';
+
+  // Uber nao respondeu (config em falta, falha de autenticacao, erro de
+  // rede ou resposta invalida): cai-se na rede de seguranca do codigo
+  // postal em vez de aceitar as cegas.
+  function semUber() {
+    if (codigoPostalSeguro(cp)) {
+      return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT, custo_cent: 0, quote_id: null, minutos: null, expira: null });
+    }
+    return j({ ok: false, erro: 'fora_de_alcance' }, 200);
+  }
+
+  if (!env.UBER_CLIENT_SECRET || !env.UBER_PICKUP) return semUber();
 
   const destino = {
     street_address: [rua],
     city: limpar(b.localidade, 60) || 'Portimão',
     state: 'Faro',
-    zip_code: limpar(b.codigo_postal, 12) || '8500',
+    zip_code: cp || '8500',
     country: 'PT',
   };
 
   let token;
   try { token = await tokenUber(env); }
-  catch (e) { return j({ ok: false, erro: 'auth' }, 502); }
+  catch (e) { return semUber(); }
 
-  const r = await fetch(
-    `https://api.uber.com/v1/customers/${env.UBER_CUSTOMER_ID}/delivery_quotes`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + token },
-      body: JSON.stringify({
-        pickup_address: env.UBER_PICKUP,
-        dropoff_address: JSON.stringify(destino),
-      }),
-    }
-  );
-
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    return j({ ok: false, erro: 'sem cotacao', detalhe: d && (d.code || d.message) || r.status }, 200);
+  let r, d;
+  try {
+    r = await fetch(
+      `https://api.uber.com/v1/customers/${env.UBER_CUSTOMER_ID}/delivery_quotes`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          pickup_address: env.UBER_PICKUP,
+          dropoff_address: JSON.stringify(destino),
+        }),
+      }
+    );
+    d = await r.json().catch(() => ({}));
+  } catch (e) {
+    return semUber();
   }
+  if (!r.ok) return semUber();
 
   const minutos = d.duration || null;
   if (minutos && minutos > ENTREGA_ETA_MAX_MIN) {
