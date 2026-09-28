@@ -179,28 +179,32 @@ async function tokenUber(env) {
   return tokenCache.valor;
 }
 
-// O cliente paga sempre um valor fixo, seja qual for o custo real do Uber
-// (mesmo quando o Uber oferece entrega mais barata ou gratis) — esse valor
-// fixo é o que subsidia as zonas mais caras. O custo real e os minutos
-// ficam registados no pedido só para analise interna.
-const ENTREGA_FIXA_CENT = 399; // o que o cliente paga pela entrega
-
-// Quem decide se se entrega numa morada e o proprio Uber, e o criterio
-// principal e o CUSTO: o cliente paga sempre ENTREGA_FIXA_CENT, por isso
-// o custo do Uber nao pode ultrapassar isto em mais do que a margem que
-// se aceita perder por entrega. Testado ao vivo: o custo do Uber sobe de
-// forma consistente com a distancia real (ex.: 3,94€ na propria rua da
-// cozinha, 6,09€ a ~1,5km), por isso e um bom filtro de zona.
+// O que o cliente paga pela entrega depende de quanto a Uber cobra
+// realmente (testado ao vivo: o custo sobe de forma consistente com a
+// distancia real -- 3,94€ na propria rua da cozinha, 6,52€ ao Parchal,
+// 9,10€ ao Alvor -- por isso e um bom filtro de zona, ao contrario do
+// campo "duration" da cotacao, que tem sempre um piso de ~40min mesmo
+// para distancia zero e nao reflete o tempo real).
 //
-// O campo "duration" da cotacao (usado antes como limite de 20min) NAO
-// serve para isto: testado ao vivo, tem sempre um piso de ~40min mesmo
-// para distancia zero (o Uber ainda nao despachou ninguem, e so uma
-// cotacao) -- nao reflete o tempo real da entrega. Fica como so uma rede
-// de seguranca contra casos verdadeiramente extremos; quem faz o corte
-// de zona e mesmo o custo.
+// Por isso ha duas faixas de preco: perto (cobra 3,99€) e zona alargada
+// como Parchal/Alvor (cobra 7,99€, para cobrir o custo mais alto do Uber
+// nessas zonas). Em ambas as faixas perde-se no maximo ~2€ por entrega
+// se o Uber cobrar o maximo permitido nessa faixa. Acima da ultima faixa,
+// a entrega e recusada -- nunca por estar numa localidade em vez de
+// outra, so pelo custo real que o Uber cobra para lá chegar.
+const ENTREGA_FAIXAS = [
+  { custo_max_cent: 599, cobra_cent: 399 }, // zona perto
+  { custo_max_cent: 999, cobra_cent: 799 }, // zona alargada (ex.: Parchal, Alvor)
+];
+const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado so na rede de seguranca (ver semUber)
+
+// O campo "duration" da cotacao fica so como rede de seguranca contra
+// casos verdadeiramente extremos -- quem faz o corte de zona e o custo.
 const ENTREGA_ETA_MAX_MIN = 60;
-const ENTREGA_MARGEM_MAX_CENT = 200; // perde-se no maximo 2€ por entrega
-const ENTREGA_CUSTO_MAX_CENT = ENTREGA_FIXA_CENT + ENTREGA_MARGEM_MAX_CENT; // 5,99€
+
+function faixaDeEntrega(custoCent) {
+  return ENTREGA_FAIXAS.find(f => custoCent <= f.custo_max_cent) || null;
+}
 
 // Rede de seguranca por codigo postal. So entra em jogo quando o Uber falha
 // tecnicamente (nao responde, erro de rede, etc.) ou quando o autocomplete
@@ -395,18 +399,17 @@ async function cotacao(request, env) {
 
   const minutos = d.duration || null;
   if (minutos && minutos > ENTREGA_ETA_MAX_MIN) {
-    // diagnostico temporario: mostra o pickup usado e a resposta toda do
-    // Uber para se perceber porque o tempo esta a dar tao alto.
-    return j({ ok: false, erro: 'fora_de_alcance', minutos, uber_pickup_usado: env.UBER_PICKUP, uber_resposta: d }, 200);
+    return j({ ok: false, erro: 'fora_de_alcance', minutos }, 200);
   }
   const custo = d.fee || 0;
-  if (custo > ENTREGA_CUSTO_MAX_CENT) {
+  const faixa = faixaDeEntrega(custo);
+  if (!faixa) {
     return j({ ok: false, erro: 'fora_de_alcance', minutos, custo_cent: custo }, 200);
   }
 
   return j({
     ok: true,
-    fee_cent: ENTREGA_FIXA_CENT,
+    fee_cent: faixa.cobra_cent,
     custo_cent: custo,
     quote_id: d.id || null,
     minutos,
