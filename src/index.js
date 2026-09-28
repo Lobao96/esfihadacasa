@@ -198,14 +198,21 @@ async function tokenUber(env) {
 // falta calcular o impacto real disto juntando ao resto das despesas do
 // negocio (nao so o custo direto do Uber).
 //
-// Por isso ha duas faixas de preco: perto (cobra 3,99€, custo Uber ate
-// 5,99€) e zona alargada como Parchal/Alvor (cobra 5,99€, custo Uber ate
-// 8€). Acima de 8€ de custo, a entrega e recusada -- nunca por estar
-// numa localidade em vez de outra, so pelo custo real que o Uber cobra
-// para lá chegar.
+// Por isso ha tres faixas de preco: perto (cobra 3,99€, custo Uber ate
+// 5,99€), zona alargada como Parchal/Alvor (cobra 5,99€, custo Uber ate
+// 8€) e zona longe (cobra 7,99€, custo Uber ate 10€) -- esta ultima e
+// "opcional": o site nao aplica o preco sem mais, mostra ao cliente que
+// aquela zona tem taxa mais alta e deixa-o escolher se quer pagar para
+// ter entrega ou preferir levantamento (28/09: ha ruas em Alvor a 2 min
+// de distancia uma da outra em que uma fica a 6,52€ e outra a 9,10€ de
+// custo Uber -- recusar a segunda por completo perdia a venda de quem
+// tinha todo o gosto em pagar a diferenca). Acima de 10€ de custo, a
+// entrega e recusada -- nunca por estar numa localidade em vez de outra,
+// so pelo custo real que o Uber cobra para lá chegar.
 const ENTREGA_FAIXAS = [
   { custo_max_cent: 599, cobra_cent: 399 }, // zona perto
   { custo_max_cent: 800, cobra_cent: 599 }, // zona alargada (ex.: Parchal, Alvor)
+  { custo_max_cent: 1000, cobra_cent: 799, opcional: true }, // zona longe: só com o cliente a aceitar a taxa mais alta
 ];
 const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado so na rede de seguranca (ver semUber)
 
@@ -421,6 +428,7 @@ async function cotacao(request, env) {
   return j({
     ok: true,
     fee_cent: faixa.cobra_cent,
+    opcional: !!faixa.opcional,
     custo_cent: custo,
     quote_id: d.id || null,
     minutos,

@@ -306,6 +306,15 @@
   .cotacao.ok { background: rgba(30,142,74,0.10); color: #146634; border: 1.5px solid #1E8E4A; }
   .cotacao.espera { background: rgba(58,31,18,0.05); color: var(--ink-soft); }
   .cotacao.falha { background: rgba(244,185,66,0.18); color: var(--ink); border: 1.5px dashed var(--gold); }
+  .cotacao.opcional { background: rgba(244,185,66,0.18); color: var(--ink); border: 1.5px dashed var(--gold); }
+  .cotacao-opcoes { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .cotacao-opcoes button {
+    font-family: inherit; font-weight: 800; font-size: 0.82rem; padding: 9px 14px;
+    border-radius: 999px; border: 1.5px solid var(--red); cursor: pointer;
+  }
+  .cotacao-opcoes button.aceitar { background: var(--red); color: var(--white); }
+  .cotacao-opcoes button.recusar { background: transparent; color: var(--red); }
+  .taxa-nota { font-size: 0.74rem; color: var(--ink-soft); margin-top: 4px; line-height: 1.4; }
   .confirma {
     display: flex; gap: 11px; align-items: flex-start; margin-top: 12px;
     padding: 13px 14px; border-radius: 12px; cursor: pointer;
@@ -643,6 +652,7 @@
       </div>
       <div class="addr-field" id="addrField" style="display:none;">
         <div class="zone-info ok">Taxa de entrega: calculada pela sua morada</div>
+        <div class="taxa-nota">O valor da taxa de entrega é definido pela empresa de entregas parceira (terceiros) — não lucramos com essa taxa; nalgumas moradas até ficamos a perder.</div>
         <div class="addr-wrap">
           <input type="text" id="addrInput" placeholder="Rua e número"
                  autocomplete="off" oninput="onAddrInput()">
@@ -1692,6 +1702,7 @@
 
   // ---- preço real da entrega, vindo do Uber ----
   let entregaCotada = null;      // { fee_cent, quote_id } quando o Uber responde
+  let entregaOpcionalPendente = null; // quote da zona longe, à espera do cliente aceitar ou não
   let temporizadorCotacao = null;
   let foraDeAlcance = false;     // true = esta morada fica fora da zona de entrega
 
@@ -1891,6 +1902,7 @@
     renderConfirmacao();
     clearTimeout(temporizadorCotacao);
     entregaCotada = null;
+    entregaOpcionalPendente = null;
     updateTotal();
     temporizadorCotacao = setTimeout(pedirCotacao, 900);
   }
@@ -1920,13 +1932,27 @@
         body: JSON.stringify({ morada: morada.trim(), localidade: loc.trim(), codigo_postal: cp.trim() }),
       });
       const d = await r.json();
-      if (d && d.ok) {
+      if (d && d.ok && d.opcional) {
+        // Zona longe: nao aplica o preco sem mais, deixa o cliente escolher
+        // se quer pagar a taxa mais alta ou preferir levantamento.
+        entregaCotada = null;
+        entregaOpcionalPendente = { fee_cent: d.fee_cent, quote_id: d.quote_id, minutos: d.minutos || null, custo_cent: d.custo_cent || null };
+        caixaCotacao('opcional',
+          `<strong>Esta morada fica numa zona de entrega mais cara.</strong> A empresa de entregas cobra mais para lá chegar.<br>` +
+          `Quer pagar <strong>${fmt(d.fee_cent / 100)}</strong> de taxa de entrega, ou prefere levantar no local?` +
+          `<div class="cotacao-opcoes">` +
+          `<button type="button" class="aceitar" onclick="aceitarEntregaOpcional()">Aceito, quero entrega</button>` +
+          `<button type="button" class="recusar" onclick="recusarEntregaOpcional()">Prefiro levantamento</button>` +
+          `</div>`);
+      } else if (d && d.ok) {
+        entregaOpcionalPendente = null;
         entregaCotada = { fee_cent: d.fee_cent, quote_id: d.quote_id, minutos: d.minutos || null, custo_cent: d.custo_cent || null };
         caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>`);
       } else {
         // fora de alcance, ou o Uber falhou e o codigo postal nao e da
         // nossa zona: o backend ja decidiu, nao se aceita as cegas.
         entregaCotada = null;
+        entregaOpcionalPendente = null;
         foraDeAlcance = true;
         caixaCotacao('falha',
           '<strong>Ainda não entregamos nessa morada</strong> — fica longe demais da nossa cozinha ' +
@@ -1936,12 +1962,29 @@
       // nao foi possivel sequer contactar o nosso servidor: mais vale
       // pedir para tentar outra vez do que aceitar uma morada as cegas.
       entregaCotada = null;
+      entregaOpcionalPendente = null;
       foraDeAlcance = true;
       caixaCotacao('falha',
         '<strong>Não consegui confirmar a entrega agora.</strong> Tente novamente daqui a pouco, ' +
         'ou escolha <strong>levantamento no local</strong>.');
     }
     updateTotal();
+  }
+
+  function aceitarEntregaOpcional() {
+    if (!entregaOpcionalPendente) return;
+    entregaCotada = entregaOpcionalPendente;
+    entregaOpcionalPendente = null;
+    caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(entregaCotada.fee_cent / 100)}</strong>`);
+    updateTotal();
+    mostrarFaltas([]);
+  }
+
+  function recusarEntregaOpcional() {
+    entregaOpcionalPendente = null;
+    entregaCotada = null;
+    caixaCotacao('', '');
+    setOrderType('levantamento');
   }
 
   async function verEstadoLoja() {
@@ -1989,6 +2032,7 @@
       else if (loc.length < 2) faltas.push('Entrega: falta escrever a localidade.');
       else if (!cpValido(cp)) faltas.push('Entrega: falta o código postal, no formato 0000-000.');
       else if (foraDeAlcance) faltas.push('Entrega: não fazemos entrega para essa morada. Escolha levantamento no local.');
+      else if (entregaOpcionalPendente) faltas.push('Entrega: falta escolher se aceita a taxa de entrega mais alta para esta morada, ou opte por levantamento no local.');
       else if (moradaConfirmada !== m) faltas.push('Entrega: falta confirmar a morada na caixa amarela.');
     }
     return faltas;
