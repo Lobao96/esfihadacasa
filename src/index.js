@@ -180,31 +180,18 @@ async function tokenUber(env) {
 // (mesmo quando o Uber oferece entrega mais barata ou gratis) — esse valor
 // fixo é o que subsidia as zonas mais caras. O custo real e os minutos
 // ficam registados no pedido só para analise interna.
-const ENTREGA_FIXA_CENT = 399;
+const ENTREGA_FIXA_CENT = 399; // o que o cliente paga pela entrega
 
-// Se o Uber demorar mais do que isto a entregar, não aceitamos o pedido
-// para essa morada — é a fronteira que decide "fazemos/não fazemos
-// entrega ali", em vez de um raio fixo no mapa.
-const ENTREGA_ETA_MAX_MIN = 15;
-
-// Lista fixa das localidades onde entregamos. Isto corre sempre, mesmo
-// que o Uber diga que uma morada fica a menos de 15 min (o transito varia
-// e a Google pode devolver o codigo postal errado se a morada estiver mal
-// escrita) -- por isso nunca e so o tempo do Uber a decidir "entregamos
-// aqui", tem sempre de bater certo com esta lista tambem. Cobre Portimao,
-// Praia da Rocha, Alvor, Ferragudo e Parchal; exclui de proposito Estombar,
-// Lagoa, Mexilhoeira Grande, Silves e qualquer outra localidade.
-const LOCALIDADES_SEGURAS = new Set([
-  'portimao', 'praia da rocha', 'alvor', 'ferragudo', 'parchal',
-]);
-
-function normalizarTexto(s) {
-  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-}
-
-function localidadeSegura(loc) {
-  return LOCALIDADES_SEGURAS.has(normalizarTexto(loc));
-}
+// Quem decide se se entrega numa morada e o proprio Uber, com dois
+// limites: o tempo estimado (com uma margem -- 15 min e o alvo, mas ate
+// 20 min tudo bem se for so o transito a atrasar um pouco) e o custo que
+// o Uber cobra (o cliente paga sempre ENTREGA_FIXA_CENT, por isso o custo
+// do Uber nao pode ultrapassar isto em mais do que a margem que se aceita
+// perder por entrega). Uma morada so e recusada se ultrapassar um destes
+// dois limites -- nunca por estar numa localidade em vez de outra.
+const ENTREGA_ETA_MAX_MIN = 20;
+const ENTREGA_MARGEM_MAX_CENT = 200; // perde-se no maximo 2€ por entrega
+const ENTREGA_CUSTO_MAX_CENT = ENTREGA_FIXA_CENT + ENTREGA_MARGEM_MAX_CENT; // 5,99€
 
 // Rede de seguranca por codigo postal. So entra em jogo quando o Uber falha
 // tecnicamente (nao responde, erro de rede, etc.) ou quando o autocomplete
@@ -344,15 +331,6 @@ async function cotacao(request, env) {
   const rua = limpar(b.morada, 200);
   if (!rua || rua.length < 5) return j({ ok: false, erro: 'morada curta' }, 400);
   const cp = limpar(b.codigo_postal, 12) || '';
-  const localidade = limpar(b.localidade, 60) || '';
-
-  // Filtro fixo por localidade: corre sempre, antes de perguntar ao Uber
-  // seja o que for. Uma morada fora desta lista nunca e aceite, nem que o
-  // Uber diga que da tempo -- e a localidade que decide a zona, o Uber so
-  // decide se dentro da zona ainda vale a pena por causa do transito.
-  if (!localidadeSegura(localidade)) {
-    return j({ ok: false, erro: 'fora_de_alcance' }, 200);
-  }
 
   // Uber nao respondeu (config em falta, falha de autenticacao, erro de
   // rede ou resposta invalida): cai-se na rede de seguranca do codigo
@@ -401,13 +379,17 @@ async function cotacao(request, env) {
   if (minutos && minutos > ENTREGA_ETA_MAX_MIN) {
     return j({ ok: false, erro: 'fora_de_alcance', minutos }, 200);
   }
+  const custo = d.fee || 0;
+  if (custo > ENTREGA_CUSTO_MAX_CENT) {
+    return j({ ok: false, erro: 'fora_de_alcance', minutos, custo_cent: custo }, 200);
+  }
 
   return j({
     ok: true,
     fee_cent: ENTREGA_FIXA_CENT,
-    custo_cent: d.fee || 0,
+    custo_cent: custo,
     quote_id: d.id || null,
-    minutos: d.duration || null,
+    minutos,
     expira: d.expires || null,
   });
 }
