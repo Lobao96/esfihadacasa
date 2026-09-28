@@ -384,7 +384,9 @@ async function cotacao(request, env) {
 
   const minutos = d.duration || null;
   if (minutos && minutos > ENTREGA_ETA_MAX_MIN) {
-    return j({ ok: false, erro: 'fora_de_alcance', minutos }, 200);
+    // diagnostico temporario: mostra o pickup usado e a resposta toda do
+    // Uber para se perceber porque o tempo esta a dar tao alto.
+    return j({ ok: false, erro: 'fora_de_alcance', minutos, uber_pickup_usado: env.UBER_PICKUP, uber_resposta: d }, 200);
   }
   const custo = d.fee || 0;
   if (custo > ENTREGA_CUSTO_MAX_CENT) {
