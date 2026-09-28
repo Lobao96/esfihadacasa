@@ -94,6 +94,21 @@
     text-decoration:none;border-radius:12px}
   .nav-i span{font-size:1.25rem;line-height:1}
   .nav-i.on{color:var(--gold);background:rgba(255,255,255,.07)}
+  .modal-fundo{position:fixed;inset:0;background:rgba(58,31,18,.55);z-index:40;
+    display:none;align-items:flex-start;justify-content:center;padding:24px 14px;overflow-y:auto}
+  .modal-fundo.on{display:flex}
+  .modal{background:var(--white);border-radius:16px;padding:20px;max-width:480px;width:100%;margin-top:18px}
+  .modal h2{font-family:'Baloo 2',sans-serif;margin-bottom:4px}
+  .modal .nota{font-size:.78rem;color:var(--ink-soft);margin-bottom:10px;line-height:1.4}
+  .custo-grupo{font-size:.74rem;font-weight:800;color:var(--ink-mudo);text-transform:uppercase;
+    letter-spacing:.03em;margin:14px 0 6px}
+  .custo-linha{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(58,31,18,.08)}
+  .custo-linha span{flex:1;font-size:.88rem;font-weight:700}
+  .custo-linha input{width:82px;text-align:right;padding:8px 10px;font-size:.9rem}
+  .modal-botoes{display:flex;gap:10px;margin-top:16px}
+  .modal-botoes button{flex:1;margin-top:0}
+  .btn-secundario{background:transparent;color:var(--ink-soft);border:1.5px solid rgba(58,31,18,.2)}
+  .custo-msg{font-size:.8rem;font-weight:800;color:#146634;display:none;margin-top:8px}
   .duas{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media (max-width:640px){ .duas{grid-template-columns:1fr} }
 </style>
@@ -111,6 +126,7 @@
 <div id="app" style="display:none">
   <header>
     <h1>📊 Análise</h1>
+    <button class="pb" style="margin-left:auto;background:transparent;color:var(--gold);border-color:rgba(244,185,66,.5)" onclick="abrirCustos()">⚙️ Custos</button>
   </header>
   <div class="wrap">
     <div class="periodo">
@@ -128,6 +144,21 @@
     </div>
     <p class="intervalo" id="intervalo"></p>
     <div id="conteudo"></div>
+  </div>
+
+  <div class="modal-fundo" id="custosModal">
+    <div class="modal">
+      <h2>⚙️ Custos dos produtos</h2>
+      <p class="nota">Preencha o custo aproximado de cada produto (ingredientes). Serve só para
+        estimar o lucro no fecho de caixa — não é contabilidade oficial. Pode deixar a 0 o que
+        ainda não souber; fica de fora da conta até preencher.</p>
+      <div id="custosLista"></div>
+      <div class="custo-msg" id="custoMsg">Guardado!</div>
+      <div class="modal-botoes">
+        <button class="btn btn-secundario" onclick="fecharCustos()">Fechar</button>
+        <button class="btn" onclick="guardarCustosPainel()">Guardar</button>
+      </div>
+    </div>
   </div>
 
   <nav class="nav">
@@ -148,6 +179,59 @@
     const r = await fetch('/api' + caminho, { headers: { 'x-painel-pass': pass }, cache: 'no-store' });
     if (r.status === 401) throw new Error('401');
     return r.json();
+  }
+
+  // Mesma lista de produtos do site (public/index.html), so os nomes --
+  // e para o dono poder definir o custo de cada um, mesmo dos que ainda
+  // nao venderam nada.
+  const PRODUTOS_CUSTO = [
+    { grupo: 'Salgadas', itens: ['A Tradicional', 'A Suculenta', 'A Caipira', 'A Queridinha'] },
+    { grupo: 'Doces', itens: ['A Que Todo Mundo Ama', 'A Irresistível', 'A Diferentona'] },
+    { grupo: 'Extras salgadas', itens: ['Bacon', 'Milho', 'Queijo', 'Azeitona', 'Chouriço em cubos', 'Fiambre'] },
+    { grupo: 'Extras doces', itens: ['Morango', 'Coco', 'Amendoim'] },
+    { grupo: 'Bebidas', itens: ['Coca-Cola 1L', 'Fanta Laranja 1L', 'Guaraná', 'Coca-Cola',
+                                 'Coca-Cola Zero', 'Fanta Laranja', 'Iced Tea Pêssego', 'Água'] },
+  ];
+
+  function idCusto(nome) { return 'c_' + nome.replace(/[^a-zA-Z0-9]/g, ''); }
+
+  async function abrirCustos() {
+    document.getElementById('custosModal').classList.add('on');
+    document.getElementById('custoMsg').style.display = 'none';
+    let atuais = {};
+    try {
+      const d = await api('/painel/custos');
+      (d.custos || []).forEach(c => { atuais[c.produto] = c.custo_cent; });
+    } catch (e) {}
+    document.getElementById('custosLista').innerHTML = PRODUTOS_CUSTO.map(g => `
+      <div class="custo-grupo">${esc(g.grupo)}</div>
+      ${g.itens.map(nome => `
+        <div class="custo-linha">
+          <span>${esc(nome)}</span>
+          <input type="number" step="0.01" min="0" inputmode="decimal" id="${idCusto(nome)}"
+                 value="${atuais[nome] ? (atuais[nome] / 100).toFixed(2) : ''}" placeholder="0,00">
+        </div>`).join('')}
+    `).join('');
+  }
+
+  function fecharCustos() { document.getElementById('custosModal').classList.remove('on'); }
+
+  async function guardarCustosPainel() {
+    const itens = [];
+    PRODUTOS_CUSTO.forEach(g => g.itens.forEach(nome => {
+      const el = document.getElementById(idCusto(nome));
+      const v = el ? parseFloat((el.value || '0').replace(',', '.')) : 0;
+      itens.push({ produto: nome, custo_cent: Math.round((v || 0) * 100) });
+    }));
+    await fetch('/api/painel/custos', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-painel-pass': pass },
+      body: JSON.stringify({ itens }),
+    });
+    const msg = document.getElementById('custoMsg');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+    carregar();
   }
 
   async function entrar() {
@@ -254,6 +338,21 @@
           <div class="extra">por pedido</div></div>
         <div class="tile"><div class="v">${r.esfihas || 0}</div><div class="k">Esfihas</div>
           <div class="extra">${pedidos ? (r.esfihas / pedidos).toFixed(1) : '0'} por pedido</div></div>
+      </div>
+
+      <div class="bloco">
+        <h2>Fecho de caixa · custo e lucro estimados</h2>
+        <p class="nota">${D.custoProdutos ? 'Estimativa a partir dos custos que preencheu em' : 'Ainda sem custos preenchidos em'}
+          <a href="#" onclick="abrirCustos();return false;" style="color:var(--red);font-weight:800">⚙️ Custos</a> —
+          nunca é a contabilidade real, só uma referência rápida.</p>
+        <div class="tiles">
+          <div class="tile"><div class="v">${eur0(D.custoProdutos)}</div><div class="k">Custo estimado</div>
+            <div class="extra">ingredientes vendidos</div></div>
+          <div class="tile"><div class="v destaque">${eur0(D.lucroEstimado)}</div><div class="k">Lucro estimado</div>
+            <div class="extra">receita − custo − Uber</div></div>
+          <div class="tile"><div class="v">${eur0(D.entregaCobrada)}</div><div class="k">Entregas cobradas</div>
+            <div class="extra">${eur0(D.entregaCustoUber)} pago à Uber</div></div>
+        </div>
       </div>
 
       <div class="bloco">

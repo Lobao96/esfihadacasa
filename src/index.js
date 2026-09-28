@@ -792,10 +792,17 @@ async function analise(request, env) {
        FROM visitas WHERE dia >= ? AND dia <= ? GROUP BY origem ORDER BY visitas DESC`
   ).bind(de, ate).all();
 
+  // Custo por produto (sabor, extra ou bebida) definido a mao no painel --
+  // serve so para dar uma nocao de custo/lucro, nao e contabilidade real.
+  const { results: custosRows } = await env.DB.prepare('SELECT produto, custo_cent FROM custos').all();
+  const custos = {};
+  for (const c of custosRows || []) custos[c.produto] = c.custo_cent || 0;
+
   const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
   const dias = {}, horas = {}, zonas = {}, origens = {};
   const sabores = {}, extras = {}, bebidas = {};
   let receita = 0, esfihas = 0, entregas = 0;
+  let custoProdutos = 0, entregaCobrada = 0, entregaCustoUber = 0;
 
   for (const r of linhas || []) {
     receita += r.total_cent || 0;
@@ -824,9 +831,20 @@ async function analise(request, env) {
     if (it && !Array.isArray(it)) {
       for (const x of it.producao || []) {
         somar(sabores, x.sabor, x.n || 0);
-        for (const e of x.extras || []) somar(extras, e, x.n || 0);
+        custoProdutos += (custos[x.sabor] || 0) * (x.n || 0);
+        for (const e of x.extras || []) {
+          somar(extras, e, x.n || 0);
+          custoProdutos += (custos[e] || 0) * (x.n || 0);
+        }
       }
-      for (const b of it.bebidas || []) somar(bebidas, b.nome, b.n || 0);
+      for (const b of it.bebidas || []) {
+        somar(bebidas, b.nome, b.n || 0);
+        custoProdutos += (custos[b.nome] || 0) * (b.n || 0);
+      }
+      if (it.entrega) {
+        entregaCobrada += it.entrega.cent || 0;
+        entregaCustoUber += it.entrega.custo_cent || 0;
+      }
     }
   }
 
@@ -851,7 +869,30 @@ async function analise(request, env) {
     porOrigem: valores(origens).sort((a, b) => b.pedidos - a.pedidos),
     visitas: vis || [],
     sabores: ordenar(sabores), extras: ordenar(extras), bebidas: ordenar(bebidas),
+    // Fecho de caixa: so aparece com nocao real quando os custos estiverem
+    // preenchidos no painel -- ate la fica tudo a 0 (nunca inventa valores).
+    custoProdutos, entregaCobrada, entregaCustoUber,
+    lucroEstimado: receita - custoProdutos - entregaCustoUber,
   });
+}
+
+async function listarCustos(env) {
+  const { results } = await env.DB.prepare('SELECT produto, custo_cent FROM custos ORDER BY produto').all();
+  return j({ ok: true, custos: results || [] });
+}
+
+async function guardarCustos(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const itens = Array.isArray(b.itens) ? b.itens : [];
+  const lote = itens
+    .filter(it => it && it.produto)
+    .map(it => env.DB.prepare(
+      `INSERT INTO custos (produto, custo_cent) VALUES (?, ?)
+       ON CONFLICT(produto) DO UPDATE SET custo_cent = excluded.custo_cent`
+    ).bind(limpar(it.produto, 120), Math.max(0, parseInt(it.custo_cent, 10) || 0)));
+  if (lote.length) await env.DB.batch(lote);
+  return await listarCustos(env);
 }
 
 // ---------------------------------------------------------------- entrada
@@ -920,6 +961,8 @@ export default {
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
+        if (p === '/api/painel/custos' && request.method === 'GET') return await listarCustos(env);
+        if (p === '/api/painel/custos' && request.method === 'POST') return await guardarCustos(request, env);
         if (p === '/api/painel/subscrever' && request.method === 'POST') return await subscrever(request, env);
         if (p === '/api/painel/testar-aviso' && request.method === 'POST') return await testarAviso(request, env, ctx);
         if (p === '/api/painel/uber-entrega' && request.method === 'POST') return await criarEntregaUberReal(request, env);
