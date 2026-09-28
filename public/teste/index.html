@@ -1269,7 +1269,7 @@
       return `
         ${comboSecao(u, 'salgada', MENU.salgadas, c.nSalgadas)}
         ${comboSecao(u, 'doce', MENU.doces, c.nDoces)}
-        <p class="combo-step">🎁 Oferta de ${rotuloFixo} ${tipoTexto} <span style="opacity:.7;font-weight:400">Basta colocar (conforme o stock existente)</span></p>`;
+        <p class="combo-step">🎁 Oferta de ${rotuloFixo} ${tipoTexto} <span style="opacity:.7;font-weight:400">(conforme o stock existente)</span></p>`;
     }
     const beb = bebidasDoCombo(c).map(b =>
       `<button class="ex-chip${u.bebidas.indexOf(b.id) >= 0 ? ' on' : ''}" onclick="comboToggleBebida(${u.uid}, '${b.id}')">${b.name}</button>`
