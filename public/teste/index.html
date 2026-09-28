@@ -648,11 +648,11 @@
       <div class="addr-field" id="addrField" style="display:none;">
         <div class="zone-info ok">Taxa de entrega: 3,99€</div>
         <div class="addr-wrap">
-          <input type="text" id="addrInput" placeholder="Rua"
+          <input type="text" id="addrInput" placeholder="Rua e número"
                  autocomplete="off" oninput="onAddrInput()">
           <ul class="addr-suggest" id="addrSuggest"></ul>
         </div>
-        <input type="text" id="numAndarInput" placeholder="Número e andar (ex.: 12, 2º Esq)"
+        <input type="text" id="andarInput" placeholder="Andar (opcional)"
                autocomplete="off" oninput="agendarCotacao()">
         <input type="text" id="locInput" placeholder="Localidade"
                oninput="agendarCotacao()">
@@ -1681,8 +1681,8 @@
 
   function ruaCompleta() {
     const r = ((document.getElementById('addrInput') || {}).value || '').trim();
-    const na = ((document.getElementById('numAndarInput') || {}).value || '').trim();
-    return [r, na].filter(Boolean).join(', ');
+    const andar = ((document.getElementById('andarInput') || {}).value || '').trim();
+    return [r, andar].filter(Boolean).join(', ');
   }
 
   function moradaEscrita() {
@@ -1822,11 +1822,13 @@
       if (locEl && localidade) locEl.value = localidade;
       const cpEl = document.getElementById('cpInput');
       if (cpEl && codigoPostal) cpEl.value = codigoPostal;
-      // depois de escolher a morada, falta so o numero (se a Google nao o
-      // tiver dado) e o andar -- ficam num campo proprio, sem autocomplete,
-      // para escrever nao voltar a abrir a lista de sugestoes.
-      const naEl = document.getElementById('numAndarInput');
-      if (naEl) { naEl.focus(); naEl.select(); }
+      // o numero pode ser escrito logo na rua (o autocomplete refina a
+      // sugestao a medida que se escreve, tal como no Google Maps, e assim
+      // a Google devolve o codigo postal certo para esse numero). So falta
+      // o andar, que a Google nunca devolve -- fica num campo proprio, sem
+      // autocomplete, para escrever nao voltar a abrir a lista de sugestoes.
+      const andarEl = document.getElementById('andarInput');
+      if (andarEl) { andarEl.focus(); andarEl.select(); }
     } catch (e) {
       // morada escolhida mas os detalhes falharam: fica o texto que o
       // cliente ja via na sugestao, ele pode corrigir os outros campos
