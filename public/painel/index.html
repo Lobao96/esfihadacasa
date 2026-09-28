@@ -235,6 +235,22 @@
     if (janela) janela.location.href = url; else window.open(url, '_blank', 'noopener');
   }
 
+  // Copia o link do recibo/acompanhamento do pedido, para reenviar mais
+  // tarde caso o cliente peça outra vez ou não tenha sido enviado na hora
+  // (funciona seja qual for o estado do pedido — entregue, ensaio, etc.).
+  async function copiarLink(id) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p || !p.token) return;
+    const link = location.origin + '/pedido/?t=' + p.token;
+    const btn = document.getElementById('lnk' + id);
+    try {
+      await navigator.clipboard.writeText(link);
+      if (btn) { const t = btn.textContent; btn.textContent = '✓ Copiado!'; setTimeout(() => { btn.textContent = t; }, 1800); }
+    } catch (e) {
+      window.prompt('Copie o link:', link);
+    }
+  }
+
   // Momento certo para cada estado do pedido.
   function momentoDe(p) {
     if (p.estado === 'novo') return p.pago ? 'pago' : 'recebido';
@@ -561,6 +577,7 @@
               onclick="marcar(${p.id}, {estado: '${prox[0]}'})">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
+          ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
           <button class="ac" onclick="marcar(${p.id}, {estado: 'cancelado'})">Cancelar</button>
         </div>
       </div>`;
