@@ -235,6 +235,56 @@
     if (janela) janela.location.href = url; else window.open(url, '_blank', 'noopener');
   }
 
+  // Ao carregar em "Começar a fazer": marca sempre a preparação (desconta
+  // stock), e só para pedidos de ENTREGA pergunta se quer chamar já o
+  // estafeta real no Uber. Nunca pergunta nem chama para retirada. A
+  // chamada ao Uber só acontece se o staff confirmar na caixa.
+  async function comecarFazer(id) {
+    const p = pedidos.find(x => x.id === id);
+    await marcar(id, { estado: 'preparacao' });
+    if (!p || p.modo !== 'entrega') return;
+    if (confirm('Quer chamar já o estafeta da Uber para esta entrega?')) {
+      await chamarUber(id);
+    }
+  }
+
+  async function chamarUber(id) {
+    let d;
+    try {
+      d = await api('/painel/uber-entrega', { method: 'POST', body: JSON.stringify({ id }) });
+    } catch (e) {
+      alert('Não consegui falar com o Uber. Peça o estafeta manualmente.');
+      return;
+    }
+    if (d && d.ok) {
+      alert('Estafeta pedido! ' + (d.tracking_url ? 'Link de acompanhamento:\n' + d.tracking_url : ''));
+    } else if (d && d.erro === 'ja_pedido') {
+      alert('Este pedido já tinha um estafeta pedido antes.' + (d.tracking_url ? '\n' + d.tracking_url : ''));
+    } else {
+      alert('Não consegui pedir o estafeta (' + (d && d.erro ? d.erro : 'erro desconhecido') + ').\nPeça manualmente.');
+    }
+    await carregar();
+  }
+
+  // Ao cancelar um pedido de entrega que já tinha estafeta pedido no Uber,
+  // pergunta se quer cancelar também no Uber.
+  async function cancelarPedido(id) {
+    const p = pedidos.find(x => x.id === id);
+    await marcar(id, { estado: 'cancelado' });
+    if (!p) return;
+    const d = dadosDe(p);
+    const temUber = d.entrega && d.entrega.uber_delivery_id && !d.entrega.uber_cancelada_em;
+    if (temUber && confirm('Este pedido já tinha estafeta da Uber pedido. Cancelar também a entrega no Uber?')) {
+      try {
+        const r = await api('/painel/uber-cancelar', { method: 'POST', body: JSON.stringify({ id }) });
+        if (!r || !r.ok) alert('Não consegui cancelar no Uber (' + (r && r.erro ? r.erro : 'erro') + '). Cancele manualmente.');
+      } catch (e) {
+        alert('Não consegui cancelar no Uber. Cancele manualmente.');
+      }
+      await carregar();
+    }
+  }
+
   // Copia o link do recibo/acompanhamento do pedido, para reenviar mais
   // tarde caso o cliente peça outra vez ou não tenha sido enviado na hora
   // (funciona seja qual for o estado do pedido — entregue, ensaio, etc.).
@@ -574,11 +624,11 @@
             ${p.pago ? '✓ Pago' : 'Marcar pago'}
           </button>
           ${prox ? `<button class="ac ${travado ? '' : 'destaque'}" ${travado ? 'disabled title="Na entrega, marque pago primeiro"' : ''}
-              onclick="marcar(${p.id}, {estado: '${prox[0]}'})">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
+              onclick="${prox[0] === 'preparacao' ? `comecarFazer(${p.id})` : `marcar(${p.id}, {estado: '${prox[0]}'})`}">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
-          <button class="ac" onclick="marcar(${p.id}, {estado: 'cancelado'})">Cancelar</button>
+          <button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>
         </div>
       </div>`;
     }).join('');

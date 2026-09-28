@@ -480,6 +480,163 @@ async function acompanhar(request, env) {
   return j({ ok: true, pedido: p });
 }
 
+// Cria a entrega REAL no Uber Direct para um pedido (so entrega, nunca
+// retirada). So e chamada quando o staff confirma explicitamente no
+// painel -- nunca automaticamente. Pede sempre uma cotacao nova primeiro,
+// porque a cotacao guardada no pedido pode ja ter expirado entre o
+// cliente fazer o pedido e o staff carregar em "Comecar a fazer".
+async function criarEntregaUberReal(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+  if (p.modo !== 'entrega') return j({ ok: false, erro: 'nao_e_entrega' }, 400);
+  if (!p.morada || p.morada.length < 5) return j({ ok: false, erro: 'sem_morada' }, 200);
+
+  let dados = {};
+  try { dados = JSON.parse(p.itens || '{}') || {}; } catch (e) {}
+  if (dados.entrega && dados.entrega.uber_delivery_id) {
+    return j({ ok: false, erro: 'ja_pedido', delivery_id: dados.entrega.uber_delivery_id,
+               tracking_url: dados.entrega.uber_tracking_url || null }, 200);
+  }
+
+  if (!env.UBER_CLIENT_ID || !env.UBER_CLIENT_SECRET || !env.UBER_CUSTOMER_ID || !env.UBER_PICKUP) {
+    return j({ ok: false, erro: 'sem_config' }, 200);
+  }
+
+  const telDigitos = soDigitos(p.telefone || '');
+  if (!telDigitos) return j({ ok: false, erro: 'sem_telefone' }, 200);
+  const telE164 = '+' + (telDigitos.length === 9 ? '351' + telDigitos : telDigitos);
+
+  const destino = {
+    street_address: [p.morada],
+    city: p.localidade || 'Portimão',
+    state: 'Faro',
+    zip_code: (dados.entrega && dados.entrega.codigo_postal) || '8500',
+    country: 'PT',
+  };
+
+  let token;
+  try { token = await tokenUber(env); }
+  catch (e) { return j({ ok: false, erro: 'falha_autenticacao', detalhe: String(e && e.message || e) }, 200); }
+
+  // Cotacao fresca, feita agora (nao reaproveita a do checkout).
+  let rc, dc;
+  try {
+    rc = await fetch(
+      `https://api.uber.com/v1/customers/${env.UBER_CUSTOMER_ID}/delivery_quotes`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          pickup_address: env.UBER_PICKUP,
+          dropoff_address: JSON.stringify(destino),
+          pickup_ready_dt: new Date().toISOString(),
+        }),
+      }
+    );
+    dc = await rc.json().catch(() => ({}));
+  } catch (e) {
+    return j({ ok: false, erro: 'erro_de_rede_cotacao', detalhe: String(e && e.message || e) }, 200);
+  }
+  if (!rc.ok || !dc.id) {
+    return j({ ok: false, erro: 'uber_recusou_cotacao_' + rc.status,
+               detalhe: (dc && (dc.message || dc.error)) || null }, 200);
+  }
+
+  let rd, dd;
+  try {
+    rd = await fetch(
+      `https://api.uber.com/v1/customers/${env.UBER_CUSTOMER_ID}/deliveries`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          quote_id: dc.id,
+          pickup_name: env.UBER_PICKUP_NOME || 'Esfiha da Casa',
+          pickup_address: env.UBER_PICKUP,
+          pickup_phone_number: env.UBER_PICKUP_TELEFONE || '+351938211480',
+          dropoff_name: 'Pedido #' + p.numero,
+          dropoff_address: JSON.stringify(destino),
+          dropoff_phone_number: telE164,
+          dropoff_notes: p.mensagem ? limpar(p.mensagem, 280) : undefined,
+          manifest_items: [
+            { name: 'Esfihas — pedido #' + p.numero, quantity: Math.max(1, p.n_esfihas || 1),
+              price: p.total_cent || 0, vat_percentage: 0 },
+          ],
+          manifest_total_value: p.total_cent || 0,
+        }),
+      }
+    );
+    dd = await rd.json().catch(() => ({}));
+  } catch (e) {
+    return j({ ok: false, erro: 'erro_de_rede_entrega', detalhe: String(e && e.message || e) }, 200);
+  }
+  if (!rd.ok || !dd.id) {
+    return j({ ok: false, erro: 'uber_recusou_entrega_' + rd.status,
+               detalhe: (dd && (dd.message || dd.error || JSON.stringify(dd))) || null }, 200);
+  }
+
+  dados.entrega = Object.assign({}, dados.entrega, {
+    uber_delivery_id: dd.id,
+    uber_tracking_url: dd.tracking_url || null,
+    uber_pedido_em: new Date().toISOString(),
+    custo_real_cent: dd.fee || dc.fee || null,
+  });
+  await env.DB.prepare('UPDATE pedidos SET itens = ? WHERE id = ?').bind(JSON.stringify(dados), id).run();
+
+  return j({ ok: true, delivery_id: dd.id, tracking_url: dd.tracking_url || null,
+             custo_cent: dd.fee || dc.fee || null });
+}
+
+// Cancela no Uber uma entrega que ja tenha sido pedida para este pedido
+// (usado quando um pedido de entrega e cancelado depois de o estafeta ja
+// ter sido chamado).
+async function cancelarEntregaUber(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let dados = {};
+  try { dados = JSON.parse(p.itens || '{}') || {}; } catch (e) {}
+  const deliveryId = dados.entrega && dados.entrega.uber_delivery_id;
+  if (!deliveryId) return j({ ok: false, erro: 'sem_entrega_uber' }, 200);
+  if (dados.entrega.uber_cancelada_em) return j({ ok: true, ja_cancelada: true });
+
+  if (!env.UBER_CLIENT_ID || !env.UBER_CLIENT_SECRET || !env.UBER_CUSTOMER_ID) {
+    return j({ ok: false, erro: 'sem_config' }, 200);
+  }
+
+  let token;
+  try { token = await tokenUber(env); }
+  catch (e) { return j({ ok: false, erro: 'falha_autenticacao', detalhe: String(e && e.message || e) }, 200); }
+
+  let r;
+  try {
+    r = await fetch(
+      `https://api.uber.com/v1/customers/${env.UBER_CUSTOMER_ID}/deliveries/${deliveryId}/cancel`,
+      { method: 'POST', headers: { authorization: 'Bearer ' + token } }
+    );
+  } catch (e) {
+    return j({ ok: false, erro: 'erro_de_rede', detalhe: String(e && e.message || e) }, 200);
+  }
+  if (!r.ok) {
+    const corpoErro = await r.text().catch(() => '');
+    return j({ ok: false, erro: 'uber_recusou_cancelamento_' + r.status, detalhe: corpoErro.slice(0, 300) }, 200);
+  }
+
+  dados.entrega.uber_cancelada_em = new Date().toISOString();
+  await env.DB.prepare('UPDATE pedidos SET itens = ? WHERE id = ?').bind(JSON.stringify(dados), id).run();
+  return j({ ok: true });
+}
+
 async function registarVisita(request, env) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: true }); }
@@ -741,6 +898,8 @@ export default {
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
         if (p === '/api/painel/subscrever' && request.method === 'POST') return await subscrever(request, env);
         if (p === '/api/painel/testar-aviso' && request.method === 'POST') return await testarAviso(request, env, ctx);
+        if (p === '/api/painel/uber-entrega' && request.method === 'POST') return await criarEntregaUberReal(request, env);
+        if (p === '/api/painel/uber-cancelar' && request.method === 'POST') return await cancelarEntregaUber(request, env);
         if (p === '/api/painel/chave' && request.method === 'GET') return j({ ok: true, chave: VAPID_PUBLIC });
       }
 
