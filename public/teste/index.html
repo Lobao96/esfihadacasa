@@ -635,8 +635,8 @@
                oninput="agendarCotacao()">
         <input type="text" id="locInput" placeholder="Localidade (ex.: Portimão, Alvor, Ferragudo)"
                oninput="agendarCotacao()">
-        <input type="text" id="cpInput" placeholder="Código postal (ex.: 8500-692)"
-               inputmode="numeric" maxlength="9" oninput="agendarCotacao()">
+        <input type="text" id="cpInput" placeholder="Código postal"
+               inputmode="numeric" maxlength="8" oninput="formatarCP(this); agendarCotacao()">
         <div class="cotacao" id="cotacao"></div>
 
         <label class="confirma" id="confirmaCaixa" style="display:none;">
@@ -1675,6 +1675,15 @@
 
   function cpValido(cp) {
     return /^\d{4}-\d{3}$/.test((cp || '').trim());
+  }
+
+  // O cliente so escreve numeros; o traco no formato 0000-000 e posto
+  // sozinho, para nao haver espaco para erros de formatacao.
+  function formatarCP(input) {
+    const digitos = input.value.replace(/\D/g, '').slice(0, 7);
+    input.value = digitos.length > 4
+      ? digitos.slice(0, 4) + '-' + digitos.slice(4)
+      : digitos;
   }
 
   function renderConfirmacao() {
