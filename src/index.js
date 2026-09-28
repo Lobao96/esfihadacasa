@@ -167,7 +167,10 @@ async function tokenUber(env) {
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: corpo.toString(),
   });
-  if (!r.ok) throw new Error('uber auth ' + r.status);
+  if (!r.ok) {
+    const corpoErro = await r.text().catch(() => '');
+    throw new Error('uber auth ' + r.status + ' ' + corpoErro.slice(0, 300));
+  }
   const d = await r.json();
   tokenCache = {
     valor: d.access_token,
