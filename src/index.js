@@ -35,19 +35,24 @@ async function estadoDoDia(db, dia) {
     await db.prepare('INSERT OR IGNORE INTO stock (dia, total, usado, aberto) VALUES (?, 0, 0, 1)').bind(dia).run();
     r = { total: 0, usado: 0, aberto: 1 };
   }
-  const ilimitado = !r.total;               // total 0 = sem limite definido
-  const restante = ilimitado ? null : Math.max(0, r.total - r.usado);
+  // O total de esfihas por vender deixou de ser um numero escrito a mao:
+  // e sempre a soma do stock real (salgadas congeladas por sabor + massa
+  // doce pronta). Descer qualquer um desses automaticamente desce aqui.
+  const salg = await db.prepare('SELECT COALESCE(SUM(quantidade), 0) AS s FROM stock_salgadas').first();
+  const doce = await db.prepare('SELECT quantidade FROM stock_doces WHERE id = 1').first();
+  const total = (salg && salg.s || 0) + (doce && doce.quantidade || 0);
+  const restante = Math.max(0, total);
   return {
     dia,
-    total: r.total,
+    total,
     usado: r.usado,
     restante,
-    ilimitado,
+    ilimitado: false,
     // abertoManual e o que o dono escolheu no botao do painel (fechar/abrir loja).
     // aberto e o estado real que bloqueia pedidos: so fica aberto se o dono
-    // quis abrir E ainda houver stock (ou for ilimitado).
+    // quis abrir E ainda houver stock.
     abertoManual: !!r.aberto,
-    aberto: !!r.aberto && (ilimitado || restante > 0),
+    aberto: !!r.aberto && restante > 0,
   };
 }
 
@@ -87,6 +92,12 @@ function ehGratis(nome) {
 function ehOfertaOpaca(nome) {
   return /^Oferta\s/i.test(String(nome || '').trim());
 }
+function producaoDoItens(itensJson) {
+  let it = null;
+  try { it = JSON.parse(itensJson || 'null'); } catch (e) {}
+  return (it && !Array.isArray(it) && it.producao) || [];
+}
+
 function bebidasDoItens(itensJson) {
   let it = null;
   try { it = JSON.parse(itensJson || 'null'); } catch (e) {}
@@ -716,7 +727,14 @@ async function listar(request, env) {
             token, telefone, nome, origem
        FROM pedidos WHERE dia = ? ORDER BY ensaio ASC, numero ASC`
   ).bind(dia).all();
-  return j({ ok: true, dia, pedidos: results, estado: await estadoDoDia(env.DB, dia) });
+  const { results: salgadas } = await env.DB.prepare(
+    'SELECT nome, quantidade, minimo FROM stock_salgadas ORDER BY nome ASC'
+  ).all();
+  const doces = await env.DB.prepare(
+    'SELECT quantidade, minimo FROM stock_doces WHERE id = 1'
+  ).first();
+  return j({ ok: true, dia, pedidos: results, estado: await estadoDoDia(env.DB, dia),
+             salgadas: salgadas || [], doces: doces || { quantidade: 0, minimo: 0 } });
 }
 
 const ESTADOS = ['novo', 'preparacao', 'caminho', 'entregue', 'cancelado'];
@@ -752,6 +770,19 @@ async function mudarPedido(request, env) {
   }
   if (entraEmProducao || saiDeProducao) {
     const sinal = entraEmProducao ? -1 : 1;   // entra em produção = sai do stock; sai de produção (cancelado) = devolve
+    for (const x of producaoDoItens(p.itens)) {
+      const n = parseInt(x.n, 10) || 0;
+      if (!n) continue;
+      if (x.doce) {
+        lote.push(env.DB.prepare(
+          `UPDATE stock_doces SET quantidade = MAX(0, quantidade + ?), atualizado_em = ? WHERE id = 1`
+        ).bind(sinal * n, agora));
+      } else if (x.sabor) {
+        lote.push(env.DB.prepare(
+          `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade + ?), atualizado_em = ? WHERE nome = ?`
+        ).bind(sinal * n, agora, x.sabor));
+      }
+    }
     for (const beb of bebidasDoItens(p.itens)) {
       if (ehOfertaOpaca(beb.nome)) continue;   // nao se sabe qual garrafa foi -- ajusta-se a mao
       const nome = nomeBaseBebida(beb.nome);
@@ -777,10 +808,6 @@ async function mudarStock(request, env) {
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const dia = limpar(b.dia, 10) || diaLisboa();
   await estadoDoDia(env.DB, dia);
-  if (b.total !== undefined) {
-    await env.DB.prepare('UPDATE stock SET total = ? WHERE dia = ?')
-      .bind(Math.max(0, parseInt(b.total, 10) || 0), dia).run();
-  }
   if (b.aberto !== undefined) {
     await env.DB.prepare('UPDATE stock SET aberto = ? WHERE dia = ?').bind(b.aberto ? 1 : 0, dia).run();
   }
@@ -853,17 +880,73 @@ async function mudarSalgadaStock(request, env) {
   return await listarSalgadas(request, env);
 }
 
+async function listarDoces(request, env) {
+  const r = await env.DB.prepare(
+    'SELECT quantidade, minimo, atualizado_em FROM stock_doces WHERE id = 1'
+  ).first();
+  return j({ ok: true, doces: r || { quantidade: 0, minimo: 0 } });
+}
+
+async function mudarDoceStock(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const agora = new Date().toISOString();
+  if (b.quantidade !== undefined) {
+    await env.DB.prepare('UPDATE stock_doces SET quantidade = ?, atualizado_em = ? WHERE id = 1')
+      .bind(Math.max(0, parseInt(b.quantidade, 10) || 0), agora).run();
+  }
+  if (b.minimo !== undefined) {
+    await env.DB.prepare('UPDATE stock_doces SET minimo = ?, atualizado_em = ? WHERE id = 1')
+      .bind(Math.max(0, parseInt(b.minimo, 10) || 0), agora).run();
+  }
+  return await listarDoces(request, env);
+}
+
 async function limparEnsaio(request, env) {
-  // Devolve ao contador as esfihas que os ensaios tinham consumido, dia a dia,
-  // e so depois apaga os pedidos.
-  const { results } = await env.DB.prepare(
-    `SELECT dia, SUM(n_esfihas) AS n FROM pedidos
-      WHERE ensaio = 1 AND stock_debitado = 1 GROUP BY dia`
+  // Devolve tudo o que os ensaios tinham consumido -- contador do dia,
+  // salgadas, massa doce e bebidas/ofertas -- pedido a pedido, e so depois
+  // apaga os pedidos. Sem isto, um ensaio deixava o stock permanentemente
+  // mais baixo mesmo depois de "apagado".
+  const agora = new Date().toISOString();
+  const { results: debitados } = await env.DB.prepare(
+    `SELECT dia, n_esfihas, itens FROM pedidos WHERE ensaio = 1 AND stock_debitado = 1`
   ).all();
-  const lote = (results || []).map(r =>
-    env.DB.prepare('UPDATE stock SET usado = MAX(0, usado - ?) WHERE dia = ?').bind(r.n || 0, r.dia));
+
+  const lote = [];
+  const porDia = {};
+  for (const r of debitados || []) {
+    porDia[r.dia] = (porDia[r.dia] || 0) + (r.n_esfihas || 0);
+    for (const x of producaoDoItens(r.itens)) {
+      const n = parseInt(x.n, 10) || 0;
+      if (!n) continue;
+      if (x.doce) {
+        lote.push(env.DB.prepare(
+          `UPDATE stock_doces SET quantidade = MAX(0, quantidade + ?), atualizado_em = ? WHERE id = 1`
+        ).bind(n, agora));
+      } else if (x.sabor) {
+        lote.push(env.DB.prepare(
+          `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade + ?), atualizado_em = ? WHERE nome = ?`
+        ).bind(n, agora, x.sabor));
+      }
+    }
+    for (const beb of bebidasDoItens(r.itens)) {
+      if (ehOfertaOpaca(beb.nome)) continue;
+      const nome = nomeBaseBebida(beb.nome);
+      const n = parseInt(beb.n, 10) || 0;
+      if (!nome || !n) continue;
+      lote.push(env.DB.prepare(
+        `UPDATE stock_bebidas SET quantidade = MAX(0, quantidade + ?), atualizado_em = ? WHERE nome = ?`
+      ).bind(n, agora, nome));
+    }
+    lote.push(env.DB.prepare(
+      `UPDATE stock_bebidas SET quantidade = MAX(0, quantidade + por_pedido), atualizado_em = ? WHERE por_pedido > 0`
+    ).bind(agora));
+  }
+  for (const dia of Object.keys(porDia)) {
+    lote.push(env.DB.prepare('UPDATE stock SET usado = MAX(0, usado - ?) WHERE dia = ?').bind(porDia[dia], dia));
+  }
   lote.push(env.DB.prepare('DELETE FROM pedidos WHERE ensaio = 1'));
-  await env.DB.batch(lote);
+  if (lote.length) await env.DB.batch(lote);
   return j({ ok: true, estado: await estadoDoDia(env.DB, diaLisboa()) });
 }
 
@@ -917,9 +1000,6 @@ async function analise(request, env) {
 
   const { results: stockBebidas } = await env.DB.prepare(
     'SELECT nome, quantidade, minimo, por_pedido FROM stock_bebidas ORDER BY por_pedido DESC, nome ASC'
-  ).all();
-  const { results: stockSalgadas } = await env.DB.prepare(
-    'SELECT nome, quantidade, minimo FROM stock_salgadas ORDER BY nome ASC'
   ).all();
 
   const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
@@ -1007,7 +1087,6 @@ async function analise(request, env) {
     sabores: ordenar(sabores), extras: ordenar(extras), bebidas: ordenar(bebidas),
     bebidasVendidas: ordenar(bebidasVendidas), bebidasOfertas: ordenar(bebidasOfertas), ofertasFixas,
     stockBebidas: stockBebidas || [],
-    stockSalgadas: stockSalgadas || [],
     // Fecho de caixa: so aparece com nocao real quando os custos estiverem
     // preenchidos no painel -- ate la fica tudo a 0 (nunca inventa valores).
     custoProdutos, entregaCobrada, entregaCustoUber,
@@ -1106,6 +1185,8 @@ export default {
         if (p === '/api/painel/bebidas' && request.method === 'POST') return await mudarBebidaStock(request, env);
         if (p === '/api/painel/salgadas-stock' && request.method === 'GET') return await listarSalgadas(request, env);
         if (p === '/api/painel/salgadas-stock' && request.method === 'POST') return await mudarSalgadaStock(request, env);
+        if (p === '/api/painel/doces-stock' && request.method === 'GET') return await listarDoces(request, env);
+        if (p === '/api/painel/doces-stock' && request.method === 'POST') return await mudarDoceStock(request, env);
         if (p === '/api/painel/subscrever' && request.method === 'POST') return await subscrever(request, env);
         if (p === '/api/painel/testar-aviso' && request.method === 'POST') return await testarAviso(request, env, ctx);
         if (p === '/api/painel/uber-entrega' && request.method === 'POST') return await criarEntregaUberReal(request, env);

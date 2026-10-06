@@ -58,6 +58,15 @@
   .barra i{display:block;height:100%;background:var(--verde)}
   .barra i.pouco{background:var(--gold)}
   .barra i.nada{background:var(--red)}
+  .saboresbox{background:var(--white);border-radius:14px;padding:12px 16px;margin-bottom:14px}
+  .saboresbox h3{font-size:.85rem;font-weight:800;margin-bottom:2px}
+  .saboresbox .nota{font-size:.75rem;color:var(--ink-soft);margin-bottom:8px}
+  .saborl{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--cinza)}
+  .saborl:last-child{border-bottom:none}
+  .saborl .nome{flex:1;font-weight:700;font-size:.88rem;line-height:1.3}
+  .saborl .nome small{display:block;font-weight:400;color:var(--ink-soft)}
+  .saborl input{width:64px;font-family:inherit;font-weight:800;font-size:.9rem;text-align:center;
+    padding:7px 4px;border:1.5px solid rgba(58,31,18,.2);border-radius:8px}
 
   .filtros{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
   .filtro{font-family:inherit;font-weight:800;font-size:.8rem;padding:7px 14px;border-radius:999px;
@@ -148,12 +157,16 @@
         <div class="lbl">esfihas por vender</div>
       </div>
       <div class="campo">
-        <input type="number" id="stockTotal" min="0" max="2000" placeholder="feitas hoje">
-        <button class="mini" onclick="guardarStock()">Guardar</button>
         <button class="mini" id="btnAberto" onclick="alternarLoja()">—</button>
       </div>
       <div class="barra"><i id="barra" style="width:0%"></i></div>
       <div id="stockAviso" style="display:none;flex-basis:100%;font-size:.8rem;font-weight:700;color:var(--red);margin-top:4px"></div>
+    </div>
+
+    <div class="saboresbox">
+      <h3>Stock de esfihas</h3>
+      <p class="nota">O número de "esfihas por vender" aí em cima soma-se sozinho a partir destas quantidades — mexe só aqui. Sem aviso de mínimo de propósito: as esfihas são feitas em doses diárias, não faz sentido repor a meio do dia.</p>
+      <div id="saboresLista"></div>
     </div>
 
     <div class="filtros">
@@ -359,6 +372,7 @@
     esconderAviso();
     pedidos = d.pedidos || [];
     est = d.estado;
+    pintarSabores(d.salgadas || [], d.doces || { quantidade: 0, minimo: 0 });
     const aviso = document.getElementById('passado');
     if (diaVisto) {
       aviso.textContent = 'A ver os pedidos de ' + diaVisto + '. Não é hoje.';
@@ -505,9 +519,6 @@
       b.style.width = pc + '%';
       b.className = pc === 0 ? 'nada' : (pc <= 20 ? 'pouco' : '');
     }
-    if (document.activeElement !== document.getElementById('stockTotal')) {
-      document.getElementById('stockTotal').value = est.total || '';
-    }
     // O botao reflete sempre o que o dono escolheu (abertoManual), nao o
     // calculo com o stock -- assim nunca parece "nao funcionar" so porque
     // o stock chegou a zero.
@@ -524,10 +535,39 @@
     }
   }
 
-  async function guardarStock() {
-    const t = parseInt(document.getElementById('stockTotal').value, 10) || 0;
-    const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ total: t }) });
-    est = d.estado; pintarStock();
+  const INGREDIENTES_SALGADAS = {
+    'A Tradicional': 'Carne picada temperada da casa, cebola, salsinha',
+    'A Suculenta': 'Mussarela, creme de leite, salsinha',
+    'A Caipira': 'Frango desfiado temperado da casa, queijo cremoso, salsinha',
+    'A Queridinha': 'Calabresa, cebola, orégãos',
+  };
+
+  function pintarSabores(salgadas, doces) {
+    const el = document.getElementById('saboresLista');
+    if (!el) return;
+    const linhasSalgadas = (salgadas || []).map(x => `
+      <div class="saborl">
+        <span class="nome">${esc(x.nome)}${INGREDIENTES_SALGADAS[x.nome] ? `<small>${esc(INGREDIENTES_SALGADAS[x.nome])}</small>` : ''}</span>
+        <input type="number" min="0" value="${x.quantidade}"
+          onchange="guardarSalgada('${esc(x.nome)}', this.value)">
+      </div>`).join('');
+    const linhaDoce = `
+      <div class="saborl">
+        <span class="nome">Massa doce<small>Sem recheio — pronta a rechear na hora, qualquer sabor</small></span>
+        <input type="number" min="0" value="${(doces && doces.quantidade) || 0}"
+          onchange="guardarDoce(this.value)">
+      </div>`;
+    el.innerHTML = linhasSalgadas + linhaDoce;
+  }
+
+  async function guardarSalgada(nome, valor) {
+    await api('/painel/salgadas-stock', { method: 'POST', body: JSON.stringify({ nome, quantidade: valor }) });
+    carregar();
+  }
+
+  async function guardarDoce(valor) {
+    await api('/painel/doces-stock', { method: 'POST', body: JSON.stringify({ quantidade: valor }) });
+    carregar();
   }
 
   async function alternarLoja() {
