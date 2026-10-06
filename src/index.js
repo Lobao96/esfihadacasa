@@ -812,6 +812,36 @@ async function mudarBebidaStock(request, env) {
   return await listarBebidas(request, env);
 }
 
+async function listarSalgadas(request, env) {
+  const { results } = await env.DB.prepare(
+    'SELECT nome, quantidade, minimo, atualizado_em FROM stock_salgadas ORDER BY nome ASC'
+  ).all();
+  return j({ ok: true, salgadas: results || [] });
+}
+
+async function mudarSalgadaStock(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const nome = limpar(b.nome, 80);
+  if (!nome) return j({ ok: false, erro: 'nome em falta' }, 400);
+  const agora = new Date().toISOString();
+
+  await env.DB.prepare(
+    `INSERT INTO stock_salgadas (nome, quantidade, minimo, atualizado_em) VALUES (?, ?, ?, ?)
+     ON CONFLICT(nome) DO NOTHING`
+  ).bind(nome, Math.max(0, parseInt(b.quantidade, 10) || 0), Math.max(0, parseInt(b.minimo, 10) || 0), agora).run();
+
+  if (b.quantidade !== undefined) {
+    await env.DB.prepare('UPDATE stock_salgadas SET quantidade = ?, atualizado_em = ? WHERE nome = ?')
+      .bind(Math.max(0, parseInt(b.quantidade, 10) || 0), agora, nome).run();
+  }
+  if (b.minimo !== undefined) {
+    await env.DB.prepare('UPDATE stock_salgadas SET minimo = ?, atualizado_em = ? WHERE nome = ?')
+      .bind(Math.max(0, parseInt(b.minimo, 10) || 0), agora, nome).run();
+  }
+  return await listarSalgadas(request, env);
+}
+
 async function limparEnsaio(request, env) {
   // Devolve ao contador as esfihas que os ensaios tinham consumido, dia a dia,
   // e so depois apaga os pedidos.
@@ -876,6 +906,9 @@ async function analise(request, env) {
 
   const { results: stockBebidas } = await env.DB.prepare(
     'SELECT nome, quantidade, minimo, por_pedido FROM stock_bebidas ORDER BY por_pedido DESC, nome ASC'
+  ).all();
+  const { results: stockSalgadas } = await env.DB.prepare(
+    'SELECT nome, quantidade, minimo FROM stock_salgadas ORDER BY nome ASC'
   ).all();
 
   const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
@@ -963,6 +996,7 @@ async function analise(request, env) {
     sabores: ordenar(sabores), extras: ordenar(extras), bebidas: ordenar(bebidas),
     bebidasVendidas: ordenar(bebidasVendidas), bebidasOfertas: ordenar(bebidasOfertas), ofertasFixas,
     stockBebidas: stockBebidas || [],
+    stockSalgadas: stockSalgadas || [],
     // Fecho de caixa: so aparece com nocao real quando os custos estiverem
     // preenchidos no painel -- ate la fica tudo a 0 (nunca inventa valores).
     custoProdutos, entregaCobrada, entregaCustoUber,
@@ -1059,6 +1093,8 @@ export default {
         if (p === '/api/painel/custos' && request.method === 'POST') return await guardarCustos(request, env);
         if (p === '/api/painel/bebidas' && request.method === 'GET') return await listarBebidas(request, env);
         if (p === '/api/painel/bebidas' && request.method === 'POST') return await mudarBebidaStock(request, env);
+        if (p === '/api/painel/salgadas-stock' && request.method === 'GET') return await listarSalgadas(request, env);
+        if (p === '/api/painel/salgadas-stock' && request.method === 'POST') return await mudarSalgadaStock(request, env);
         if (p === '/api/painel/subscrever' && request.method === 'POST') return await subscrever(request, env);
         if (p === '/api/painel/testar-aviso' && request.method === 'POST') return await testarAviso(request, env, ctx);
         if (p === '/api/painel/uber-entrega' && request.method === 'POST') return await criarEntregaUberReal(request, env);

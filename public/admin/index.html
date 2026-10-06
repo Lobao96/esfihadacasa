@@ -355,6 +355,35 @@
     await carregar();
   }
 
+  function stockSalgadasHtml(lista) {
+    if (!lista || !lista.length) return '<div class="vazio">Ainda sem sabores registados.</div>';
+    const total = lista.reduce((a, x) => a + (x.quantidade || 0), 0);
+    const linhas = lista.map(x => {
+      const baixo = x.minimo > 0 && x.quantidade <= x.minimo;
+      return `
+      <div class="stockb ${baixo ? 'baixo' : ''}">
+        <span class="nome">${esc(x.nome)}</span>
+        ${baixo ? '<span class="avisa">comprar</span>' : ''}
+        <input type="number" min="0" class="min" title="aviso a partir de (0 = sem aviso)"
+          value="${x.minimo}" onchange="guardarSalgada('${esc(x.nome)}', {minimo: this.value})">
+        <input type="number" min="0" title="quantidade congelada agora"
+          value="${x.quantidade}" onchange="guardarSalgada('${esc(x.nome)}', {quantidade: this.value})">
+      </div>`;
+    }).join('');
+    return linhas + `<div class="stockb" style="border-top:2px solid var(--grelha);margin-top:4px;font-weight:800">
+      <span class="nome">Total</span><span>${total}</span></div>`;
+  }
+
+  async function guardarSalgada(nome, campos) {
+    const corpo = Object.assign({ nome }, campos);
+    await fetch('/api/painel/salgadas-stock', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-painel-pass': pass },
+      body: JSON.stringify(corpo),
+    });
+    await carregar();
+  }
+
   async function adicionarBebida() {
     const nomeEl = document.getElementById('novaBebidaNome');
     const qtdEl = document.getElementById('novaBebidaQtd');
@@ -436,6 +465,12 @@
           <p class="nota">Onde estão os clientes.</p>
           ${barras(D.porZona, x => x.zona, x => x.pedidos, x => x.pedidos)}
         </div>
+      </div>
+
+      <div class="bloco">
+        <h2>Stock de esfihas salgadas</h2>
+        <p class="nota">Congeladas e já recheadas, prontas a ir ao forno. As doces não entram aqui — são feitas por encomenda (massa, pré-cozedura e só depois recheio), por isso ficam só nos "Sabores mais vendidos". Em vermelho, está na hora de fazer mais.</p>
+        ${stockSalgadasHtml(D.stockSalgadas)}
       </div>
 
       <div class="duas">
