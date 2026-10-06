@@ -43,6 +43,7 @@
   .passo.agora .p-desc{display:block}
 
   .resumo{margin-top:18px;padding-top:16px;border-top:1px solid rgba(58,31,18,.1)}
+  .endereco-entrega{margin-top:14px;padding:12px 14px;background:var(--cream,#FFF3DC);border-radius:12px;font-weight:700;font-size:.98rem;line-height:1.4}
   .linha{display:flex;justify-content:space-between;gap:12px;font-size:.9rem;
     font-weight:600;padding:3px 0}
   .linha .v{font-weight:800}
@@ -217,10 +218,10 @@
         <div class="passos">${listaPassos}</div>
         <div class="resumo">
           <div class="linha"><span>Esfihas</span><span class="v">${p.n_esfihas || 0}</span></div>
-          ${entrega && p.localidade ? `<div class="linha"><span>Localidade</span><span class="v">${esc(p.localidade)}</span></div>` : ''}
           <div class="linha"><span>Total</span><span class="total">${eur(p.total_cent)}
             <span class="pago ${p.pago ? '' : 'nao'}">${p.pago ? 'pago' : 'por pagar'}</span></span></div>
         </div>
+        ${entrega && (p.morada || p.localidade) ? `<div class="endereco-entrega">🛵 ${esc([p.morada, p.localidade].filter(Boolean).join(', '))}</div>` : ''}
         <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>
       </div>
       ${reciboHtml(p)}

@@ -513,13 +513,17 @@ async function novoPedido(request, env, ctx) {
              estado: await estadoDoDia(env.DB, dia) });
 }
 
-// Pagina publica de acompanhamento: devolve o minimo, nunca morada nem telefone.
+// Pagina publica de acompanhamento: devolve o minimo necessario para o
+// cliente seguir o pedido. Inclui a morada (mas nunca o telefone) porque
+// este link e tambem o que a loja reenvia ao estafeta para saber para
+// onde ir -- protegido por um token aleatorio de 7 caracteres (nao e
+// adivinhavel), nao por estar escondido.
 async function acompanhar(request, env) {
   const url = new URL(request.url);
   const tk = (url.searchParams.get('t') || '').toUpperCase().slice(0, 12);
   if (!tk) return j({ ok: false, erro: 'sem codigo' }, 400);
   const p = await env.DB.prepare(
-    `SELECT numero, estado, pago, modo, localidade, total_cent, n_esfihas,
+    `SELECT numero, estado, pago, modo, localidade, morada, total_cent, n_esfihas,
             itens, criado_em, atualizado_em, ensaio
        FROM pedidos WHERE token = ?`
   ).bind(tk).first();
