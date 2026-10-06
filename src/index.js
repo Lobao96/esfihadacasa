@@ -814,6 +814,13 @@ async function mudarStock(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, dia) });
 }
 
+async function stockPublicoBebidas(request, env) {
+  const { results } = await env.DB.prepare(
+    'SELECT nome, quantidade FROM stock_bebidas WHERE por_pedido = 0'
+  ).all();
+  return j({ ok: true, bebidas: results || [] });
+}
+
 async function listarBebidas(request, env) {
   const { results } = await env.DB.prepare(
     'SELECT nome, quantidade, minimo, por_pedido, atualizado_em FROM stock_bebidas ORDER BY por_pedido DESC, nome ASC'
@@ -1170,6 +1177,9 @@ export default {
       }
       if (p === '/api/visita' && request.method === 'POST') {
         return await registarVisita(request, env);
+      }
+      if (p === '/api/stock-bebidas' && request.method === 'GET') {
+        return await stockPublicoBebidas(request, env);
       }
       if (p === '/api/cotacao' && request.method === 'POST') {
         return await cotacao(request, env);

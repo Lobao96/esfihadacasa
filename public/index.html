@@ -901,13 +901,39 @@
   const extraSel = {};
   let orderType = "entrega";
 
+  let estoqueBebidas = {};
+  function qtdBebida(id) {
+    const nome = nomeBebida(id);
+    return Object.prototype.hasOwnProperty.call(estoqueBebidas, nome) ? estoqueBebidas[nome] : Infinity;
+  }
+  function bebidaEsgotada(id) { return qtdBebida(id) <= 0; }
+
+  function renderBebidasGrid() {
+    const bg = document.getElementById('bebidasGrid');
+    if (!bg) return;
+    bg.innerHTML = '';
+    MENU.bebidas.forEach(i => bg.innerHTML += drinkHtml(i));
+  }
+
+  async function verEstoqueBebidas() {
+    try {
+      const r = await fetch(API + '/stock-bebidas', { cache: 'no-store' });
+      const d = await r.json();
+      if (d && d.ok) {
+        estoqueBebidas = {};
+        (d.bebidas || []).forEach(b => { estoqueBebidas[b.nome] = b.quantidade; });
+        renderBebidasGrid();
+        renderOrderList();
+      }
+    } catch (e) { /* sem servidor: assume-se tudo disponivel, como antes */ }
+  }
+
   function renderMenu() {
     const sg = document.getElementById('salgadasGrid');
     const dg = document.getElementById('docesGrid');
     MENU.salgadas.forEach(i => sg.innerHTML += cardHtml(i));
     MENU.doces.forEach(i => dg.innerHTML += cardHtml(i));
-    const bg = document.getElementById('bebidasGrid');
-    MENU.bebidas.forEach(i => bg.innerHTML += drinkHtml(i));
+    renderBebidasGrid();
     const cg = document.getElementById('comboGrid');
     if (cg) cg.innerHTML = comboHtml();
   }
@@ -1010,21 +1036,22 @@
   }
 
   function drinkHtml(i) {
-    return `<div class="card drink">
+    const esgotada = bebidaEsgotada(i.id);
+    return `<div class="card drink${esgotada ? ' esgotada' : ''}">
       <div class="drink-art">${drinkArt(i.id)}</div>
       <div class="drink-top">
         <h3>${i.name}</h3>
-        <p class="desc">${i.desc}</p>
+        <p class="desc">${esgotada ? 'Esgotado por hoje' : i.desc}</p>
       </div>
       <div class="card-foot">
         <span class="price">${fmt(i.price)}</span>
-        <div class="stepper">
+        ${esgotada ? '<span class="price" style="color:var(--red,#C8232B)">Esgotado</span>' : `<div class="stepper">
           <button onclick="changeQty('${i.id}', -1)">−</button>
           <input class="qty" type="number" inputmode="numeric" min="0" max="99" value="0"
                  data-qty="${i.id}" onchange="setQty('${i.id}', this.value)" onfocus="this.select()"
                  aria-label="Quantidade de ${i.name}">
           <button onclick="changeQty('${i.id}', 1)">+</button>
-        </div>
+        </div>`}
       </div>
     </div>`;
   }
@@ -1279,7 +1306,9 @@
         <p class="combo-step">🎁 Oferta de ${rotuloFixo} ${tipoTexto} <span style="opacity:.7;font-weight:400">(conforme o stock existente)</span></p>`;
     }
     const beb = bebidasDoCombo(c).map(b =>
-      `<button class="ex-chip${u.bebidas.indexOf(b.id) >= 0 ? ' on' : ''}" onclick="comboToggleBebida(${u.uid}, '${b.id}')">${b.name}</button>`
+      bebidaEsgotada(b.id)
+        ? `<button class="ex-chip" disabled style="opacity:.45;text-decoration:line-through">${b.name}</button>`
+        : `<button class="ex-chip${u.bebidas.indexOf(b.id) >= 0 ? ' on' : ''}" onclick="comboToggleBebida(${u.uid}, '${b.id}')">${b.name}</button>`
     ).join('');
     const faltamB = c.nBebidas - u.bebidas.length;
     const rotuloB = c.nBebidas === 1 ? 'a bebida' : c.nBebidas + ' bebidas';
@@ -1309,7 +1338,9 @@
       return `<div class="brinde-aviso">Faltam ${faltam} esfiha${faltam > 1 ? 's' : ''} para ganhar 1 bebida de 1L grátis.</div>`;
     }
     const chips = bebidas1L().map(b =>
-      `<button class="ex-chip${brindeBebida === b.id ? ' on' : ''}" onclick="setBrinde('${b.id}')">${b.name}</button>`
+      bebidaEsgotada(b.id)
+        ? `<button class="ex-chip" disabled style="opacity:.45;text-decoration:line-through">${b.name}</button>`
+        : `<button class="ex-chip${brindeBebida === b.id ? ' on' : ''}" onclick="setBrinde('${b.id}')">${b.name}</button>`
     ).join('');
     return `<div class="unit unit-combo">
       <div class="unit-top">
@@ -2116,7 +2147,14 @@
         mostrarFaltas(['Não temos esfihas suficientes em stock para este pedido (restam ' + (d.estado ? d.estado.restante : 0) + ').']);
         return false;
       }
-    } catch (e) { /* segue para o WhatsApp na mesma */ }
+      else if (!d || d.ok !== true) {
+        // Qualquer outro erro do servidor (ex.: falta nome/telefone) --
+        // nunca se segue para o WhatsApp como se tivesse corrido bem.
+        btn.textContent = textoOriginal;
+        mostrarFaltas(['Não foi possível enviar o pedido. Confira o nome e o WhatsApp e tente outra vez.']);
+        return false;
+      }
+    } catch (e) { /* sem ligacao ao servidor: segue para o WhatsApp na mesma, para nao perder o pedido */ }
 
     btn.textContent = textoOriginal;
     const texto = encodeURIComponent(buildMessage());
@@ -2228,8 +2266,10 @@
   applyEsgotado();
   updateTotal();
   verEstadoLoja();
+  verEstoqueBebidas();
   registarVisita();
   setInterval(verEstadoLoja, 120000);
+  setInterval(verEstoqueBebidas, 120000);
   setInterval(updateStatus, 60000);
 </script>
 
