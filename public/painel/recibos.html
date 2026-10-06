@@ -50,7 +50,7 @@
   .linha-pago { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid var(--ink); margin-top: 10px; padding-top: 10px; font-size: 0.88rem; }
   .linha-pago .metodo b { display: block; font-size: 0.95rem; }
   .linha-pago .valor { font-weight: 700; }
-  .endereco { font-size: 0.82rem; color: var(--ink-soft); margin: -6px 0 12px; }
+  .endereco { font-size: 1.05rem; font-weight: 700; color: var(--ink); margin: 2px 0 14px; line-height: 1.4; }
   .rodape { text-align: center; font-size: 0.82rem; color: var(--ink-soft); margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--line); }
   .rodape .num { font-weight: 700; color: var(--ink); }
 
@@ -197,27 +197,16 @@
     let total = 0;
     let html = '';
     pedidos.forEach((p, i) => {
-      const d = dadosDe(p);
       total += p.total_cent || 0;
-      const entregaCent = (d.entrega && d.entrega.cent) ? d.entrega.cent : 0;
-      const subtotalCent = Math.max(0, (p.total_cent || 0) - entregaCent);
       html += `
         <div class="recibo">
           <div class="cabecalho">
             <img src="/icon-512.png" alt="Esfiha da Casa">
             <div class="loja">Esfiha da Casa</div>
           </div>
-          <div class="subloja">Recibo · Pedido #${p.numero}</div>
+          <div class="subloja">Pedido #${p.numero} · ${horaDe(p.criado_em)}</div>
           ${enderecoHtml(p)}
-          ${itensTabela(d)}
-          <div class="linha-resumo"><span>Subtotal</span><span>${eurCent(subtotalCent)}</span></div>
-          ${entregaCent ? `<div class="linha-resumo"><span>Taxa de entrega</span><span>${eurCent(entregaCent)}</span></div>` : ''}
-          <div class="linha-total"><span>Total</span><span>${eurCent(p.total_cent)}</span></div>
-          <div class="linha-pago">
-            <span class="metodo">Pago<b>${dataHoraDe(p.criado_em)}</b></span>
-            <span class="valor">${eurCent(p.total_cent)}</span>
-          </div>
-          <div class="rodape">${dataHoraDe(p.criado_em)}<br><span class="num">Recibo: #${p.numero}</span></div>
+          <div class="linha-total"><span>Total a cobrar</span><span>${eurCent(p.total_cent)}</span></div>
         </div>`;
     });
     lista.innerHTML = html;
