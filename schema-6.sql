@@ -10,13 +10,10 @@ CREATE TABLE IF NOT EXISTS stock_salgadas (
   atualizado_em TEXT
 );
 
--- Semeia com os 7 sabores salgados do cardápio atual, quantidade a 0 —
+-- Semeia com os 4 sabores salgados do cardápio atual, quantidade a 0 —
 -- o utilizador preenche as quantidades reais diretamente no painel.
 INSERT OR IGNORE INTO stock_salgadas (nome, quantidade, minimo, atualizado_em) VALUES
-  ('A Tradicional',            0, 0, datetime('now')),
-  ('A Suculenta',              0, 0, datetime('now')),
-  ('A Caipira',                0, 0, datetime('now')),
-  ('A Queridinha',             0, 0, datetime('now')),
-  ('A Que Todo Mundo Ama',     0, 0, datetime('now')),
-  ('A Irresistível',           0, 0, datetime('now')),
-  ('A Diferentona',            0, 0, datetime('now'));
+  ('A Tradicional', 0, 0, datetime('now')),
+  ('A Suculenta',   0, 0, datetime('now')),
+  ('A Caipira',     0, 0, datetime('now')),
+  ('A Queridinha',  0, 0, datetime('now'));

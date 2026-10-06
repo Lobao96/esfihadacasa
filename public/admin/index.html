@@ -355,14 +355,21 @@
     await carregar();
   }
 
+  const INGREDIENTES_SALGADAS = {
+    'A Tradicional': 'Carne picada temperada da casa, cebola, salsinha',
+    'A Suculenta': 'Mussarela, creme de leite, salsinha',
+    'A Caipira': 'Frango desfiado temperado da casa, queijo cremoso, salsinha',
+    'A Queridinha': 'Calabresa, cebola, orégãos',
+  };
+
   function stockSalgadasHtml(lista) {
     if (!lista || !lista.length) return '<div class="vazio">Ainda sem sabores registados.</div>';
     const total = lista.reduce((a, x) => a + (x.quantidade || 0), 0);
     const linhas = lista.map(x => {
       const baixo = x.minimo > 0 && x.quantidade <= x.minimo;
       return `
-      <div class="stockb ${baixo ? 'baixo' : ''}">
-        <span class="nome">${esc(x.nome)}</span>
+      <div class="stockb ${baixo ? 'baixo' : ''}" style="align-items:flex-start">
+        <span class="nome" style="white-space:normal;line-height:1.3">${esc(x.nome)}${INGREDIENTES_SALGADAS[x.nome] ? `<br><small style="font-weight:400;color:var(--ink-mudo)">${esc(INGREDIENTES_SALGADAS[x.nome])}</small>` : ''}</span>
         ${baixo ? '<span class="avisa">comprar</span>' : ''}
         <input type="number" min="0" class="min" title="aviso a partir de (0 = sem aviso)"
           value="${x.minimo}" onchange="guardarSalgada('${esc(x.nome)}', {minimo: this.value})">
