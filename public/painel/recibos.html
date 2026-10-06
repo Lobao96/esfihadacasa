@@ -172,8 +172,10 @@
 
   function enderecoHtml(p) {
     if (p.modo === 'entrega') {
+      const d = dadosDe(p);
+      const cp = (d.entrega && d.entrega.codigo_postal) ? String(d.entrega.codigo_postal).trim() : '';
       const partes = [p.morada, p.localidade].filter(Boolean).map(esc).join(', ');
-      return `<p class="endereco">🛵 Entrega — ${partes || 'morada não indicada'}${p.telefone ? ' · Tel: ' + esc(p.telefone) : ''}</p>`;
+      return `<p class="endereco">🛵 Entrega — ${partes || 'morada não indicada'}${cp ? ' · ' + esc(cp) : ''}${p.telefone ? ' · Tel: ' + esc(p.telefone) : ''}</p>`;
     }
     return `<p class="endereco">🧺 Retirada no local${p.telefone ? ' · Tel: ' + esc(p.telefone) : ''}</p>`;
   }

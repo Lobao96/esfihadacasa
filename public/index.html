@@ -231,10 +231,11 @@
 
   .addr-field { margin-top: 12px; }
   .addr-field input {
-    width: 100%; padding: 11px 12px; border-radius: 10px;
-    border: 1.5px solid var(--line); background: var(--bg); color: var(--text);
-    font-family: 'Nunito', sans-serif; font-size: 0.92rem;
+    width: 100%; padding: 11px 13px; border-radius: 10px;
+    border: 1.5px solid rgba(58,31,18,0.18); background: var(--white); color: var(--ink);
+    font-family: inherit; font-size: 1rem; font-weight: 700;
   }
+  .addr-field input:focus { outline: none; border-color: var(--red); }
   .addr-wrap { position: relative; }
   .addr-suggest {
     list-style: none; margin: 0; padding: 0; position: absolute;
@@ -293,12 +294,13 @@
     color: var(--ink); background: rgba(244,185,66,0.2);
     padding: 8px 10px; border-radius: 8px; font-weight: 600;
   }
-  #cpInput, #locInput {
+  #cpInput, #locInput, #telInput, #nomeInput {
     width: 100%; font-family: inherit; font-size: 1rem; font-weight: 700;
-    padding: 11px 13px; margin-top: 8px; border: 1.5px solid rgba(58,31,18,0.18);
+    padding: 11px 13px; border: 1.5px solid rgba(58,31,18,0.18);
     border-radius: 10px; background: var(--white); color: var(--ink);
   }
-  #cpInput:focus { outline: none; border-color: var(--red); }
+  #cpInput, #locInput { margin-top: 8px; }
+  #cpInput:focus, #locInput:focus, #telInput:focus, #nomeInput:focus { outline: none; border-color: var(--red); }
   .cotacao {
     margin-top: 10px; padding: 11px 13px; border-radius: 10px;
     font-size: 0.86rem; font-weight: 700; line-height: 1.45; display: none;
@@ -409,12 +411,6 @@
     border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;
     font-size: 0.86rem; font-weight: 600; line-height: 1.5;
   }
-  #telInput {
-    width: 100%; font-family: inherit; font-size: 1rem; font-weight: 700;
-    padding: 11px 13px; border: 1.5px solid rgba(58,31,18,0.18);
-    border-radius: 10px; background: var(--white); color: var(--ink);
-  }
-  #telInput:focus { outline: none; border-color: var(--red); }
   .tel-nota { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
   .link-pedido {
     background: rgba(30,142,74,0.10); border: 1.5px solid #1E8E4A; color: #146634;

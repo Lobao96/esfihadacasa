@@ -193,6 +193,8 @@
   function pintar(p) {
     if (p.ensaio) document.getElementById('ensaio').style.display = 'block';
     const entrega = p.modo === 'entrega';
+    const dEnt = dadosDe(p);
+    const cp = (dEnt.entrega && dEnt.entrega.codigo_postal) ? String(dEnt.entrega.codigo_postal).trim() : '';
     const passos = entrega ? ESTADOS : ESTADOS_RET;
     let idx = passos.findIndex(x => x.id === p.estado);
     if (p.estado === 'cancelado') idx = -1;
@@ -226,8 +228,8 @@
           <div class="linha"><span>Total</span><span class="total">${eur(p.total_cent)}
             <span class="pago ${p.pago ? '' : 'nao'}">${p.pago ? 'pago' : 'por pagar'}</span></span></div>
         </div>
-        ${entrega && (p.morada || p.localidade) ? `<div class="endereco-entrega">${p.nome ? `👤 <strong>${esc(p.nome)}</strong><br>` : ''}🛵 ${esc([p.morada, p.localidade].filter(Boolean).join(', '))}
-          ${p.telefone ? `<br>📞 <a href="tel:${esc(p.telefone)}" style="color:inherit">${esc(p.telefone)}</a> · <a href="https://wa.me/${waDigitos(p.telefone)}" target="_blank" rel="noopener" style="color:inherit">WhatsApp do cliente</a>` : ''}
+        ${entrega && (p.morada || p.localidade) ? `<div class="endereco-entrega">${p.nome ? `👤 <strong>${esc(p.nome)}</strong><br>` : ''}🛵 ${esc([p.morada, p.localidade].filter(Boolean).join(', '))}${cp ? ` · ${esc(cp)}` : ''}
+          ${p.telefone ? `<br>📞 <a href="tel:${esc(p.telefone)}" style="color:inherit">${esc(p.telefone)}</a> · <a href="https://wa.me/${waDigitos(p.telefone)}" target="_blank" rel="noopener" style="color:inherit">WhatsApp</a>` : ''}
         </div>` : ''}
         <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>
       </div>

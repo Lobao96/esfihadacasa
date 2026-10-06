@@ -513,8 +513,8 @@ async function novoPedido(request, env, ctx) {
   const res = await env.DB.prepare(
     `INSERT INTO pedidos
        (dia, numero, senha, ensaio, modo, localidade, morada, total_cent, n_esfihas,
-        itens, mensagem, criado_em, token, telefone, origem, campanha, nome)
-     SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        itens, mensagem, criado_em, token, telefone, origem, campanha, nome, stock_debitado)
+     SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1
        FROM pedidos WHERE ${filtroNumero}
      RETURNING id, numero, token`
   ).bind(
@@ -524,6 +524,40 @@ async function novoPedido(request, env, ctx) {
     token, telCliente, limpar(b.origem, 60), limpar(b.campanha, 80), nomeCliente,
     ...(ensaio ? [dia] : [])
   ).first();
+
+  // O stock desce logo aqui, assim que o pedido e feito (vendido) -- nao so
+  // quando o staff o marca "em preparacao" -- para o painel mostrar sempre
+  // quantas esfihas/bebidas restam de verdade. Se o pedido for cancelado
+  // depois, mudarPedido() devolve tudo (ve stock_debitado).
+  const loteDebito = [
+    env.DB.prepare('UPDATE stock SET usado = usado + ? WHERE dia = ?').bind(nEsfihasPedidas, dia),
+  ];
+  for (const x of producaoDoItens(itens)) {
+    const n = parseInt(x.n, 10) || 0;
+    if (!n) continue;
+    if (x.doce) {
+      loteDebito.push(env.DB.prepare(
+        `UPDATE stock_doces SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE id = 1`
+      ).bind(n, agora));
+    } else if (x.sabor) {
+      loteDebito.push(env.DB.prepare(
+        `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
+      ).bind(n, agora, x.sabor));
+    }
+  }
+  for (const beb of bebidasDoItens(itens)) {
+    if (ehOfertaOpaca(beb.nome)) continue;
+    const nomeBeb = nomeBaseBebida(beb.nome);
+    const n = parseInt(beb.n, 10) || 0;
+    if (!nomeBeb || !n) continue;
+    loteDebito.push(env.DB.prepare(
+      `UPDATE stock_bebidas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
+    ).bind(n, agora, nomeBeb));
+  }
+  loteDebito.push(env.DB.prepare(
+    `UPDATE stock_bebidas SET quantidade = MAX(0, quantidade - por_pedido), atualizado_em = ? WHERE por_pedido > 0`
+  ).bind(agora));
+  await env.DB.batch(loteDebito);
 
   if (ctx && ctx.waitUntil) ctx.waitUntil(avisarTelemovel(env));
 
@@ -752,9 +786,11 @@ async function mudarPedido(request, env) {
   const pago = b.pago === undefined ? p.pago : (b.pago ? 1 : 0);
   const agora = new Date().toISOString();
 
-  // O stock so desce quando o pedido entra em preparacao, e uma unica vez:
-  // pedidos abandonados nao gastam massa. Os pedidos de ensaio descontam
-  // tal e qual, para o ensaio ser fiel; o "Apagar ensaios" devolve tudo.
+  // O stock ja desce na criacao do pedido (novoPedido), nao aqui -- isto
+  // so cobre dois casos: um pedido antigo que por algum motivo ainda nao
+  // tinha sido debitado ao chegar a preparacao, e o cancelamento, que
+  // devolve o que foi descontado (pedidos de ensaio tambem descontam, para
+  // o ensaio ser fiel; o "Apagar ensaios" devolve tudo).
   const entraEmProducao = estado === 'preparacao' && !p.stock_debitado;
   const saiDeProducao = estado === 'cancelado' && p.stock_debitado;
 
