@@ -70,6 +70,29 @@ function limpar(v, max = 400) {
   return String(v).slice(0, max);
 }
 
+// ------------------------------------------------------------- bebidas
+// O brinde automatico (10 esfihas -> 1 bebida gratis) e a oferta fixa do
+// Combo Junta a Malta chegam marcados de forma diferente:
+//  - brinde: nome vem com "(gratis)" no fim -- sabe-se exatamente qual bebida.
+//  - combo2 (bebidaFixa): vem como uma linha opaca "Oferta Nx bebida... (a
+//    escolha da casa)" -- nao se sabe qual garrafa foi de facto usada, por
+//    isso NAO desconta stock por bebida especifica (fica por conta de quem
+//    esta na loja ajustar a mao, ja que e quem escolhe a garrafa).
+function nomeBaseBebida(nome) {
+  return String(nome || '').replace(/\s*\(gr[áa]tis\)\s*$/i, '').trim();
+}
+function ehGratis(nome) {
+  return /\(gr[áa]tis\)\s*$/i.test(String(nome || ''));
+}
+function ehOfertaOpaca(nome) {
+  return /^Oferta\s/i.test(String(nome || '').trim());
+}
+function bebidasDoItens(itensJson) {
+  let it = null;
+  try { it = JSON.parse(itensJson || 'null'); } catch (e) {}
+  return (it && !Array.isArray(it) && it.bebidas) || [];
+}
+
 // ---------------------------------------------------------------- avisos
 // Notificacoes no telemovel (Web Push). Enviamos um aviso sem conteudo:
 // o telemovel mostra "Novo pedido" e, ao tocar, abre o painel. Assim nao
@@ -716,6 +739,23 @@ async function mudarPedido(request, env) {
   } else if (saiDeProducao) {
     lote.push(env.DB.prepare('UPDATE stock SET usado = MAX(0, usado - ?) WHERE dia = ?').bind(p.n_esfihas || 0, p.dia));
   }
+  if (entraEmProducao || saiDeProducao) {
+    const sinal = entraEmProducao ? -1 : 1;   // entra em produção = sai do stock; sai de produção (cancelado) = devolve
+    for (const beb of bebidasDoItens(p.itens)) {
+      if (ehOfertaOpaca(beb.nome)) continue;   // nao se sabe qual garrafa foi -- ajusta-se a mao
+      const nome = nomeBaseBebida(beb.nome);
+      const n = parseInt(beb.n, 10) || 0;
+      if (!nome || !n) continue;
+      lote.push(env.DB.prepare(
+        `UPDATE stock_bebidas SET quantidade = MAX(0, quantidade + ?), atualizado_em = ? WHERE nome = ?`
+      ).bind(sinal * n, agora, nome));
+    }
+    // Ofertas fixas (ex.: 2 saquetas de ketchup por pedido) -- saem sempre,
+    // independentemente do que o cliente escolheu.
+    lote.push(env.DB.prepare(
+      `UPDATE stock_bebidas SET quantidade = MAX(0, quantidade + (? * por_pedido)), atualizado_em = ? WHERE por_pedido > 0`
+    ).bind(sinal, agora));
+  }
   await env.DB.batch(lote);
 
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
@@ -734,6 +774,42 @@ async function mudarStock(request, env) {
     await env.DB.prepare('UPDATE stock SET aberto = ? WHERE dia = ?').bind(b.aberto ? 1 : 0, dia).run();
   }
   return j({ ok: true, estado: await estadoDoDia(env.DB, dia) });
+}
+
+async function listarBebidas(request, env) {
+  const { results } = await env.DB.prepare(
+    'SELECT nome, quantidade, minimo, por_pedido, atualizado_em FROM stock_bebidas ORDER BY por_pedido DESC, nome ASC'
+  ).all();
+  return j({ ok: true, bebidas: results || [] });
+}
+
+async function mudarBebidaStock(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const nome = limpar(b.nome, 80);
+  if (!nome) return j({ ok: false, erro: 'nome em falta' }, 400);
+  const agora = new Date().toISOString();
+  const porPedido = Math.max(0, parseInt(b.porPedido, 10) || 0);
+
+  await env.DB.prepare(
+    `INSERT INTO stock_bebidas (nome, quantidade, minimo, por_pedido, atualizado_em) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(nome) DO NOTHING`
+  ).bind(nome, Math.max(0, parseInt(b.quantidade, 10) || 0), Math.max(0, parseInt(b.minimo, 10) || 0),
+         porPedido, agora).run();
+
+  if (b.quantidade !== undefined) {
+    await env.DB.prepare('UPDATE stock_bebidas SET quantidade = ?, atualizado_em = ? WHERE nome = ?')
+      .bind(Math.max(0, parseInt(b.quantidade, 10) || 0), agora, nome).run();
+  }
+  if (b.minimo !== undefined) {
+    await env.DB.prepare('UPDATE stock_bebidas SET minimo = ?, atualizado_em = ? WHERE nome = ?')
+      .bind(Math.max(0, parseInt(b.minimo, 10) || 0), agora, nome).run();
+  }
+  if (b.porPedido !== undefined) {
+    await env.DB.prepare('UPDATE stock_bebidas SET por_pedido = ?, atualizado_em = ? WHERE nome = ?')
+      .bind(porPedido, agora, nome).run();
+  }
+  return await listarBebidas(request, env);
 }
 
 async function limparEnsaio(request, env) {
@@ -798,9 +874,13 @@ async function analise(request, env) {
   const custos = {};
   for (const c of custosRows || []) custos[c.produto] = c.custo_cent || 0;
 
+  const { results: stockBebidas } = await env.DB.prepare(
+    'SELECT nome, quantidade, minimo, por_pedido FROM stock_bebidas ORDER BY por_pedido DESC, nome ASC'
+  ).all();
+
   const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
   const dias = {}, horas = {}, zonas = {}, origens = {};
-  const sabores = {}, extras = {}, bebidas = {};
+  const sabores = {}, extras = {}, bebidas = {}, bebidasVendidas = {}, bebidasOfertas = {};
   let receita = 0, esfihas = 0, entregas = 0;
   let custoProdutos = 0, entregaCobrada = 0, entregaCustoUber = 0;
 
@@ -840,6 +920,12 @@ async function analise(request, env) {
       for (const b of it.bebidas || []) {
         somar(bebidas, b.nome, b.n || 0);
         custoProdutos += (custos[b.nome] || 0) * (b.n || 0);
+        if (ehOfertaOpaca(b.nome)) {
+          somar(bebidasOfertas, b.nome, b.n || 0);
+        } else {
+          const alvo = ehGratis(b.nome) ? bebidasOfertas : bebidasVendidas;
+          somar(alvo, nomeBaseBebida(b.nome), b.n || 0);
+        }
       }
       if (it.entrega) {
         entregaCobrada += it.entrega.cent || 0;
@@ -860,6 +946,12 @@ async function analise(request, env) {
   const valores = o => Object.keys(o).map(k => o[k]);
   const pedidos = (linhas || []).length;
 
+  // Ofertas fixas (ex.: saquetas de ketchup): nao vem no itens de nenhum
+  // pedido, sai sempre a mesma quantidade por pedido -- calcula-se por fora.
+  const ofertasFixas = (stockBebidas || [])
+    .filter(x => x.por_pedido > 0)
+    .map(x => ({ nome: x.nome, n: x.por_pedido * pedidos }));
+
   return j({
     ok: true, de, ate,
     resumo: { pedidos, receita, esfihas, entregas, medio: pedidos ? receita / pedidos : 0 },
@@ -869,6 +961,8 @@ async function analise(request, env) {
     porOrigem: valores(origens).sort((a, b) => b.pedidos - a.pedidos),
     visitas: vis || [],
     sabores: ordenar(sabores), extras: ordenar(extras), bebidas: ordenar(bebidas),
+    bebidasVendidas: ordenar(bebidasVendidas), bebidasOfertas: ordenar(bebidasOfertas), ofertasFixas,
+    stockBebidas: stockBebidas || [],
     // Fecho de caixa: so aparece com nocao real quando os custos estiverem
     // preenchidos no painel -- ate la fica tudo a 0 (nunca inventa valores).
     custoProdutos, entregaCobrada, entregaCustoUber,
@@ -963,6 +1057,8 @@ export default {
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
         if (p === '/api/painel/custos' && request.method === 'GET') return await listarCustos(env);
         if (p === '/api/painel/custos' && request.method === 'POST') return await guardarCustos(request, env);
+        if (p === '/api/painel/bebidas' && request.method === 'GET') return await listarBebidas(request, env);
+        if (p === '/api/painel/bebidas' && request.method === 'POST') return await mudarBebidaStock(request, env);
         if (p === '/api/painel/subscrever' && request.method === 'POST') return await subscrever(request, env);
         if (p === '/api/painel/testar-aviso' && request.method === 'POST') return await testarAviso(request, env, ctx);
         if (p === '/api/painel/uber-entrega' && request.method === 'POST') return await criarEntregaUberReal(request, env);

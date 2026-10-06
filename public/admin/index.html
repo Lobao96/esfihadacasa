@@ -111,6 +111,16 @@
   .custo-msg{font-size:.8rem;font-weight:800;color:#146634;display:none;margin-top:8px}
   .duas{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media (max-width:640px){ .duas{grid-template-columns:1fr} }
+
+  .stockb{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--grelha);font-size:.85rem}
+  .stockb:last-child{border-bottom:none}
+  .stockb .nome{flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .stockb.baixo .nome{color:var(--red-dark)}
+  .stockb .avisa{font-size:.68rem;font-weight:800;color:var(--red-dark);background:#FDECEC;
+    border-radius:999px;padding:2px 8px;margin-left:4px;white-space:nowrap}
+  .stockb input{width:56px;font-family:inherit;font-weight:800;font-size:.85rem;text-align:center;
+    padding:5px 4px;border:1.5px solid rgba(58,31,18,.2);border-radius:8px}
+  .stockb .min{width:42px;color:var(--ink-mudo)}
 </style>
 </head>
 <body>
@@ -309,6 +319,52 @@
       </div>`).join('') + `</div>`;
   }
 
+  // ---- ofertas, juntando as várias origens numa só lista para o gráfico ----
+  function ofertasJuntas(D) {
+    const mapa = {};
+    const somar = (nome, n) => { if (nome && n) mapa[nome] = (mapa[nome] || 0) + n; };
+    (D.bebidasOfertas || []).forEach(x => somar(x.nome, x.n));
+    (D.ofertasFixas || []).forEach(x => somar(x.nome, x.n));
+    return Object.keys(mapa).map(nome => ({ nome, n: mapa[nome] })).sort((a, b) => b.n - a.n);
+  }
+
+  // ---- stock de bebidas e ofertas fixas ----
+  function stockBebidasHtml(lista) {
+    if (!lista || !lista.length) return '<div class="vazio">Ainda sem bebidas registadas.</div>';
+    return lista.map(x => {
+      const baixo = x.quantidade <= x.minimo;
+      return `
+      <div class="stockb ${baixo ? 'baixo' : ''}">
+        <span class="nome">${esc(x.nome)}${x.por_pedido ? ` <small style="color:var(--ink-mudo)">(fixo, ${x.por_pedido}/pedido)</small>` : ''}</span>
+        ${baixo ? '<span class="avisa">comprar</span>' : ''}
+        <input type="number" min="0" class="min" title="aviso a partir de"
+          value="${x.minimo}" onchange="guardarBebida('${esc(x.nome)}', {minimo: this.value})">
+        <input type="number" min="0" title="quantidade agora"
+          value="${x.quantidade}" onchange="guardarBebida('${esc(x.nome)}', {quantidade: this.value})">
+      </div>`;
+    }).join('');
+  }
+
+  async function guardarBebida(nome, campos) {
+    const corpo = Object.assign({ nome }, campos);
+    await fetch('/api/painel/bebidas', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-painel-pass': pass },
+      body: JSON.stringify(corpo),
+    });
+    await carregar();
+  }
+
+  async function adicionarBebida() {
+    const nomeEl = document.getElementById('novaBebidaNome');
+    const qtdEl = document.getElementById('novaBebidaQtd');
+    const fixoEl = document.getElementById('novaBebidaFixo');
+    const nome = nomeEl.value.trim();
+    if (!nome) return;
+    await guardarBebida(nome, { quantidade: qtdEl.value || 0, minimo: 0, porPedido: fixoEl.value || 0 });
+    nomeEl.value = ''; qtdEl.value = ''; fixoEl.value = '';
+  }
+
   function diaCurto(d) {
     const p = String(d).split('-');
     return p.length === 3 ? p[2] + '/' + p[1] : d;
@@ -389,9 +445,32 @@
           ${barras(D.extras, x => x.nome, x => x.n, x => x.n)}
         </div>
         <div class="bloco">
-          <h2>Bebidas</h2>
-          <p class="nota">Unidades, brindes incluídos.</p>
-          ${barras(D.bebidas, x => x.nome, x => x.n, x => x.n)}
+          <h2>Bebidas vendidas</h2>
+          <p class="nota">Só as que geram receita: compradas à parte, ou a bebida do Combo Minha Fome Minhas Regras.</p>
+          ${barras(D.bebidasVendidas, x => x.nome, x => x.n, x => x.n)}
+        </div>
+      </div>
+
+      <div class="duas">
+        <div class="bloco">
+          <h2>Ofertas</h2>
+          <p class="nota">Tudo o que sai sem entrar na receita: brinde das 10 esfihas, a oferta do Combo Junta a Malta e saquetas fixas por pedido.</p>
+          ${barras(ofertasJuntas(D), x => x.nome, x => x.n, x => x.n)}
+        </div>
+        <div class="bloco">
+          <h2>Stock de bebidas e ofertas</h2>
+          <p class="nota">Desce sozinho quando um pedido entra em preparação — as "fixas" saem em todos os pedidos. A oferta do Combo Junta a Malta não desconta automaticamente (não se sabe qual garrafa foi) — ajuste à mão. Em vermelho, está na hora de comprar mais.</p>
+          ${stockBebidasHtml(D.stockBebidas)}
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <input id="novaBebidaNome" placeholder="nome" style="flex:1;min-width:110px;font-family:inherit;font-size:.85rem;
+              font-weight:700;padding:8px 10px;border:1.5px solid rgba(58,31,18,.2);border-radius:8px">
+            <input id="novaBebidaQtd" type="number" min="0" placeholder="qtd" style="width:60px;font-family:inherit;
+              font-size:.85rem;font-weight:700;padding:8px 10px;border:1.5px solid rgba(58,31,18,.2);border-radius:8px">
+            <input id="novaBebidaFixo" type="number" min="0" placeholder="fixo/pedido" title="deixa 0 se não for uma oferta fixa"
+              style="width:92px;font-family:inherit;font-size:.85rem;font-weight:700;padding:8px 10px;
+              border:1.5px solid rgba(58,31,18,.2);border-radius:8px">
+            <button class="pb" onclick="adicionarBebida()">Adicionar</button>
+          </div>
         </div>
       </div>
 
