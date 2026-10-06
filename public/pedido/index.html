@@ -108,6 +108,11 @@
 
   function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + '€'; }
   function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function waDigitos(tel) {
+    let d = String(tel || '').replace(/\D/g, '');
+    if (d.length === 9) d = '351' + d;
+    return d;
+  }
 
   function token() {
     return (new URLSearchParams(location.search).get('t') || '').toUpperCase();
@@ -221,7 +226,9 @@
           <div class="linha"><span>Total</span><span class="total">${eur(p.total_cent)}
             <span class="pago ${p.pago ? '' : 'nao'}">${p.pago ? 'pago' : 'por pagar'}</span></span></div>
         </div>
-        ${entrega && (p.morada || p.localidade) ? `<div class="endereco-entrega">🛵 ${esc([p.morada, p.localidade].filter(Boolean).join(', '))}</div>` : ''}
+        ${entrega && (p.morada || p.localidade) ? `<div class="endereco-entrega">🛵 ${esc([p.morada, p.localidade].filter(Boolean).join(', '))}
+          ${p.telefone ? `<br>📞 <a href="tel:${esc(p.telefone)}" style="color:inherit">${esc(p.telefone)}</a> · <a href="https://wa.me/${waDigitos(p.telefone)}" target="_blank" rel="noopener" style="color:inherit">WhatsApp do cliente</a>` : ''}
+        </div>` : ''}
         <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>
       </div>
       ${reciboHtml(p)}
