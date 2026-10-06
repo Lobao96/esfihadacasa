@@ -857,17 +857,20 @@ async function listarSalgadas(request, env) {
   return j({ ok: true, salgadas: results || [] });
 }
 
+// Lista fechada -- os unicos sabores salgados que esta rota aceita. Isto
+// evita que uma pagina antiga em cache (ou qualquer outro chamador) volte
+// a criar linhas de sabores doces aqui, como ja aconteceu uma vez.
+const SABORES_SALGADOS_VALIDOS = new Set([
+  'A Tradicional', 'A Suculenta', 'A Caipira', 'A Queridinha',
+]);
+
 async function mudarSalgadaStock(request, env) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const nome = limpar(b.nome, 80);
   if (!nome) return j({ ok: false, erro: 'nome em falta' }, 400);
+  if (!SABORES_SALGADOS_VALIDOS.has(nome)) return j({ ok: false, erro: 'sabor desconhecido' }, 400);
   const agora = new Date().toISOString();
-
-  await env.DB.prepare(
-    `INSERT INTO stock_salgadas (nome, quantidade, minimo, atualizado_em) VALUES (?, ?, ?, ?)
-     ON CONFLICT(nome) DO NOTHING`
-  ).bind(nome, Math.max(0, parseInt(b.quantidade, 10) || 0), Math.max(0, parseInt(b.minimo, 10) || 0), agora).run();
 
   if (b.quantidade !== undefined) {
     await env.DB.prepare('UPDATE stock_salgadas SET quantidade = ?, atualizado_em = ? WHERE nome = ?')
