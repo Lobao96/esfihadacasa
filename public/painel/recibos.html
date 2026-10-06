@@ -205,7 +205,9 @@
             <div class="loja">Esfiha da Casa</div>
           </div>
           <div class="subloja">Pedido #${p.numero} · ${horaDe(p.criado_em)}</div>
+          ${p.nome ? `<p class="endereco" style="font-weight:800;font-size:1rem;color:var(--ink);margin-bottom:2px">👤 ${esc(p.nome)}</p>` : ''}
           ${enderecoHtml(p)}
+          ${p.telefone ? `<p class="endereco" style="margin-top:-8px">📞 ${esc(p.telefone)}</p>` : ''}
           <div class="linha-total"><span>Total a cobrar</span><span>${eurCent(p.total_cent)}</span></div>
         </div>`;
     });

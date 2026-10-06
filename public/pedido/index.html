@@ -226,7 +226,7 @@
           <div class="linha"><span>Total</span><span class="total">${eur(p.total_cent)}
             <span class="pago ${p.pago ? '' : 'nao'}">${p.pago ? 'pago' : 'por pagar'}</span></span></div>
         </div>
-        ${entrega && (p.morada || p.localidade) ? `<div class="endereco-entrega">🛵 ${esc([p.morada, p.localidade].filter(Boolean).join(', '))}
+        ${entrega && (p.morada || p.localidade) ? `<div class="endereco-entrega">${p.nome ? `👤 <strong>${esc(p.nome)}</strong><br>` : ''}🛵 ${esc([p.morada, p.localidade].filter(Boolean).join(', '))}
           ${p.telefone ? `<br>📞 <a href="tel:${esc(p.telefone)}" style="color:inherit">${esc(p.telefone)}</a> · <a href="https://wa.me/${waDigitos(p.telefone)}" target="_blank" rel="noopener" style="color:inherit">WhatsApp do cliente</a>` : ''}
         </div>` : ''}
         <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>

@@ -676,10 +676,14 @@
         <div class="taxa-nota">Nota: O valor da entrega é definido pela empresa parceira e não constitui receita para a Esfiha da Casa.</div>
               </div>
 
+      <p class="extras-title">O seu nome</p>
+      <input type="text" id="nomeInput" placeholder="Nome e apelido" autocomplete="name" aria-label="O seu nome">
+      <p class="tel-nota">Para sabermos a quem entregar.</p>
+
       <p class="extras-title">Seu WhatsApp</p>
       <input type="tel" id="telInput" inputmode="tel" placeholder="Ex.: 912 345 678"
              autocomplete="tel" aria-label="Seu número de WhatsApp">
-      <p class="tel-nota">Serve só para a gente te avisar quando o pedido estiver a caminho. Pode deixar em branco.</p>
+      <p class="tel-nota">Para avisarmos quando o pedido estiver a caminho, e para o estafeta poder ligar se não encontrar a morada.</p>
 
       <p class="extras-title">Pagamento</p>
       <div class="pay-row" id="payRow"></div>
@@ -2020,6 +2024,10 @@
       if (f.length) faltas.push(c.name + ': falta escolher ' + f.join(', '));
     });
     if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
+    const nomeV = ((document.getElementById('nomeInput') || {}).value || '').trim();
+    if (nomeV.length < 2) faltas.push('Falta escrever o seu nome.');
+    const telV = ((document.getElementById('telInput') || {}).value || '').replace(/\D/g, '');
+    if (telV.length < 9) faltas.push('Falta o número de WhatsApp (precisamos para a entrega).');
     if (estadoLoja && !estadoLoja.ilimitado && contaEsfihasTotal() > (estadoLoja.restante || 0)) {
       faltas.push('Não temos esfihas suficientes em stock para este pedido (restam ' + estadoLoja.restante + ', este pedido precisa de ' + contaEsfihasTotal() + ').');
     }
@@ -2073,6 +2081,7 @@
           modo: orderType === 'entrega' ? 'entrega' : 'retirada',
           morada: orderType === 'entrega' ? ruaCompleta() : '',
           localidade: orderType === 'entrega' ? ((document.getElementById('locInput') || {}).value || '').trim() : '',
+          nome: (document.getElementById('nomeInput') || {}).value || '',
           telefone: (document.getElementById('telInput') || {}).value || '',
           origem: ORIGEM.origem,
           campanha: ORIGEM.campanha,

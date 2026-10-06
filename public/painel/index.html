@@ -641,6 +641,7 @@
           <span class="tot">${eur(p.total_cent)}</span>
         </div>
         <div class="meta">
+          ${p.nome ? `<strong>${esc(p.nome)}</strong><br>` : ''}
           ${horaDe(p.criado_em)} · ${p.n_esfihas || 0} esfiha${p.n_esfihas === 1 ? '' : 's'}
           ${p.senha ? ' · senha ' + p.senha : ''}
           ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}

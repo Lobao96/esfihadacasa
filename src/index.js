@@ -479,6 +479,13 @@ async function novoPedido(request, env, ctx) {
     return j({ ok: false, erro: 'sem_stock', estado: st }, 409);
   }
 
+  // Nome e telefone sao obrigatorios -- quem entrega (estafeta ou a propria
+  // loja, na retirada) tem de saber a quem entregar e como contactar.
+  const nomeCliente = limpar(b.nome, 120);
+  if (!nomeCliente || nomeCliente.length < 2) return j({ ok: false, erro: 'nome obrigatorio' }, 400);
+  const telCliente = soDigitos(b.telefone);
+  if (!telCliente) return j({ ok: false, erro: 'telefone obrigatorio' }, 400);
+
   const agora = new Date().toISOString();
   // b.itens pode ser a lista simples (formato antigo) ou o objecto com
   // linhas, producao e bebidas (formato novo). Guarda-se tal como vem.
@@ -495,15 +502,15 @@ async function novoPedido(request, env, ctx) {
   const res = await env.DB.prepare(
     `INSERT INTO pedidos
        (dia, numero, senha, ensaio, modo, localidade, morada, total_cent, n_esfihas,
-        itens, mensagem, criado_em, token, telefone, origem, campanha)
-     SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        itens, mensagem, criado_em, token, telefone, origem, campanha, nome)
+     SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        FROM pedidos WHERE ${filtroNumero}
      RETURNING id, numero, token`
   ).bind(
     dia, limpar(b.senha, 40), ensaio, limpar(b.modo, 20), limpar(b.localidade, 80),
     limpar(b.morada, 300), Math.max(0, parseInt(b.total_cent, 10) || 0),
     Math.max(0, parseInt(b.n_esfihas, 10) || 0), itens, limpar(b.mensagem, 4000), agora,
-    token, soDigitos(b.telefone), limpar(b.origem, 60), limpar(b.campanha, 80),
+    token, telCliente, limpar(b.origem, 60), limpar(b.campanha, 80), nomeCliente,
     ...(ensaio ? [dia] : [])
   ).first();
 
@@ -523,7 +530,7 @@ async function acompanhar(request, env) {
   const tk = (url.searchParams.get('t') || '').toUpperCase().slice(0, 12);
   if (!tk) return j({ ok: false, erro: 'sem codigo' }, 400);
   const p = await env.DB.prepare(
-    `SELECT numero, estado, pago, modo, localidade, morada, telefone, total_cent, n_esfihas,
+    `SELECT numero, estado, pago, modo, localidade, morada, telefone, nome, total_cent, n_esfihas,
             itens, criado_em, atualizado_em, ensaio
        FROM pedidos WHERE token = ?`
   ).bind(tk).first();
@@ -706,7 +713,7 @@ async function listar(request, env) {
   const { results } = await env.DB.prepare(
     `SELECT id, numero, senha, ensaio, estado, pago, modo, localidade, morada,
             total_cent, n_esfihas, itens, mensagem, criado_em, atualizado_em,
-            token, telefone, origem
+            token, telefone, nome, origem
        FROM pedidos WHERE dia = ? ORDER BY ensaio ASC, numero ASC`
   ).bind(dia).all();
   return j({ ok: true, dia, pedidos: results, estado: await estadoDoDia(env.DB, dia) });
