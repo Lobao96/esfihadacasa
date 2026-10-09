@@ -257,9 +257,28 @@
     const p = pedidos.find(x => x.id === id);
     await marcar(id, { estado: 'preparacao' });
     if (!p || p.modo !== 'entrega') return;
-    if (confirm('Quer chamar já o estafeta da Uber para esta entrega?')) {
-      await chamarUber(id);
-    }
+    // Entrega própria: o staff envia os dados ao estafeta por WhatsApp
+    // (botão "Enviar ao estafeta" no cartão). O Uber Direct fica desligado.
+  }
+
+  // WhatsApp do estafeta (só dígitos, com 351). Preencher quando houver número.
+  const ESTAFETA_WA = '';
+
+  function mensagemEstafeta(p) {
+    const link = location.origin + '/pedido/?t=' + p.token;
+    return `🛵 Entrega #${p.numero}\n` +
+      (p.nome ? `Cliente: ${p.nome}\n` : '') +
+      `Morada: ${p.morada || p.localidade || '(por confirmar)'}\n` +
+      (p.telefone ? `Telefone: ${p.telefone}\n` : '') +
+      (p.pago ? 'Já pago ✅\n' : `Cobrar ${eur(p.total_cent)} ao cliente\n`) +
+      `\nDetalhes: ${link}`;
+  }
+
+  function enviarEstafeta(id) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p) return;
+    const txt = encodeURIComponent(mensagemEstafeta(p));
+    window.open(ESTAFETA_WA ? `https://wa.me/${ESTAFETA_WA}?text=${txt}` : `https://wa.me/?text=${txt}`, '_blank', 'noopener');
   }
 
   async function chamarUber(id) {
@@ -676,7 +695,7 @@
       <div class="p ${p.estado}">
         <div class="p-top">
           <span class="num">#${p.numero}${!p.ensaio && idx.has(p.id) ? `<small style="opacity:.6;font-weight:700">-${idx.get(p.id)}</small>` : ''}</span>
-          <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega' : 'Retirada'}</span>
+          <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega · estafeta' : 'Levantamento'}</span>
           ${p.ensaio ? '<span class="tag-ensaio">ENSAIO</span>' : ''}
           <span class="tot">${eur(p.total_cent)}</span>
         </div>
@@ -686,7 +705,7 @@
           ${p.senha ? ' · senha ' + p.senha : ''}
           ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}
           ${entrega && p.morada ? '<br>' + p.morada : ''}
-          ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo Uber ' + eur(infoEntrega.custo_cent) : '') : ''}
+          ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
         </div>
@@ -697,6 +716,7 @@
           </button>
           ${prox ? `<button class="ac ${travado ? '' : 'destaque'}" ${travado ? 'disabled title="Na entrega, marque pago primeiro"' : ''}
               onclick="${prox[0] === 'preparacao' ? `comecarFazer(${p.id})` : `marcar(${p.id}, {estado: '${prox[0]}'})`}">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
+          ${entrega && p.estado !== 'entregue' && p.estado !== 'cancelado' ? `<button class="ac wa" onclick="enviarEstafeta(${p.id})">🛵 Enviar ao estafeta</button>` : ''}
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}

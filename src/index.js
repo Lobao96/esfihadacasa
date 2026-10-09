@@ -1051,13 +1051,13 @@ async function analise(request, env) {
   const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
   const dias = {}, horas = {}, zonas = {}, origens = {};
   const sabores = {}, extras = {}, bebidas = {}, bebidasVendidas = {}, bebidasOfertas = {};
-  let receita = 0, esfihas = 0, entregas = 0;
+  let receita = 0, esfihas = 0, entregas = 0, receitaEntregas = 0;
   let custoProdutos = 0, entregaCobrada = 0, entregaCustoUber = 0;
 
   for (const r of linhas || []) {
     receita += r.total_cent || 0;
     esfihas += r.n_esfihas || 0;
-    if (r.modo === 'entrega') entregas++;
+    if (r.modo === 'entrega') { entregas++; receitaEntregas += r.total_cent || 0; }
 
     const d = dias[r.dia] || (dias[r.dia] = { dia: r.dia, pedidos: 0, receita: 0, esfihas: 0 });
     d.pedidos++; d.receita += r.total_cent || 0; d.esfihas += r.n_esfihas || 0;
@@ -1124,7 +1124,7 @@ async function analise(request, env) {
 
   return j({
     ok: true, de, ate,
-    resumo: { pedidos, receita, esfihas, entregas, medio: pedidos ? receita / pedidos : 0 },
+    resumo: { pedidos, receita, esfihas, entregas, receitaEntregas, retiradas: pedidos - entregas, medio: pedidos ? receita / pedidos : 0 },
     porDia: serie,
     porHora: valores(horas).sort((a, b) => a.hora - b.hora),
     porZona: valores(zonas).sort((a, b) => b.pedidos - a.pedidos),
