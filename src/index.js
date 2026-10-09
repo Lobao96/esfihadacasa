@@ -38,9 +38,16 @@ async function estadoDoDia(db, dia) {
   // O total de esfihas por vender deixou de ser um numero escrito a mao:
   // e sempre a soma do stock real (salgadas congeladas por sabor + massa
   // doce pronta). Descer qualquer um desses automaticamente desce aqui.
-  const salg = await db.prepare('SELECT COALESCE(SUM(quantidade), 0) AS s FROM stock_salgadas').first();
+  const { results: salgLinhas } = await db.prepare('SELECT nome, quantidade FROM stock_salgadas').all();
   const doce = await db.prepare('SELECT quantidade FROM stock_doces WHERE id = 1').first();
-  const total = (salg && salg.s || 0) + (doce && doce.quantidade || 0);
+  const porSabor = {};
+  let somaSalg = 0;
+  for (const linha of (salgLinhas || [])) {
+    porSabor[linha.nome] = linha.quantidade;
+    somaSalg += linha.quantidade || 0;
+  }
+  const doceRestante = (doce && doce.quantidade) || 0;
+  const total = somaSalg + doceRestante;
   const restante = Math.max(0, total);
   return {
     dia,
@@ -48,6 +55,11 @@ async function estadoDoDia(db, dia) {
     usado: r.usado,
     restante,
     ilimitado: false,
+    // Stock por sabor, publico (so numeros, sem nada sensivel) -- usado no
+    // site para desativar logo no cartao um sabor esgotado, em vez de so
+    // deixar saber la para o fim, ao tentar enviar o pedido.
+    porSabor,
+    doceRestante,
     // abertoManual e o que o dono escolheu no botao do painel (fechar/abrir loja).
     // aberto e o estado real que bloqueia pedidos: so fica aberto se o dono
     // quis abrir E ainda houver stock.
@@ -234,157 +246,54 @@ async function tokenUber(env) {
 //
 // (10/10) A entrega passou a ser feita pela Andreza (estafeta propria),
 // nao pelo estafeta da Uber -- ver mudarPedido()/painel. A chamada ao
-// Uber aqui em baixo (cotarEntrega) fica so como *estimativa de custo*
-// para decidir o preco a cobrar ao cliente, nunca para despachar de
-// verdade. A pedido do dono, deixou de haver faixas por zona: entrega a
-// 3,50€ fixos para toda a area que a Andreza cobre (Alvor a Lagoa, ~10km
-// por estrada a partir da loja em Portimao -- o custo Uber estimado serve
-// de proxy para essa distancia, ja que nao ha outra fonte de distancia
-// real). Acima de 10€ de custo estimado (fora dessa area), a entrega e
-// recusada -- nunca por estar numa localidade em vez de outra, so pelo
-// custo/distancia real ate la.
+// Uber aqui em baixo (cotarEntrega) fica so como *estimativa de distancia*
+// para decidir se a morada fica dentro da area que a Andreza cobre, nunca
+// para despachar de verdade. A pedido do dono, deixou de haver faixas por
+// zona: entrega a 3,50€ fixos para toda a area Alvor a Lagoa (~10km por
+// estrada a partir da loja em Portimao).
+//
+// O corte de zona e feito pelo TEMPO estimado (ENTREGA_ETA_MAX_MIN), nao
+// pelo custo -- o preco que a Uber devolve pode variar com a hora do dia
+// (picos, noite) mesmo para a mesma distancia, e isso ja rejeitou moradas
+// dentro da zona (ex: Lagoa, de noite) so por o preco ter vindo mais alto
+// nesse momento. O custo so serve de rede de seguranca contra um erro
+// grosseiro de geocodificacao (morada que caiu a centenas de km).
 const ENTREGA_FAIXAS = [
-  { custo_max_cent: 1000, cobra_cent: 350 }, // zona unica: Alvor a Lagoa (~10km), fixo
+  { custo_max_cent: 2500, cobra_cent: 350 }, // rede de seguranca, nao e o corte real
 ];
-const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado so na rede de seguranca (ver semUber)
+const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado tambem na rede de seguranca (ver semUber)
 
-// O campo "duration" da cotacao fica so como rede de seguranca contra
-// casos verdadeiramente extremos -- quem faz o corte de zona e o custo.
-const ENTREGA_ETA_MAX_MIN = 60;
+// Corte por tempo: 15min da loja e o limite real -- o concelho de Lagoa
+// tambem tem zonas longe demais (Porches, Carvoeiro) que ficariam dentro
+// do codigo postal 8400 mas fora do alcance da Andreza. O codigo postal
+// (ver codigoPostalSeguro) so serve para excluir de vez concelhos errados
+// (Lagos, Silves, Monchique); quem corta mesmo a zona e este tempo.
+const ENTREGA_ETA_MAX_MIN = 15;
 
 function faixaDeEntrega(custoCent) {
   return ENTREGA_FAIXAS.find(f => custoCent <= f.custo_max_cent) || null;
 }
 
-// Rede de seguranca por codigo postal. So entra em jogo quando o Uber falha
-// tecnicamente (nao responde, erro de rede, etc.) ou quando o autocomplete
-// de moradas nao estiver disponivel: nunca decide enquanto o Uber conseguir
-// responder normalmente. Construida a partir dos codigos postais reais dos
-// CTT (base de dados oficial) para Portimao + Praia da Rocha, Alvor,
-// Ferragudo e Parchal -- excluindo deliberadamente Estombar, Lagoa e
-// Mexilhoeira Grande, que ficam fora da zona de entrega de 15 min.
-const CP_SEGURANCA = [
-  { prefixo: '8500', min: 69, max: 69 }, // Portimao
-  { prefixo: '8500', min: 73, max: 73 }, // Portimao
-  { prefixo: '8500', min: 75, max: 78 }, // Portimao
-  { prefixo: '8500', min: 141, max: 141 }, // Portimao
-  { prefixo: '8500', min: 286, max: 286 }, // Portimao
-  { prefixo: '8500', min: 289, max: 294 }, // Portimao
-  { prefixo: '8500', min: 299, max: 300 }, // Portimao
-  { prefixo: '8500', min: 302, max: 303 }, // Portimao
-  { prefixo: '8500', min: 305, max: 305 }, // Portimao
-  { prefixo: '8500', min: 307, max: 311 }, // Portimao
-  { prefixo: '8500', min: 313, max: 314 }, // Portimao
-  { prefixo: '8500', min: 316, max: 316 }, // Portimao
-  { prefixo: '8500', min: 318, max: 319 }, // Portimao
-  { prefixo: '8500', min: 321, max: 321 }, // Portimao
-  { prefixo: '8500', min: 323, max: 323 }, // Portimao
-  { prefixo: '8500', min: 325, max: 325 }, // Portimao
-  { prefixo: '8500', min: 328, max: 328 }, // Portimao
-  { prefixo: '8500', min: 332, max: 333 }, // Portimao
-  { prefixo: '8500', min: 336, max: 336 }, // Portimao
-  { prefixo: '8500', min: 339, max: 341 }, // Portimao
-  { prefixo: '8500', min: 343, max: 345 }, // Portimao
-  { prefixo: '8500', min: 347, max: 348 }, // Portimao
-  { prefixo: '8500', min: 352, max: 353 }, // Portimao
-  { prefixo: '8500', min: 356, max: 356 }, // Portimao
-  { prefixo: '8500', min: 363, max: 363 }, // Portimao
-  { prefixo: '8500', min: 367, max: 367 }, // Portimao
-  { prefixo: '8500', min: 371, max: 372 }, // Portimao
-  { prefixo: '8500', min: 381, max: 384 }, // Portimao
-  { prefixo: '8500', min: 396, max: 396 }, // Portimao
-  { prefixo: '8500', min: 399, max: 399 }, // Portimao
-  { prefixo: '8500', min: 402, max: 402 }, // Portimao
-  { prefixo: '8500', min: 406, max: 406 }, // Portimao
-  { prefixo: '8500', min: 411, max: 411 }, // Portimao
-  { prefixo: '8500', min: 416, max: 427 }, // Portimao
-  { prefixo: '8500', min: 429, max: 444 }, // Portimao
-  { prefixo: '8500', min: 448, max: 449 }, // Portimao
-  { prefixo: '8500', min: 454, max: 456 }, // Portimao
-  { prefixo: '8500', min: 458, max: 461 }, // Portimao
-  { prefixo: '8500', min: 463, max: 467 }, // Portimao
-  { prefixo: '8500', min: 469, max: 469 }, // Portimao
-  { prefixo: '8500', min: 474, max: 478 }, // Portimao
-  { prefixo: '8500', min: 480, max: 480 }, // Portimao
-  { prefixo: '8500', min: 483, max: 486 }, // Portimao
-  { prefixo: '8500', min: 488, max: 494 }, // Portimao
-  { prefixo: '8500', min: 496, max: 504 }, // Portimao
-  { prefixo: '8500', min: 506, max: 515 }, // Portimao
-  { prefixo: '8500', min: 518, max: 521 }, // Portimao
-  { prefixo: '8500', min: 524, max: 527 }, // Portimao
-  { prefixo: '8500', min: 530, max: 531 }, // Portimao
-  { prefixo: '8500', min: 533, max: 540 }, // Portimao
-  { prefixo: '8500', min: 542, max: 544 }, // Portimao
-  { prefixo: '8500', min: 546, max: 576 }, // Portimao
-  { prefixo: '8500', min: 578, max: 588 }, // Portimao
-  { prefixo: '8500', min: 590, max: 590 }, // Portimao
-  { prefixo: '8500', min: 592, max: 612 }, // Portimao
-  { prefixo: '8500', min: 614, max: 635 }, // Portimao
-  { prefixo: '8500', min: 638, max: 643 }, // Portimao
-  { prefixo: '8500', min: 645, max: 657 }, // Portimao
-  { prefixo: '8500', min: 659, max: 687 }, // Portimao
-  { prefixo: '8500', min: 689, max: 699 }, // Portimao
-  { prefixo: '8500', min: 701, max: 712 }, // Portimao
-  { prefixo: '8500', min: 714, max: 716 }, // Portimao
-  { prefixo: '8500', min: 718, max: 720 }, // Portimao
-  { prefixo: '8500', min: 722, max: 725 }, // Portimao
-  { prefixo: '8500', min: 728, max: 757 }, // Portimao
-  { prefixo: '8500', min: 759, max: 761 }, // Portimao
-  { prefixo: '8500', min: 763, max: 764 }, // Portimao
-  { prefixo: '8500', min: 766, max: 766 }, // Portimao
-  { prefixo: '8500', min: 768, max: 769 }, // Portimao
-  { prefixo: '8500', min: 772, max: 772 }, // Portimao
-  { prefixo: '8500', min: 775, max: 776 }, // Portimao
-  { prefixo: '8500', min: 778, max: 778 }, // Portimao
-  { prefixo: '8500', min: 780, max: 780 }, // Portimao
-  { prefixo: '8500', min: 782, max: 782 }, // Portimao
-  { prefixo: '8500', min: 784, max: 802 }, // Portimao
-  { prefixo: '8500', min: 804, max: 815 }, // Portimao
-  { prefixo: '8500', min: 818, max: 820 }, // Portimao
-  { prefixo: '8500', min: 822, max: 824 }, // Portimao
-  { prefixo: '8500', min: 826, max: 827 }, // Portimao
-  { prefixo: '8500', min: 830, max: 833 }, // Portimao
-  { prefixo: '8500', min: 835, max: 835 }, // Portimao
-  { prefixo: '8500', min: 841, max: 844 }, // Portimao
-  { prefixo: '8500', min: 847, max: 847 }, // Portimao
-  { prefixo: '8500', min: 992, max: 992 }, // Portimao
-  { prefixo: '8500', min: 995, max: 995 }, // Portimao
-  { prefixo: '8500', min: 997, max: 998 }, // Portimao
-  { prefixo: '8500', min: 2, max: 3 }, // Alvor
-  { prefixo: '8500', min: 5, max: 23 }, // Alvor
-  { prefixo: '8500', min: 25, max: 35 }, // Alvor
-  { prefixo: '8500', min: 37, max: 37 }, // Alvor
-  { prefixo: '8500', min: 44, max: 45 }, // Alvor
-  { prefixo: '8500', min: 56, max: 58 }, // Alvor
-  { prefixo: '8500', min: 74, max: 74 }, // Alvor
-  { prefixo: '8500', min: 81, max: 81 }, // Alvor
-  { prefixo: '8500', min: 84, max: 84 }, // Alvor
-  { prefixo: '8500', min: 87, max: 87 }, // Alvor
-  { prefixo: '8500', min: 322, max: 322 }, // Alvor
-  { prefixo: '8500', min: 329, max: 329 }, // Alvor
-  { prefixo: '8500', min: 335, max: 335 }, // Alvor
-  { prefixo: '8500', min: 777, max: 777 }, // Alvor
-  { prefixo: '8500', min: 783, max: 783 }, // Alvor
-  { prefixo: '8500', min: 996, max: 996 }, // Alvor
-  { prefixo: '8400', min: 202, max: 215 }, // Ferragudo
-  { prefixo: '8400', min: 219, max: 262 }, // Ferragudo
-  { prefixo: '8400', min: 275, max: 277 }, // Ferragudo
-  { prefixo: '8400', min: 279, max: 279 }, // Ferragudo
-  { prefixo: '8400', min: 282, max: 282 }, // Ferragudo
-  { prefixo: '8400', min: 287, max: 287 }, // Ferragudo
-  { prefixo: '8400', min: 996, max: 996 }, // Ferragudo
-  { prefixo: '8400', min: 600, max: 621 }, // Parchal
-  { prefixo: '8400', min: 623, max: 625 }, // Parchal
-  { prefixo: '8400', min: 651, max: 652 }, // Parchal
-  { prefixo: '8400', min: 655, max: 670 }, // Parchal
-];
+// Primeiro filtro, antes de perguntar a Uber: o codigo postal tem de ser
+// dos concelhos de Portimao ou Lagoa (Algarve) -- nunca aceita so porque a
+// Uber, num momento de pouco transito, desse uma estimativa de tempo curta
+// para um concelho errado. Confirmado nos CTT: prefixo 8500 = concelho de
+// Portimao (Portimao, Praia da Rocha, Alvor, Mexilhoeira Grande); 8400 =
+// concelho de Lagoa (Lagoa, Carvoeiro, Estombar, Ferragudo, Parchal,
+// Porches). Os vizinhos ficam sempre de fora: Lagos e 8600, Silves e 8300,
+// Monchique e 8550.
+//
+// Mas o concelho de Lagoa e grande -- Porches e Carvoeiro ficam a mais de
+// 15min da loja, fora do alcance real da Andreza, mesmo tendo codigo
+// postal 8400. Por isso o codigo postal so exclui concelhos errados de
+// vez; quem decide a zona de verdade e o tempo estimado (ENTREGA_ETA_MAX_MIN,
+// mais abaixo), ate Lagoa Centro no maximo.
+const CONCELHOS_ENTREGA = new Set(['8400', '8500']); // Lagoa, Portimao
 
 function codigoPostalSeguro(cp) {
   const m = (cp || '').trim().match(/^(\d{4})-?(\d{3})$/);
   if (!m) return false;
-  const prefixo = m[1];
-  const sufixo = parseInt(m[2], 10);
-  return CP_SEGURANCA.some(r => r.prefixo === prefixo && sufixo >= r.min && sufixo <= r.max);
+  return CONCELHOS_ENTREGA.has(m[1]);
 }
 
 async function cotacao(request, env) {
@@ -394,6 +303,15 @@ async function cotacao(request, env) {
   const rua = limpar(b.morada, 200);
   if (!rua || rua.length < 5) return j({ ok: false, erro: 'morada curta' }, 400);
   const cp = limpar(b.codigo_postal, 12) || '';
+
+  // O codigo postal e quem decide a zona, sempre que o temos -- nao so
+  // quando a Uber falha. Um codigo postal fora de Portimao/Lagoa e
+  // recusado logo aqui, nem chega a perguntar a Uber (nunca aceita so
+  // porque a Uber, num momento de pouco transito, desse uma estimativa
+  // de tempo curta para um sitio fora da zona).
+  if (cp && !codigoPostalSeguro(cp)) {
+    return j({ ok: false, erro: 'fora_de_alcance', uber_motivo: 'fora_do_concelho' }, 200);
+  }
 
   // Uber nao respondeu (config em falta, falha de autenticacao, erro de
   // rede ou resposta invalida): cai-se na rede de seguranca do codigo

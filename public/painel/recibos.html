@@ -214,9 +214,26 @@
         </div>`;
     });
     lista.innerHTML = html;
+
+    // Quantos recibos vieram de entrega (estafeta) vs levantamento no local,
+    // e quanto se deve a Andreza nesse dia -- mesma regra do painel: recebe
+    // o maior entre 20€ e 3,50€ por entrega; a loja so paga a diferenca nos
+    // dias com 5 entregas ou menos.
+    const entregas = pedidos.filter(p => p.modo === 'entrega').length;
+    const retiradas = pedidos.length - entregas;
+    let andrezaHtml = '';
+    if (entregas) {
+      const taxa = entregas * 3.5;
+      const recebe = Math.max(20, taxa);
+      const complemento = Math.max(0, recebe - taxa);
+      andrezaHtml = `
+      <div><b>${eur(recebe)}</b>Andreza recebe${complemento > 0 ? ' (' + eur(complemento) + ' de complemento)' : ''}</div>`;
+    }
     resumo.innerHTML = `
       <div><b>${pedidos.length}</b>recibos</div>
-      <div><b>${eurCent(total)}</b>total do dia</div>`;
+      <div><b>${eurCent(total)}</b>total do dia</div>
+      <div><b>${entregas}</b>entregas (estafeta)</div>
+      <div><b>${retiradas}</b>levantamentos</div>${andrezaHtml}`;
   }
 
   (function () {

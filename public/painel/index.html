@@ -767,8 +767,13 @@
           <button class="ac pago ${p.pago ? 'on' : ''}" onclick="marcarPago(${p.id}, ${p.pago ? 0 : 1})">
             ${p.pago ? '✓ Pago' : 'Marcar pago'}
           </button>
+          ${/* Entrega paga em dinheiro: ao marcar "Entregue" ja se marca
+                 pago automaticamente -- a Andreza recebeu o dinheiro na hora,
+                 ninguem vai la a seguir carregar em "Marcar pago" a mao, e sem
+                 isto o pedido nunca aparecia nos Recibos nem contava para o
+                 que se deve pagar a ela. */ ''}
           ${prox ? `<button class="ac ${travado ? '' : 'destaque'}" ${travado ? 'disabled title="Na entrega, marque pago primeiro"' : ''}
-              onclick="${prox[0] === 'preparacao' ? `comecarFazer(${p.id})` : `marcar(${p.id}, {estado: '${prox[0]}'})`}">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
+              onclick="${prox[0] === 'preparacao' ? `comecarFazer(${p.id})` : `marcar(${p.id}, {estado: '${prox[0]}'${(prox[0] === 'entregue' && pagaDinheiro) ? ', pago: 1' : ''}})`}">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
           ${entrega && p.estado !== 'entregue' && p.estado !== 'cancelado' ? `<button class="ac wa" onclick="enviarEstafeta(${p.id})">🛵 Enviar ao estafeta</button>` : ''}
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}

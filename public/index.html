@@ -453,6 +453,14 @@
   .combo-pick-name { flex: 1; font-weight: 700; font-size: 0.9rem; }
   .combo-pick .ex-chips { margin-top: 6px; }
   .ex-chip.disabled { opacity: 0.4; pointer-events: none; }
+  .card.esgotado-sabor { opacity: 0.55; }
+  .card.esgotado-sabor .stepper button { pointer-events: none; opacity: 0.4; }
+  .card.esgotado-sabor .stepper .qty { pointer-events: none; }
+  .esgotado-tag {
+    display: inline-block; font-size: 0.72rem; font-weight: 800;
+    background: rgba(200,35,43,0.12); color: var(--red);
+    padding: 3px 9px; border-radius: 999px; margin: -2px 0 8px;
+  }
   .brinde-aviso {
     margin-top: 10px; padding: 9px 12px; border-radius: 10px;
     background: rgba(244,185,66,0.18); border: 1px dashed var(--gold);
@@ -854,6 +862,7 @@
     { id: "bacon", name: "Bacon", price: 0.50 },
     { id: "milho", name: "Milho", price: 0.50 },
     { id: "queijo", name: "Queijo", price: 0.50 },
+    { id: "catupiry", name: "Catupiry", price: 0.50 },
     { id: "azeitona", name: "Azeitona", price: 0.50 },
     { id: "chourico", name: "Chouriço em cubos", price: 0.50 },
     { id: "fiambre", name: "Fiambre", price: 0.50 },
@@ -1068,7 +1077,7 @@
       ? `<img class="card-img" src="${i.img}" alt="${i.name}">`
       : `<div class="card-img placeholder">🫓</div>`;
     const alerg = i.alerg.map(a => `<span class="alerg-tag">${a}</span>`).join('');
-    return `<div class="card">
+    return `<div class="card" data-item="${i.id}">
       ${img}
       <h3>${i.name}</h3>
       <p class="desc">${i.desc}</p>
@@ -1117,6 +1126,74 @@
     return i ? i.name : '';
   }
 
+  // Stock por sabor (vem do /estado): usa-se para desativar logo no cartao
+  // um sabor esgotado, em vez de so deixar saber la para o fim, ao tentar
+  // enviar o pedido -- e so entao a Cloudflare recusar com sem_stock_sabor.
+  function stockDisponivel(id) {
+    if (!estadoLoja) return null;
+    if (isDoce(id)) return estadoLoja.doceRestante != null ? estadoLoja.doceRestante : null;
+    if (isSalgada(id)) {
+      if (!estadoLoja.porSabor) return null;
+      const n = estadoLoja.porSabor[nomeSabor(id)];
+      return n != null ? n : null;
+    }
+    return null; // bebidas e combos nao tem limite por sabor aqui
+  }
+
+  // Quantas unidades deste sabor ja estao no pedido -- conta tanto as
+  // esfihas escolhidas diretamente como as escolhidas dentro de um combo,
+  // porque consomem o mesmo stock fisico.
+  function qtdPedidaDoSabor(id) {
+    let n = 0;
+    units.forEach(u => {
+      if (u.itemId === id) n++;
+      (u.picks || []).forEach(pk => { if (pk.sid === id) n++; });
+      (u.picksDoces || []).forEach(pk => { if (pk.sid === id) n++; });
+    });
+    return n;
+  }
+
+  function avisarEsgotado(id) {
+    mostrarFaltas(['Esgotou ' + nomeSabor(id) + ' por hoje. Escolhe outro sabor.']);
+  }
+
+  // Chamada sempre que o /estado responde: marca os sabores sem stock como
+  // esgotados nos cartoes (cinzento, botao "+" desativado), e se algum ja
+  // estiver no pedido acima do que resta, tira o excesso sozinho.
+  function aplicarStockSabores() {
+    if (!estadoLoja) return;
+    [...MENU.salgadas, ...MENU.doces].forEach(i => {
+      const disp = stockDisponivel(i.id);
+      const card = document.querySelector('.card[data-item="' + i.id + '"]');
+      const esgotado = disp != null && disp <= 0;
+      if (card) {
+        card.classList.toggle('esgotado-sabor', esgotado);
+        let tag = card.querySelector('.esgotado-tag');
+        if (esgotado && !tag) {
+          tag = document.createElement('span');
+          tag.className = 'esgotado-tag';
+          tag.textContent = 'Esgotado por hoje';
+          const foot = card.querySelector('.card-foot');
+          if (foot) card.insertBefore(tag, foot); else card.appendChild(tag);
+        } else if (!esgotado && tag) {
+          tag.remove();
+        }
+      }
+      // Se o cliente ja tinha este sabor no pedido antes de ele esgotar
+      // (ex: esgotou entre abrir a pagina e carregar em enviar), tira as
+      // unidades a mais em vez de deixar seguir para um erro no envio.
+      if (disp != null) {
+        let excesso = units.filter(u => u.itemId === i.id).length - Math.max(0, disp);
+        for (let k = units.length - 1; k >= 0 && excesso > 0; k--) {
+          if (units[k].itemId === i.id) { units.splice(k, 1); excesso--; }
+        }
+      }
+    });
+    syncCounts();
+    renderOrderList();
+    updateTotal();
+  }
+
   // extras escolhidos dentro de um combo, por esfiha
   function picksDe(u, tipo) { return tipo === 'doce' ? u.picksDoces : u.picks; }
   function extrasDoPick(tipo) { return tipo === 'doce' ? EXTRAS_DOCES : EXTRAS_SALGADAS; }
@@ -1139,6 +1216,8 @@
 
   function changeQty(id, delta) {
     if (delta > 0) {
+      const disp = stockDisponivel(id);
+      if (disp != null && qtdPedidaDoSabor(id) >= disp) { avisarEsgotado(id); return; }
       units.push({ uid: ++uidCounter, itemId: id, extras: {}, picks: [], picksDoces: [], bebidas: [] });
     } else {
       for (let k = units.length - 1; k >= 0; k--) {
@@ -1185,6 +1264,8 @@
     let n = parseInt(valor, 10);
     if (isNaN(n) || n < 0) n = 0;
     if (n > 99) n = 99;
+    const disp = stockDisponivel(id);
+    if (disp != null && n > disp) { n = disp; avisarEsgotado(id); }
     const atual = units.filter(u => u.itemId === id).length;
     if (n > atual) {
       for (let k = atual; k < n; k++) {
@@ -2055,6 +2136,7 @@
       if (d && d.ok) {
         estadoLoja = d.estado;
         if (!estadoLoja.aberto && !PRE_LANCAMENTO) aplicarEsgotadoServidor();
+        aplicarStockSabores();
         updateStatus();
       }
     } catch (e) { /* sem servidor: o site continua a funcionar como antes */ }
@@ -2088,6 +2170,13 @@
     if (estadoLoja && !estadoLoja.ilimitado && contaEsfihasTotal() > (estadoLoja.restante || 0)) {
       faltas.push('Não temos esfihas suficientes em stock para este pedido (restam ' + estadoLoja.restante + ', este pedido precisa de ' + contaEsfihasTotal() + ').');
     }
+    [...MENU.salgadas, ...MENU.doces].forEach(i => {
+      const disp = stockDisponivel(i.id);
+      const pedidas = qtdPedidaDoSabor(i.id);
+      if (disp != null && pedidas > disp) {
+        faltas.push('Esgotou ' + i.name + ' (restam ' + disp + '). Tira esse sabor do pedido ou escolhe outro.');
+      }
+    });
     if (orderType === 'entrega') {
       const addr = ruaCompleta();
       const loc = ((document.getElementById('locInput') || {}).value || '').trim();
