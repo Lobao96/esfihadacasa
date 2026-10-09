@@ -550,7 +550,8 @@
     "addressCountry": "PT"
   },
   "openingHoursSpecification": [
-    { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Tuesday","Wednesday","Thursday","Friday"], "opens": "19:30", "closes": "22:00" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Tuesday","Wednesday","Thursday"], "opens": "19:30", "closes": "22:00" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Friday", "opens": "19:30", "closes": "23:59" },
     { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "12:00", "closes": "23:59" },
     { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "12:00", "closes": "22:00" }
   ],
@@ -711,7 +712,8 @@
     <div class="hours">
       <h4 class="hours-title">Horário</h4>
       <table class="hours-table">
-        <tr><td>Terça a sexta</td><td>19:30 – 22:00</td></tr>
+        <tr><td>Terça a quinta</td><td>19:30 – 22:00</td></tr>
+        <tr><td>Sexta</td><td>19:30 – 00:00</td></tr>
         <tr><td>Sábado</td><td>12:00 – 00:00</td></tr>
         <tr><td>Domingo</td><td>12:00 – 22:00</td></tr>
         <tr><td>Segunda-feira</td><td>Fechado</td></tr>
@@ -892,7 +894,7 @@
     { day: 2, open: "19:30", close: "22:00" },      // Terça
     { day: 3, open: "19:30", close: "22:00" },      // Quarta
     { day: 4, open: "19:30", close: "22:00" },      // Quinta
-    { day: 5, open: "19:30", close: "22:00" },      // Sexta
+    { day: 5, open: "19:30", close: "23:59" },      // Sexta (até 00h)
     { day: 6, open: "12:00", close: "23:59" },      // Sábado (até 00h)
   ];
   HOURS[0] = { day: 0, open: "12:00", close: "22:00" }; // Domingo
@@ -2146,6 +2148,13 @@
         btn.textContent = textoOriginal;
         if (d.estado) estadoLoja = d.estado;
         mostrarFaltas(['Não temos esfihas suficientes em stock para este pedido (restam ' + (d.estado ? d.estado.restante : 0) + ').']);
+        return false;
+      }
+      else if (d && d.erro === 'sem_stock_sabor') {
+        btn.textContent = textoOriginal;
+        if (d.estado) estadoLoja = d.estado;
+        const nomeSabor = d.sabor === 'doce' ? 'esse sabor doce' : (d.sabor || 'esse sabor');
+        mostrarFaltas(['Esgotou ' + nomeSabor + ' (restam ' + (d.restante_sabor || 0) + '). Tira esse sabor do pedido ou escolhe outro.']);
         return false;
       }
       else if (!d || d.ok !== true) {

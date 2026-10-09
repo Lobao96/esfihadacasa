@@ -389,7 +389,7 @@
         <div class="tile"><div class="v destaque">${eur0(r.receita)}</div><div class="k">Receita</div>
           <div class="extra">${nDias} dia${nDias === 1 ? '' : 's'} · ${eur0(r.receita / nDias)} por dia</div></div>
         <div class="tile"><div class="v">${pedidos}</div><div class="k">Pedidos</div>
-          <div class="extra">${entregas} entrega${entregas === 1 ? '' : 's'} · ${pedidos - entregas} retirada${pedidos - entregas === 1 ? '' : 's'}</div></div>
+          <div class="extra">${entregas} entrega${entregas === 1 ? '' : 's'} (estafeta) · ${pedidos - entregas} levantamento${pedidos - entregas === 1 ? '' : 's'}</div></div>
         <div class="tile"><div class="v">${eur(r.medio)}</div><div class="k">Valor médio</div>
           <div class="extra">por pedido</div></div>
         <div class="tile"><div class="v">${r.esfihas || 0}</div><div class="k">Esfihas</div>

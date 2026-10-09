@@ -54,6 +54,8 @@
 
   .wa{display:block;text-align:center;margin-top:18px;background:var(--verde);color:#fff;
     text-decoration:none;font-weight:800;padding:13px;border-radius:999px}
+  .avaliar{display:block;text-align:center;margin-top:10px;background:#fff;color:var(--ink);
+    text-decoration:none;font-weight:800;padding:13px;border-radius:999px;border:2px solid #F4B942}
   .rodape{text-align:center;font-size:.8rem;color:var(--ink-soft);margin-top:16px;line-height:1.5}
   .erro{background:var(--white);border-radius:18px;padding:26px 20px;text-align:center}
   .erro h2{font-family:'Baloo 2',sans-serif;font-size:1.2rem;margin-bottom:8px}
@@ -78,7 +80,7 @@
   .rrodape{text-align:center;font-size:.76rem;color:var(--ink-soft);margin-top:14px;padding-top:10px;border-top:1px dashed rgba(58,31,18,.14)}
   .rrodape .num{font-weight:800;color:var(--ink)}
   @media print{
-    header,.wa,.rodape,#ensaio{display:none !important}
+    header,.wa,.avaliar,.rodape,#ensaio{display:none !important}
     body{background:#fff}
     .passos{display:none}
   }
@@ -232,6 +234,7 @@
           ${p.telefone ? `<br>📞 <a href="tel:${esc(p.telefone)}" style="color:inherit">${esc(p.telefone)}</a> · <a href="https://wa.me/${waDigitos(p.telefone)}" target="_blank" rel="noopener" style="color:inherit">WhatsApp</a>` : ''}
         </div>` : ''}
         <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>
+        ${p.estado === 'entregue' ? `<a class="avaliar" href="https://g.page/r/CfdTFYTIhpoLECA/review" target="_blank" rel="noopener">⭐ Avaliar no Google</a>` : ''}
       </div>
       ${reciboHtml(p)}
       ${p.pago ? `<button class="wa" style="background:var(--ink-soft);border:none;font:inherit;cursor:pointer;width:100%" onclick="window.print()">🖨️ Guardar / imprimir recibo</button>` : ''}

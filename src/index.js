@@ -232,21 +232,19 @@ async function tokenUber(env) {
 // falta calcular o impacto real disto juntando ao resto das despesas do
 // negocio (nao so o custo direto do Uber).
 //
-// Por isso ha tres faixas de preco: perto (cobra 3,99€, custo Uber ate
-// 5,99€), zona alargada como Parchal/Alvor (cobra 5,99€, custo Uber ate
-// 8€) e zona longe (cobra 7,99€, custo Uber ate 10€) -- esta ultima e
-// "opcional": o site nao aplica o preco sem mais, mostra ao cliente que
-// aquela zona tem taxa mais alta e deixa-o escolher se quer pagar para
-// ter entrega ou preferir levantamento (28/09: ha ruas em Alvor a 2 min
-// de distancia uma da outra em que uma fica a 6,52€ e outra a 9,10€ de
-// custo Uber -- recusar a segunda por completo perdia a venda de quem
-// tinha todo o gosto em pagar a diferenca). Acima de 10€ de custo, a
-// entrega e recusada -- nunca por estar numa localidade em vez de outra,
-// so pelo custo real que o Uber cobra para lá chegar.
+// (10/10) A entrega passou a ser feita pela Andreza (estafeta propria),
+// nao pelo estafeta da Uber -- ver mudarPedido()/painel. A chamada ao
+// Uber aqui em baixo (cotarEntrega) fica so como *estimativa de custo*
+// para decidir o preco a cobrar ao cliente, nunca para despachar de
+// verdade. A pedido do dono, deixou de haver faixas por zona: entrega a
+// 3,50€ fixos para toda a area que a Andreza cobre (Alvor a Lagoa, ~10km
+// por estrada a partir da loja em Portimao -- o custo Uber estimado serve
+// de proxy para essa distancia, ja que nao ha outra fonte de distancia
+// real). Acima de 10€ de custo estimado (fora dessa area), a entrega e
+// recusada -- nunca por estar numa localidade em vez de outra, so pelo
+// custo/distancia real ate la.
 const ENTREGA_FAIXAS = [
-  { custo_max_cent: 599, cobra_cent: 399 }, // zona perto
-  { custo_max_cent: 800, cobra_cent: 599 }, // zona alargada (ex.: Parchal, Alvor)
-  { custo_max_cent: 1000, cobra_cent: 799, opcional: true }, // zona longe: só com o cliente a aceitar a taxa mais alta
+  { custo_max_cent: 1000, cobra_cent: 350 }, // zona unica: Alvor a Lagoa (~10km), fixo
 ];
 const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado so na rede de seguranca (ver semUber)
 
@@ -488,6 +486,39 @@ async function novoPedido(request, env, ctx) {
   const nEsfihasPedidas = Math.max(0, parseInt(b.n_esfihas, 10) || 0);
   if (!ensaio && !st.ilimitado && nEsfihasPedidas > st.restante) {
     return j({ ok: false, erro: 'sem_stock', estado: st }, 409);
+  }
+
+  // O check acima so olha para o TOTAL agregado (st.restante) -- mas isso
+  // pode ainda ter unidades de OUTROS sabores mesmo que o sabor pedido
+  // aqui esteja a 0. Sem este segundo check, dava para encomendar um
+  // sabor esgotado desde que outro sabor ainda tivesse stock.
+  if (!ensaio && !st.ilimitado) {
+    const producaoPedida = (b.itens && typeof b.itens === 'object' && !Array.isArray(b.itens) && b.itens.producao) || [];
+    const pedidoPorSabor = new Map();
+    let docePedido = 0;
+    for (const x of producaoPedida) {
+      const n = Math.max(0, parseInt(x && x.n, 10) || 0);
+      if (!n) continue;
+      if (x.doce) docePedido += n;
+      else if (x.sabor) pedidoPorSabor.set(x.sabor, (pedidoPorSabor.get(x.sabor) || 0) + n);
+    }
+    if (pedidoPorSabor.size || docePedido) {
+      const { results: salgInfo } = await env.DB.prepare('SELECT nome, quantidade FROM stock_salgadas').all();
+      const disponivelPorSabor = new Map((salgInfo || []).map(r => [r.nome, r.quantidade]));
+      for (const [sabor, n] of pedidoPorSabor) {
+        const disp = disponivelPorSabor.has(sabor) ? disponivelPorSabor.get(sabor) : 0;
+        if (n > disp) {
+          return j({ ok: false, erro: 'sem_stock_sabor', sabor, restante_sabor: disp, estado: st }, 409);
+        }
+      }
+      if (docePedido) {
+        const doceRow = await env.DB.prepare('SELECT quantidade FROM stock_doces WHERE id = 1').first();
+        const dispDoce = (doceRow && doceRow.quantidade) || 0;
+        if (docePedido > dispDoce) {
+          return j({ ok: false, erro: 'sem_stock_sabor', sabor: 'doce', restante_sabor: dispDoce, estado: st }, 409);
+        }
+      }
+    }
   }
 
   // Nome e telefone sao obrigatorios -- quem entrega (estafeta ou a propria
@@ -1051,13 +1082,13 @@ async function analise(request, env) {
   const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
   const dias = {}, horas = {}, zonas = {}, origens = {};
   const sabores = {}, extras = {}, bebidas = {}, bebidasVendidas = {}, bebidasOfertas = {};
-  let receita = 0, esfihas = 0, entregas = 0;
+  let receita = 0, esfihas = 0, entregas = 0, receitaEntregas = 0;
   let custoProdutos = 0, entregaCobrada = 0, entregaCustoUber = 0;
 
   for (const r of linhas || []) {
     receita += r.total_cent || 0;
     esfihas += r.n_esfihas || 0;
-    if (r.modo === 'entrega') entregas++;
+    if (r.modo === 'entrega') { entregas++; receitaEntregas += r.total_cent || 0; }
 
     const d = dias[r.dia] || (dias[r.dia] = { dia: r.dia, pedidos: 0, receita: 0, esfihas: 0 });
     d.pedidos++; d.receita += r.total_cent || 0; d.esfihas += r.n_esfihas || 0;
@@ -1124,7 +1155,7 @@ async function analise(request, env) {
 
   return j({
     ok: true, de, ate,
-    resumo: { pedidos, receita, esfihas, entregas, medio: pedidos ? receita / pedidos : 0 },
+    resumo: { pedidos, receita, esfihas, entregas, receitaEntregas, retiradas: pedidos - entregas, medio: pedidos ? receita / pedidos : 0 },
     porDia: serie,
     porHora: valores(horas).sort((a, b) => a.hora - b.hora),
     porZona: valores(zonas).sort((a, b) => b.pedidos - a.pedidos),

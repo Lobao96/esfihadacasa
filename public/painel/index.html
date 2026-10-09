@@ -61,6 +61,9 @@
   .saboresbox{background:var(--white);border-radius:14px;padding:12px 16px;margin-bottom:14px}
   .saboresbox h3{font-size:.85rem;font-weight:800;margin-bottom:2px}
   .saboresbox .nota{font-size:.75rem;color:var(--ink-soft);margin-bottom:8px}
+  #estafetaResumo .linha{display:flex;justify-content:space-between;padding:5px 0;font-size:.85rem;border-top:1px solid rgba(0,0,0,.06)}
+  #estafetaResumo .linha:first-child{border-top:none}
+  #estafetaResumo .v{font-weight:800}
   .saborl{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--cinza)}
   .saborl:last-child{border-bottom:none}
   .saborl .nome{flex:1;font-weight:700;font-size:.88rem;line-height:1.3}
@@ -169,6 +172,12 @@
       <div id="saboresLista"></div>
     </div>
 
+    <div class="saboresbox" id="estafetaBox" style="display:none">
+      <h3>Andreza (estafeta)</h3>
+      <p class="nota">Recebe o maior entre 20€ e 3,50€ por entrega, por dia aberto. A loja só paga a diferença (o complemento) nos dias com 5 entregas ou menos — a partir da 6.ª entrega ela já ultrapassa os 20€ sozinha.</p>
+      <div id="estafetaResumo"></div>
+    </div>
+
     <div class="filtros">
       <input type="date" id="diaSel" onchange="mudarDia()" aria-label="Ver os pedidos deste dia">
       <button class="filtro" id="btnHoje" onclick="voltarAHoje()" style="display:none">Voltar a hoje</button>
@@ -218,7 +227,7 @@
       preparacao: `Seu pedido ${n} já está sendo feito 🔥\n\n${link}`,
       caminho: `Seu pedido ${n} saiu para entrega 🛵\nFica de olho no telemóvel!\n\n${link}`,
       pronto: `Seu pedido ${n} está pronto pra retirada 🫓\nQuando puder vir, é só avisar aqui.`,
-      entregue: `Entregue! Bom apetite 😊\nSe correu tudo bem (ou não), conta pra gente — a gente quer saber.`,
+      entregue: `Entregue! Bom apetite 😊\nSe curtiu, uma avaliação rápida no Google ajuda muito a gente (é rapidinho):\n⭐ https://g.page/r/CfdTFYTIhpoLECA/review\n\nE se rolou algum perrengue, conta pra gente também — a gente quer saber.`,
     };
     return M[momento] || '';
   }
@@ -257,9 +266,28 @@
     const p = pedidos.find(x => x.id === id);
     await marcar(id, { estado: 'preparacao' });
     if (!p || p.modo !== 'entrega') return;
-    if (confirm('Quer chamar já o estafeta da Uber para esta entrega?')) {
-      await chamarUber(id);
-    }
+    // Entrega própria: o staff envia os dados ao estafeta por WhatsApp
+    // (botão "Enviar ao estafeta" no cartão). O Uber Direct fica desligado.
+  }
+
+  // WhatsApp do estafeta (só dígitos, com 351).
+  const ESTAFETA_WA = '351920578744';
+
+  function mensagemEstafeta(p) {
+    const link = location.origin + '/pedido/?t=' + p.token;
+    return `🛵 Entrega #${p.numero}\n` +
+      (p.nome ? `Cliente: ${p.nome}\n` : '') +
+      `Morada: ${p.morada || p.localidade || '(por confirmar)'}\n` +
+      (p.telefone ? `Telefone: ${p.telefone}\n` : '') +
+      (p.pago ? 'Já pago ✅\n' : `Cobrar ${eur(p.total_cent)} ao cliente\n`) +
+      `\nDetalhes: ${link}`;
+  }
+
+  function enviarEstafeta(id) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p) return;
+    const txt = encodeURIComponent(mensagemEstafeta(p));
+    window.open(ESTAFETA_WA ? `https://wa.me/${ESTAFETA_WA}?text=${txt}` : `https://wa.me/?text=${txt}`, '_blank', 'noopener');
   }
 
   async function chamarUber(id) {
@@ -383,8 +411,33 @@
       document.getElementById('btnHoje').style.display = 'none';
     }
     pintarStock();
+    pintarEstafeta();
     pintarLista();
     if (!diaVisto) avisarNovos();
+  }
+
+  // Regra combinada com a Andreza: por dia aberto, ela recebe o maior
+  // entre 20€ e 3,50€ x nº de entregas desse dia. Nos dias com 5 entregas
+  // ou menos (3,50 x 5 = 17,50€, abaixo dos 20€), a loja paga a diferenca;
+  // a partir de 6 entregas (3,50 x 6 = 21€) ela ja ultrapassa sozinha, e a
+  // loja nao paga complemento nenhum.
+  function pintarEstafeta() {
+    const box = document.getElementById('estafetaBox');
+    const el = document.getElementById('estafetaResumo');
+    if (!box || !el) return;
+    const entregasReais = pedidos.filter(p => !p.ensaio && p.estado !== 'cancelado' && p.modo === 'entrega');
+    const n = entregasReais.length;
+    if (!n) { box.style.display = 'none'; return; }
+    const taxa = n * 3.5;
+    const recebe = Math.max(20, taxa);
+    const complemento = Math.max(0, recebe - taxa);
+    box.style.display = '';
+    el.innerHTML = `
+      <div class="linha"><span>Entregas</span><span class="v">${n}</span></div>
+      <div class="linha"><span>Taxa (3,50€ × entregas)</span><span class="v">${eur(Math.round(taxa * 100))}</span></div>
+      <div class="linha"><span>Andreza recebe</span><span class="v">${eur(Math.round(recebe * 100))}</span></div>
+      <div class="linha"><span>Complemento da loja</span><span class="v">${complemento > 0 ? eur(Math.round(complemento * 100)) : '—'}</span></div>
+    `;
   }
 
   function mostrarAviso(t) { const a = document.getElementById('aviso'); a.textContent = t; a.style.display = 'block'; }
@@ -676,7 +729,7 @@
       <div class="p ${p.estado}">
         <div class="p-top">
           <span class="num">#${p.numero}${!p.ensaio && idx.has(p.id) ? `<small style="opacity:.6;font-weight:700">-${idx.get(p.id)}</small>` : ''}</span>
-          <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega' : 'Retirada'}</span>
+          <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega · estafeta' : 'Levantamento'}</span>
           ${p.ensaio ? '<span class="tag-ensaio">ENSAIO</span>' : ''}
           <span class="tot">${eur(p.total_cent)}</span>
         </div>
@@ -686,7 +739,7 @@
           ${p.senha ? ' · senha ' + p.senha : ''}
           ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}
           ${entrega && p.morada ? '<br>' + p.morada : ''}
-          ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo Uber ' + eur(infoEntrega.custo_cent) : '') : ''}
+          ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
         </div>
@@ -697,6 +750,7 @@
           </button>
           ${prox ? `<button class="ac ${travado ? '' : 'destaque'}" ${travado ? 'disabled title="Na entrega, marque pago primeiro"' : ''}
               onclick="${prox[0] === 'preparacao' ? `comecarFazer(${p.id})` : `marcar(${p.id}, {estado: '${prox[0]}'})`}">${travado ? 'Falta o pagamento' : prox[1]}</button>` : ''}
+          ${entrega && p.estado !== 'entregue' && p.estado !== 'cancelado' ? `<button class="ac wa" onclick="enviarEstafeta(${p.id})">🛵 Enviar ao estafeta</button>` : ''}
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
