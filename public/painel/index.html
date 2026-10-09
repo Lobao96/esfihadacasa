@@ -217,10 +217,14 @@
     const link = location.origin + '/pedido/?t=' + p.token;
     const n = '#' + p.numero;
     const entrega = p.modo === 'entrega';
+    const pagaDinheiro = entrega && (dadosDe(p).entrega || {}).metodo_pagamento === 'dinheiro';
     const M = {
       recebido: `Oi! Recebemos seu pedido ${n} 🫓\n\n` +
-        (entrega && !p.pago
+        (entrega && !p.pago && !pagaDinheiro
           ? `Pra gente começar, falta só o pagamento por MB Way de ${eur(p.total_cent)} para o 938 211 480.\n\n`
+          : '') +
+        (entrega && pagaDinheiro
+          ? `Combinado: paga ${eur(p.total_cent)} em dinheiro ao estafeta, na entrega.\n\n`
           : '') +
         `Você pode acompanhar tudo por aqui:\n${link}`,
       pago: `Pagamento recebido, obrigado! 🙌\nJá vamos colocar seu pedido ${n} na bancada.\n\n👇 Veja seu pedido e a fatura aqui:\n${link}`,
@@ -275,9 +279,16 @@
 
   function mensagemEstafeta(p) {
     const link = location.origin + '/pedido/?t=' + p.token;
+    const cp = (dadosDe(p).entrega || {}).codigo_postal || '';
+    const moradaPartes = [p.morada, p.localidade, cp].filter(Boolean);
+    const moradaTxt = moradaPartes.length ? moradaPartes.join(', ') : '(por confirmar)';
+    const mapsLink = p.morada
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(moradaPartes.join(', '))}`
+      : '';
     return `🛵 Entrega #${p.numero}\n` +
       (p.nome ? `Cliente: ${p.nome}\n` : '') +
-      `Morada: ${p.morada || p.localidade || '(por confirmar)'}\n` +
+      `Morada: ${moradaTxt}\n` +
+      (mapsLink ? `📍 Trajeto: ${mapsLink}\n` : '') +
       (p.telefone ? `Telefone: ${p.telefone}\n` : '') +
       (p.pago ? 'Já pago ✅\n' : `Cobrar ${eur(p.total_cent)} ao cliente\n`) +
       `\nDetalhes: ${link}`;
@@ -724,7 +735,12 @@
       const prox = p.estado === 'novo' ? ['preparacao', 'Começar a fazer']
                  : p.estado === 'preparacao' ? (entrega ? ['caminho', 'Saiu para entrega'] : ['entregue', 'Foi levantado'])
                  : p.estado === 'caminho' ? ['entregue', 'Entregue'] : null;
-      const travado = entrega && p.estado === 'novo' && !p.pago;
+      // Na entrega paga em dinheiro, nao ha pagamento antecipado para confirmar
+      // -- quem recebe o dinheiro e a propria Andreza, no ato da entrega. So trava
+      // a espera de confirmacao de pagamento quando o metodo escolhido foi MB Way
+      // (ou em pedidos antigos, de antes de existir esta escolha).
+      const pagaDinheiro = infoEntrega && infoEntrega.metodo_pagamento === 'dinheiro';
+      const travado = entrega && p.estado === 'novo' && !p.pago && !pagaDinheiro;
       return `
       <div class="p ${p.estado}">
         <div class="p-top">

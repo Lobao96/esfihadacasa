@@ -476,7 +476,10 @@
     background: rgba(200,35,43,0.08); color: var(--red);
     border: 1.5px solid rgba(200,35,43,0.25);
     padding: 7px 14px; border-radius: 10px;
+    font-family: inherit; cursor: default;
   }
+  button.pay-chip { cursor: pointer; }
+  button.pay-chip.sel { background: var(--red); color: #fff; border-color: var(--red); }
   .pay-note { font-size: 0.8rem; color: var(--ink-soft); margin: 8px 0 0; }
 
   .total-row {
@@ -754,11 +757,11 @@
         <p><strong>Pedidos</strong><br>
         Os pedidos são feitos e confirmados pelo WhatsApp. O pedido só vale depois da gente confirmar a disponibilidade e o valor final.</p>
         <p><strong>Preços</strong><br>
-        Os preços do site já incluem os extras que você escolher. A taxa de entrega é fixa (3,99€) e é somada ao total.</p>
+        Os preços do site já incluem os extras que você escolher. A taxa de entrega é fixa (3,50€) e é somada ao total.</p>
         <p><strong>Entregas</strong><br>
         Entregamos nas regiões indicadas no site, dentro do horário de funcionamento. As entregas são feitas por serviço externo de entregadores. O tempo de entrega varia com o volume de pedidos e a distância.</p>
         <p><strong>Pagamento</strong><br>
-        Na entrega o pagamento é por MB Way antes do envio. Na retirada aceitamos MB Way ou dinheiro.</p>
+        Na entrega pode escolher MB Way (antes do envio) ou dinheiro (paga ao estafeta na entrega). Na retirada aceitamos MB Way ou dinheiro.</p>
         <p><strong>Cancelamentos</strong><br>
         Por serem alimentos feitos na hora, não se aplica o direito de desistência de 14 dias das compras à distância. Você pode cancelar sem custo enquanto o pedido ainda não começou a ser preparado.</p>
       </div>
@@ -779,7 +782,7 @@
   // Zonas de entrega a partir da cozinha, em Portimão
   // TODO: afinar as taxas quando souberes o custo real do Uber Direct por distância
   // Taxa de entrega única e fixa (Portimão e arredores até 10 km).
-  const TAXA_ENTREGA = 3.99;
+  const TAXA_ENTREGA = 3.50;
 
   // Mantido só para decodificar códigos de pedidos antigos (feitos quando
   // a taxa ainda variava por zona) no leitor do painel — não é mais usado
@@ -903,6 +906,7 @@
   const qty = {};
   const extraSel = {};
   let orderType = "entrega";
+  let metodoPagamento = "mbway";   // "mbway" ou "dinheiro" -- so importa no modo entrega
 
   let estoqueBebidas = {};
   function qtdBebida(id) {
@@ -1541,19 +1545,29 @@
   }
 
   function payMethods() {
-    return orderType === 'entrega' ? 'MB Way' : 'MB Way ou dinheiro';
+    return orderType === 'entrega' ? (metodoPagamento === 'dinheiro' ? 'Dinheiro (na entrega)' : 'MB Way') : 'MB Way ou dinheiro';
   }
 
   function renderPayment() {
     const row = document.getElementById('payRow');
     const note = document.getElementById('payNote');
     if (orderType === 'entrega') {
-      row.innerHTML = '<span class="pay-chip">MB Way</span>';
-      note.textContent = 'Na entrega o pagamento é por MB Way antes do envio, porque o entregador não recebe dinheiro.';
+      row.innerHTML =
+        '<button type="button" class="pay-chip' + (metodoPagamento === 'mbway' ? ' sel' : '') + '" onclick="escolherPagamento(\'mbway\')">MB Way</button>' +
+        '<button type="button" class="pay-chip' + (metodoPagamento === 'dinheiro' ? ' sel' : '') + '" onclick="escolherPagamento(\'dinheiro\')">Dinheiro</button>';
+      note.textContent = metodoPagamento === 'dinheiro'
+        ? 'Paga em dinheiro ao estafeta no momento da entrega.'
+        : 'Pagamento por MB Way antes do envio.';
     } else {
       row.innerHTML = '<span class="pay-chip">MB Way</span><span class="pay-chip">Dinheiro</span>';
       note.textContent = 'Na retirada você pode pagar no MB Way ou em dinheiro ao buscar o pedido.';
     }
+  }
+
+  function escolherPagamento(m) {
+    metodoPagamento = m;
+    renderPayment();
+    updateTotal();
   }
 
   function setOrderType(type) {
@@ -2125,6 +2139,7 @@
             linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido(),
             entrega: orderType === 'entrega'
               ? { cent: Math.round(deliveryFee() * 100),
+                  metodo_pagamento: metodoPagamento,
                   cotado: !!entregaCotada,
                   quote_id: entregaCotada ? entregaCotada.quote_id : null,
                   minutos: entregaCotada ? entregaCotada.minutos : null,
