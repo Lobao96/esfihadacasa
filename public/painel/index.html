@@ -263,15 +263,18 @@
   }
 
   // Ao carregar em "Começar a fazer": marca sempre a preparação (desconta
-  // stock), e só para pedidos de ENTREGA pergunta se quer chamar já o
-  // estafeta real no Uber. Nunca pergunta nem chama para retirada. A
-  // chamada ao Uber só acontece se o staff confirmar na caixa.
+  // stock) e, para pedidos de ENTREGA, abre logo o WhatsApp da Andreza com
+  // a mensagem pronta -- para nunca se esquecer de a chamar, tal como
+  // antes acontecia com o Uber. O botão "🛵 Enviar ao estafeta" continua
+  // no cartão, para reenviar à mão se isto falhar ou se enganar.
   async function comecarFazer(id) {
     const p = pedidos.find(x => x.id === id);
+    // Abre o WhatsApp já aqui, antes do "await" -- alguns browsers (Safari
+    // incluído) só deixam abrir uma janela nova dentro do mesmo clique do
+    // utilizador; se isto corresse depois do marcar() abaixo, o popup
+    // podia ser bloqueado em silêncio.
+    if (p && p.modo === 'entrega') enviarEstafeta(id);
     await marcar(id, { estado: 'preparacao' });
-    if (!p || p.modo !== 'entrega') return;
-    // Entrega própria: o staff envia os dados ao estafeta por WhatsApp
-    // (botão "Enviar ao estafeta" no cartão). O Uber Direct fica desligado.
   }
 
   // WhatsApp do estafeta (só dígitos, com 351).

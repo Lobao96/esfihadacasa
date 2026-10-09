@@ -1907,8 +1907,17 @@
       const codigoPostal = cp && cpSufixo ? (cp + '-' + cpSufixo) : cp;
 
       if (addrEl) {
+        // Quando o sitio escolhido e um ponto de interesse (camping,
+        // hotel, condominio...) em vez de uma morada normal, a Google
+        // devolve sempre a rua mais proxima como "route" -- mas so a rua
+        // sozinha nao chega para o estafeta encontrar o sitio (ex: "Camping
+        // de Alvor" nao tem numero de porta na Rua Serpa Pinto). Por isso,
+        // se o nome do sitio nao contiver ja o nome da rua, mantemos os
+        // dois: "Camping de Alvor, Rua Serpa Pinto".
         const principal = (pred.structuredFormat && pred.structuredFormat.mainText && pred.structuredFormat.mainText.text) || pred.text.text;
-        addrEl.value = [rua || principal, numero].filter(Boolean).join(', ');
+        const incluiRua = rua && principal.toLowerCase().includes(rua.toLowerCase());
+        const nomeLocal = incluiRua ? '' : principal;
+        addrEl.value = [nomeLocal, rua, numero].filter(Boolean).join(', ');
       }
       // limpa sempre primeiro -- se a nova morada nao tiver localidade ou
       // codigo postal, NUNCA se pode ficar com o valor antigo (de uma
