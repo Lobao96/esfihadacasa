@@ -263,12 +263,13 @@ const ENTREGA_FAIXAS = [
 ];
 const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado tambem na rede de seguranca (ver semUber)
 
-// Corte por tempo: 15min da loja e o limite real -- o concelho de Lagoa
-// tambem tem zonas longe demais (Porches, Carvoeiro) que ficariam dentro
-// do codigo postal 8400 mas fora do alcance da Andreza. O codigo postal
-// (ver codigoPostalSeguro) so serve para excluir de vez concelhos errados
-// (Lagos, Silves, Monchique); quem corta mesmo a zona e este tempo.
-const ENTREGA_ETA_MAX_MIN = 15;
+// Corte por tempo: testado ao vivo, a Uber devolve um "duration" maior do
+// que o tempo de condução puro do Google Maps (inclui folga de despacho) --
+// uma morada em Lagoa Centro, a uns 14min reais de carro, ja passou dos
+// 15min aqui. 20min da essa folga sem chegar a Carvoeiro ou Porches
+// (mais longe ainda). O codigo postal (ver codigoPostalSeguro) continua a
+// excluir de vez os concelhos errados (Lagos, Silves, Monchique).
+const ENTREGA_ETA_MAX_MIN = 20;
 
 function faixaDeEntrega(custoCent) {
   return ENTREGA_FAIXAS.find(f => custoCent <= f.custo_max_cent) || null;
@@ -283,11 +284,11 @@ function faixaDeEntrega(custoCent) {
 // Porches). Os vizinhos ficam sempre de fora: Lagos e 8600, Silves e 8300,
 // Monchique e 8550.
 //
-// Mas o concelho de Lagoa e grande -- Porches e Carvoeiro ficam a mais de
-// 15min da loja, fora do alcance real da Andreza, mesmo tendo codigo
-// postal 8400. Por isso o codigo postal so exclui concelhos errados de
-// vez; quem decide a zona de verdade e o tempo estimado (ENTREGA_ETA_MAX_MIN,
-// mais abaixo), ate Lagoa Centro no maximo.
+// Mas o concelho de Lagoa e grande -- Porches e Carvoeiro ficam fora do
+// alcance real da Andreza, mesmo tendo codigo postal 8400. Por isso o
+// codigo postal so exclui concelhos errados de vez; quem decide a zona de
+// verdade e o tempo estimado (ENTREGA_ETA_MAX_MIN, mais abaixo), ate
+// Lagoa Centro no maximo.
 const CONCELHOS_ENTREGA = new Set(['8400', '8500']); // Lagoa, Portimao
 
 function codigoPostalSeguro(cp) {
