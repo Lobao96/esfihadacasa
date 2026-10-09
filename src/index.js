@@ -249,27 +249,30 @@ async function tokenUber(env) {
 // Uber aqui em baixo (cotarEntrega) fica so como *estimativa de distancia*
 // para decidir se a morada fica dentro da area que a Andreza cobre, nunca
 // para despachar de verdade. A pedido do dono, deixou de haver faixas por
-// zona: entrega a 3,50€ fixos para toda a area Alvor a Lagoa (~10km por
-// estrada a partir da loja em Portimao).
+// zona: entrega a 3,50€ fixos para toda a area Alvor a Lagoa.
 //
-// O corte de zona e feito pelo TEMPO estimado (ENTREGA_ETA_MAX_MIN), nao
-// pelo custo -- o preco que a Uber devolve pode variar com a hora do dia
-// (picos, noite) mesmo para a mesma distancia, e isso ja rejeitou moradas
-// dentro da zona (ex: Lagoa, de noite) so por o preco ter vindo mais alto
-// nesse momento. O custo so serve de rede de seguranca contra um erro
-// grosseiro de geocodificacao (morada que caiu a centenas de km).
+// (10/10, mais tarde) Tentou-se cortar a zona pelo TEMPO em vez do custo,
+// mas voltou a dar asneira em producao: testado ao vivo, ate o Parchal (a
+// 5min, zona ja confirmada varias vezes) foi recusado com o corte em
+// 15min E em 20min -- confirma de vez a nota antiga mais abaixo: o campo
+// "duration" da Uber tem SEMPRE um piso de ~40min, mesmo a distancia zero,
+// e nunca reflete o tempo real. Nunca mais usar "duration" como corte de
+// zona. Quem decide e mesmo o CUSTO (ver nota "testado ao vivo" acima: sobe
+// de forma consistente e realista com a distancia -- 3,94€ na rua da loja,
+// 6,52€ ao Parchal, 9,10€ ao Alvor). O teto abaixo (1600 = 16€) e uma
+// extrapolacao a partir desses 3 pontos para cobrir tambem Lagoa Centro
+// (uns 10min, um pouco mais longe que Alvor) sem chegar a Porches/
+// Carvoeiro, que ficam bem mais longe -- por confirmar com testes reais
+// assim que o dono puder experimentar essas moradas.
 const ENTREGA_FAIXAS = [
-  { custo_max_cent: 2500, cobra_cent: 350 }, // rede de seguranca, nao e o corte real
+  { custo_max_cent: 1600, cobra_cent: 350 }, // corte real da zona (ver nota acima)
 ];
 const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado tambem na rede de seguranca (ver semUber)
 
-// Corte por tempo: testado ao vivo, a Uber devolve um "duration" maior do
-// que o tempo de condução puro do Google Maps (inclui folga de despacho) --
-// uma morada em Lagoa Centro, a uns 14min reais de carro, ja passou dos
-// 15min aqui. 20min da essa folga sem chegar a Carvoeiro ou Porches
-// (mais longe ainda). O codigo postal (ver codigoPostalSeguro) continua a
-// excluir de vez os concelhos errados (Lagos, Silves, Monchique).
-const ENTREGA_ETA_MAX_MIN = 20;
+// So fica como rede de seguranca contra uma resposta verdadeiramente
+// absurda da Uber (nao e um corte de distancia real -- ver nota acima,
+// o "duration" tem sempre um piso de ~40min mesmo a distancia zero).
+const ENTREGA_ETA_MAX_MIN = 90;
 
 function faixaDeEntrega(custoCent) {
   return ENTREGA_FAIXAS.find(f => custoCent <= f.custo_max_cent) || null;
