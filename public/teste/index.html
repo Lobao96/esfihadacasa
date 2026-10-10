@@ -983,7 +983,13 @@
     { min: 6, free: 4 },
     { min: 3, free: 2 },
   ];
+  // Promocao valida so no dia da inauguracao (11 de outubro) -- nao e um
+  // beneficio permanente do site.
+  function ehDiaDaInauguracao(now) {
+    return now.getMonth() === 9 && now.getDate() === 11;
+  }
   function tierEsfihasGratis(n) {
+    if (!ehDiaDaInauguracao(new Date())) return null;
     return PROMO_ESFIHAS_TIERS.find(t => n >= t.min) || null;
   }
 
@@ -1544,6 +1550,7 @@
     renderOrderList(); updateTotal();
   }
   function esfihasGratisHtml() {
+    if (!ehDiaDaInauguracao(new Date())) return '';
     const n = contaEsfihasAvulsas();
     const tier = tierEsfihasGratis(n);
     if (!tier) {
@@ -2533,12 +2540,18 @@
     if (promo) promo.style.display = 'none';
   }
 
+  function applyPromoTopo() {
+    const promo = document.getElementById('promoTopo');
+    if (promo && !ehDiaDaInauguracao(new Date())) promo.style.display = 'none';
+  }
+
   var sm = document.getElementById('seoMenu'); if (sm) sm.style.display = 'none';
   renderMenu();
   renderOrderList();
   setOrderType('entrega');
   updateStatus();
   applyPreLancamento();
+  applyPromoTopo();
   applyEsgotado();
   updateTotal();
   verEstadoLoja();
