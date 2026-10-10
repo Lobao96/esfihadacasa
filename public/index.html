@@ -138,6 +138,62 @@
   }
   .promo small { display: block; font-family: 'Nunito', sans-serif; font-weight: 600; font-size: 0.82rem; margin-top: 2px; }
 
+  /* Banner de topo, bem chamativo -- promocao do dia da inauguracao */
+  .promo-topo {
+    background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%);
+    color: var(--white);
+    margin: 0;
+    overflow: hidden;
+  }
+  .promo-topo-inner {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 22px 20px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
+  .promo-topo-img {
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--gold);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    flex-shrink: 0;
+  }
+  .promo-topo-tag {
+    display: inline-block;
+    background: var(--gold);
+    color: var(--ink);
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 800;
+    font-size: 0.78rem;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .promo-topo-title {
+    font-size: 1.6rem;
+    color: var(--white);
+    margin: 0 0 4px;
+  }
+  .promo-topo-desc {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--cream);
+    max-width: 360px;
+  }
+  @media (max-width: 480px) {
+    .promo-topo-img { width: 88px; height: 88px; }
+    .promo-topo-title { font-size: 1.35rem; }
+  }
+
   /* Sections */
   section { padding: 38px 0; }
   section h2 {
@@ -620,6 +676,17 @@
   </div>
 </section>
 
+<section class="promo-topo" id="promoTopo">
+  <div class="promo-topo-inner">
+    <img class="promo-topo-img" src="/img/esfiha-tradicional.jpg" alt="Esfihas da Esfiha da Casa">
+    <div>
+      <span class="promo-topo-tag">🎉 Só hoje — dia de inauguração!</span>
+      <h2 class="promo-topo-title">Compra 3, leva 5!</h2>
+      <p class="promo-topo-desc">5 esfihas ao preço de 3, pra quem vem comemorar a inauguração com a gente. É automático, no seu pedido.</p>
+    </div>
+  </div>
+</section>
+
 <div class="esgotado-banner" id="esgotadoBanner" style="display:none;"></div>
 
 <section id="sabores">
@@ -989,15 +1056,7 @@
         <span class="price">Grátis</span>
       </div>
     </div>`;
-    const promoEsfihas = `<div class="card combo-card">
-      <span class="combo-flag">Promoção</span>
-      <h3>Compra 3, leva 5</h3>
-      <p class="desc">Compre 3 esfihas avulsas (salgadas ou doces, à escolha) e ganhe mais 2 grátis. É automático: chegue às 3 e escolha os sabores das grátis no seu pedido. Não acumula com combos.</p>
-      <div class="card-foot">
-        <span class="price">Grátis</span>
-      </div>
-    </div>`;
-    return cards + promoEsfihas + brinde;
+    return cards + brinde;
   }
   // Ilustracao vetorial da bebida: lata ou garrafa, na cor do sabor.
   // Nao usa marcas nem rotulos — quando tiveres fotos reais das latas e
@@ -1167,6 +1226,7 @@
       (u.picks || []).forEach(pk => { if (pk.sid === id) n++; });
       (u.picksDoces || []).forEach(pk => { if (pk.sid === id) n++; });
     });
+    gratisEsfihas.forEach(sid => { if (sid === id) n++; });
     return n;
   }
 
@@ -1486,7 +1546,8 @@
     return gratisEsfihas.map((sid, idx) => {
       const chips = opcoes.map(o => {
         const disp = stockDisponivel(o.id);
-        const esgotado = disp != null && disp <= 0;
+        const pedidas = qtdPedidaDoSabor(o.id) - (sid === o.id ? 1 : 0);
+        const esgotado = disp != null && pedidas >= disp;
         return esgotado
           ? `<button class="ex-chip" disabled style="opacity:.45;text-decoration:line-through">${o.name}</button>`
           : `<button class="ex-chip${sid === o.id ? ' on' : ''}" onclick="setGratisEsfiha(${idx}, '${o.id}')">${o.name}</button>`;
@@ -1813,6 +1874,7 @@
       if (c) { n += (c.nSalgadas || 0) + (c.nDoces || 0); }
       else if (isSalgada(u.itemId) || isDoce(u.itemId)) n += 1;
     });
+    n += gratisEsfihas.filter(Boolean).length;
     return n;
   }
 
@@ -1845,6 +1907,7 @@
         juntar(u.itemId, extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name));
       }
     });
+    gratisEsfihas.forEach(sid => { if (sid) juntar(sid, []); });
     // salgadas primeiro, depois doces, por nome
     return [...mapa.values()].sort((a, b) =>
       a.doce - b.doce || a.sabor.localeCompare(b.sabor, 'pt') || a.extras.length - b.extras.length);
@@ -2443,12 +2506,16 @@
     if (!ESGOTADO) return;
     const b = document.getElementById('esgotadoBanner');
     if (b) { b.textContent = ESGOTADO_MSG; b.style.display = 'block'; }
+    const promo = document.getElementById('promoTopo');
+    if (promo) promo.style.display = 'none';
   }
 
   function applyPreLancamento() {
     if (!PRE_LANCAMENTO) return;
     const b = document.getElementById('preBanner');
     if (b) b.style.display = 'block';
+    const promo = document.getElementById('promoTopo');
+    if (promo) promo.style.display = 'none';
   }
 
   var sm = document.getElementById('seoMenu'); if (sm) sm.style.display = 'none';
