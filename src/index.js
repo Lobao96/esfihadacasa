@@ -665,7 +665,7 @@ async function listar(request, env) {
   const { results } = await env.DB.prepare(
     `SELECT id, numero, senha, ensaio, estado, pago, modo, localidade, morada,
             total_cent, n_esfihas, itens, mensagem, criado_em, atualizado_em,
-            token, telefone, nome, origem
+            token, telefone, nome, origem, motivo_cancelamento
        FROM pedidos WHERE dia = ? ORDER BY ensaio ASC, numero ASC`
   ).bind(dia).all();
   const { results: salgadas } = await env.DB.prepare(
@@ -691,6 +691,12 @@ async function mudarPedido(request, env) {
 
   const estado = b.estado && ESTADOS.includes(b.estado) ? b.estado : p.estado;
   const pago = b.pago === undefined ? p.pago : (b.pago ? 1 : 0);
+  // Motivo do cancelamento -- so para controlo interno (ver depois porque
+  // foi cancelado); nunca apagado ao mudar outros campos, so quando vier
+  // explicitamente no pedido.
+  const motivoCancelamento = b.motivo_cancelamento !== undefined
+    ? (b.motivo_cancelamento || null)
+    : p.motivo_cancelamento;
   const agora = new Date().toISOString();
 
   // O stock ja desce na criacao do pedido (novoPedido), nao aqui -- isto
@@ -702,9 +708,9 @@ async function mudarPedido(request, env) {
   const saiDeProducao = estado === 'cancelado' && p.stock_debitado;
 
   const lote = [
-    env.DB.prepare('UPDATE pedidos SET estado = ?, pago = ?, atualizado_em = ?, stock_debitado = ? WHERE id = ?')
+    env.DB.prepare('UPDATE pedidos SET estado = ?, pago = ?, atualizado_em = ?, stock_debitado = ?, motivo_cancelamento = ? WHERE id = ?')
       .bind(estado, pago, agora,
-            entraEmProducao ? 1 : (saiDeProducao ? 0 : p.stock_debitado), id),
+            entraEmProducao ? 1 : (saiDeProducao ? 0 : p.stock_debitado), motivoCancelamento, id),
   ];
   if (entraEmProducao) {
     lote.push(env.DB.prepare('UPDATE stock SET usado = usado + ? WHERE dia = ?').bind(p.n_esfihas || 0, p.dia));

@@ -133,6 +133,19 @@
   .nav-i span{font-size:1.25rem;line-height:1}
   .nav-i.on{color:var(--gold);background:rgba(255,255,255,.07)}
   .nav-i.alerta{color:var(--gold)}
+
+  /* modal do motivo de cancelamento */
+  .modal-overlay{position:fixed;inset:0;background:rgba(58,31,18,.55);z-index:50;
+    display:flex;align-items:center;justify-content:center;padding:18px}
+  .modal-box{background:var(--white);border-radius:16px;padding:20px;max-width:360px;width:100%;
+    box-shadow:0 12px 36px rgba(0,0,0,.28)}
+  .modal-box h3{font-family:'Baloo 2',sans-serif;font-size:1.1rem;margin-bottom:4px}
+  .modal-box .nota{font-size:.82rem;color:var(--ink-soft);margin-bottom:14px}
+  .modal-opcoes{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+  .modal-opcoes .ac{width:100%;text-align:left}
+  .modal-box .ac.sec-fechar{width:100%;background:transparent;border-color:rgba(58,31,18,.22);color:var(--ink-soft)}
+  .cancel-motivo{display:inline-block;margin-top:4px;font-weight:800;font-size:.76rem;
+    color:var(--red-dark);background:#FDECEC;border-radius:999px;padding:3px 10px}
 </style>
 </head>
 <body>
@@ -199,6 +212,20 @@
     <a class="nav-i" href="/painel/recibos.html"><span>🧾</span>Recibos</a>
     <button class="nav-i" id="navAvisos" onclick="pedirAvisos()"><span>🔔</span>Avisos</button>
   </nav>
+
+  <div class="modal-overlay" id="modalCancelar" style="display:none">
+    <div class="modal-box">
+      <h3>Motivo do cancelamento</h3>
+      <p class="nota">Pedido #<span id="mcNum"></span> — isto fica guardado so para controlo interno; o cliente recebe uma mensagem a avisar que o pedido foi cancelado.</p>
+      <div class="modal-opcoes">
+        <button class="ac" onclick="confirmarCancelamento('pagamento')">💳 Falta de pagamento</button>
+        <button class="ac" onclick="confirmarCancelamento('esgotado')">📦 Esgotou</button>
+        <button class="ac" onclick="confirmarCancelamento('entrega')">🛵 Não é possível entregar</button>
+        <button class="ac" onclick="confirmarCancelamento('outro')">✏️ Outro motivo</button>
+      </div>
+      <button class="ac sec-fechar" onclick="fecharModalCancelar()">Voltar (não cancelar)</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -234,7 +261,35 @@
       pronto: `Seu pedido ${n} está pronto pra retirada 🫓\nQuando puder vir, é só avisar aqui.`,
       entregue: `Entregue! Bom apetite 😊\nSe curtiu, uma avaliação rápida no Google ajuda muito a gente (é rapidinho):\n⭐ https://g.page/r/CfdTFYTIhpoLECA/review\n\nE se rolou algum perrengue, conta pra gente também — a gente quer saber.`,
     };
+    if (momento === 'cancelado') return mensagemCancelado(p, n);
     return M[momento] || '';
+  }
+
+  // Mensagem de cancelamento -- o motivo interno (pagamento/esgotou/entrega)
+  // so entra na mensagem quando ajuda o cliente a entender o que aconteceu;
+  // nunca soa a culpa dele.
+  function motivoCancelamentoLbl(motivo) {
+    const L = {
+      pagamento: 'falta de pagamento',
+      esgotado: 'esgotou',
+      entrega: 'não foi possível entregar',
+      outro: 'outro motivo',
+    };
+    return L[motivo] || 'motivo não registado';
+  }
+
+  function mensagemCancelado(p, n) {
+    const motivo = p.motivo_cancelamento;
+    if (motivo === 'pagamento') {
+      return `Oi! Infelizmente tivemos que cancelar seu pedido ${n} porque não recebemos a confirmação do pagamento a tempo.\nSe ainda quiser, pode fazer um novo pedido por aqui: ${location.origin}`;
+    }
+    if (motivo === 'esgotado') {
+      return `Oi! Sentimos muito, mas seu pedido ${n} teve que ser cancelado porque esgotou o que você escolheu.\nFaz um novo pedido por aqui que a gente já vê o que tem disponível: ${location.origin}`;
+    }
+    if (motivo === 'entrega') {
+      return `Oi! Infelizmente não foi possível fazer a entrega do seu pedido ${n} e tivemos que cancelá-lo.\nDesculpe o transtorno! Se quiser tentar de novo, a gente tá por aqui: ${location.origin}`;
+    }
+    return `Oi! Infelizmente seu pedido ${n} foi cancelado.\nSe quiser saber mais ou fazer um novo pedido, fala com a gente por aqui: ${location.origin}`;
   }
 
   function abrirWhats(id, momento) {
@@ -325,10 +380,42 @@
 
   // Ao cancelar um pedido de entrega que já tinha estafeta pedido no Uber,
   // pergunta se quer cancelar também no Uber.
-  async function cancelarPedido(id) {
+  // Cancelar um pedido e irreversivel e descarta o que o cliente pediu --
+  // por isso pede sempre confirmacao antes, para nao se perder um pedido so
+  // por um toque sem querer. Depois de confirmado, pede o motivo (so para
+  // controlo interno) e so entao marca como cancelado e avisa o cliente.
+  let cancelarPedidoId = null;
+
+  function cancelarPedido(id) {
     const p = pedidos.find(x => x.id === id);
-    await marcar(id, { estado: 'cancelado' });
     if (!p) return;
+    if (!confirm(`Tem a certeza que quer cancelar o pedido #${p.numero}? Esta ação não pode ser desfeita.`)) return;
+    cancelarPedidoId = id;
+    const num = document.getElementById('mcNum');
+    if (num) num.textContent = p.numero;
+    const modal = document.getElementById('modalCancelar');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function fecharModalCancelar() {
+    cancelarPedidoId = null;
+    const modal = document.getElementById('modalCancelar');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function confirmarCancelamento(motivo) {
+    const id = cancelarPedidoId;
+    const p = pedidos.find(x => x.id === id);
+    fecharModalCancelar();
+    if (!id || !p) return;
+
+    await marcar(id, { estado: 'cancelado', motivo_cancelamento: motivo });
+
+    const tel = (p.telefone || '').replace(/[^0-9]/g, '');
+    const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
+    const txt = encodeURIComponent(mensagemCancelado(Object.assign({}, p, { motivo_cancelamento: motivo }), '#' + p.numero));
+    window.open(num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`, '_blank', 'noopener');
+
     const d = dadosDe(p);
     const temUber = d.entrega && d.entrega.uber_delivery_id && !d.entrega.uber_cancelada_em;
     if (temUber && confirm('Este pedido já tinha estafeta da Uber pedido. Cancelar também a entrega no Uber?')) {
@@ -762,6 +849,7 @@
           ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
+          ${p.estado === 'cancelado' ? `<br><span class="cancel-motivo">❌ Cancelado — ${esc(motivoCancelamentoLbl(p.motivo_cancelamento))}</span>` : ''}
         </div>
         <div class="prod-lista">${producaoHtml(dados)}</div>
         <div class="acoes">
@@ -779,7 +867,7 @@
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
-          <button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>
+          ${p.estado !== 'cancelado' ? `<button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>` : ''}
         </div>
       </div>`;
     }).join('');
