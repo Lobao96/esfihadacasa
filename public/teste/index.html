@@ -570,7 +570,7 @@
     { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Tuesday","Wednesday","Thursday"], "opens": "19:30", "closes": "22:00" },
     { "@type": "OpeningHoursSpecification", "dayOfWeek": "Friday", "opens": "19:30", "closes": "23:59" },
     { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "12:00", "closes": "23:59" },
-    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "19:30", "closes": "22:30" }
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "12:00", "closes": "22:30" }
   ],
   "areaServed": ["Portimão","Parchal","Praia da Rocha","Praia do Vau","Alvor","Estômbar","Ferragudo","Mexilhoeira Grande"],
   "paymentAccepted": "MB Way, Dinheiro",
@@ -730,7 +730,7 @@
         <tr><td>Terça a quinta</td><td>19:30 – 22:00</td></tr>
         <tr><td>Sexta</td><td>19:30 – 00:00</td></tr>
         <tr><td>Sábado</td><td>12:00 – 00:00</td></tr>
-        <tr><td>Domingo</td><td>19:30 – 22:30</td></tr>
+        <tr><td>Domingo</td><td>12:00 – 22:30</td></tr>
         <tr><td>Segunda-feira</td><td>Fechado</td></tr>
       </table>
     </div>
@@ -929,7 +929,7 @@
     { day: 5, open: "19:30", close: "23:59" },      // Sexta (até 00h)
     { day: 6, open: "12:00", close: "23:59" },      // Sábado (até 00h)
   ];
-  HOURS[0] = { day: 0, open: "19:30", close: "22:30" }; // Domingo -- so jantar para comecar (11/10)
+  HOURS[0] = { day: 0, open: "12:00", close: "22:30" }; // Domingo (horario normal)
   // ======================================================
 
   const qty = {};
