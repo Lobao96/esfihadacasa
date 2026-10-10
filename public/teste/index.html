@@ -986,6 +986,8 @@
   // Promocao valida so no dia da inauguracao (11 de outubro) -- nao e um
   // beneficio permanente do site.
   function ehDiaDaInauguracao(now) {
+    // No site de teste, mostra sempre -- e so para pre-visualizar antes do dia.
+    if (MODO_TESTE) return true;
     return now.getMonth() === 9 && now.getDate() === 11;
   }
   function tierEsfihasGratis(n) {
