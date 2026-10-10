@@ -1905,13 +1905,14 @@
 
   function listaProducao() {
     const mapa = new Map();
-    const juntar = (sid, extras) => {
+    const juntar = (sid, extras, gratis) => {
       const chave = sid + '|' + extras.slice().sort().join(',');
       if (!mapa.has(chave)) {
-        mapa.set(chave, { sabor: nomeSabor(sid), ing: ingDe(sid), extras: extras, n: 0,
+        mapa.set(chave, { sabor: nomeSabor(sid), ing: ingDe(sid), extras: extras, n: 0, gratis: 0,
                           doce: isDoce(sid) ? 1 : 0 });
       }
       mapa.get(chave).n++;
+      if (gratis) mapa.get(chave).gratis++;
     };
     units.forEach(u => {
       const c = comboById(u.itemId);
@@ -1927,7 +1928,7 @@
         juntar(u.itemId, extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name));
       }
     });
-    gratisEsfihas.forEach(sid => { if (sid) juntar(sid, []); });
+    gratisEsfihas.forEach(sid => { if (sid) juntar(sid, [], true); });
     // salgadas primeiro, depois doces, por nome
     return [...mapa.values()].sort((a, b) =>
       a.doce - b.doce || a.sabor.localeCompare(b.sabor, 'pt') || a.extras.length - b.extras.length);

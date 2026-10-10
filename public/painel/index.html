@@ -106,6 +106,7 @@
     color:var(--red-dark);min-width:34px;text-align:right;line-height:1.2}
   .prod-txt{flex:1}
   .prod-nome{font-weight:800;font-size:1rem;line-height:1.25}
+  .prod-oferta{font-weight:800;font-size:.82rem;color:var(--gold,#B8860B)}
   .prod-ing{font-size:.82rem;color:var(--ink-soft);line-height:1.35;margin-top:1px}
   .prod-extra{font-size:.82rem;font-weight:800;color:var(--red);margin-top:2px}
   .prod-bebs{margin-top:9px;padding-top:8px;border-top:1px solid rgba(58,31,18,.08);
@@ -702,7 +703,7 @@
       <div class="prod">
         <span class="prod-n">${x.n}&times;</span>
         <div class="prod-txt">
-          <div class="prod-nome">${esc(x.sabor)}</div>
+          <div class="prod-nome">${esc(x.sabor)}${x.gratis ? ` <span class="prod-oferta">(${x.gratis} oferta${x.gratis > 1 ? 's' : ''})</span>` : ''}</div>
           ${x.ing ? `<div class="prod-ing">${esc(x.ing)}</div>` : ''}
           ${x.extras && x.extras.length
               ? `<div class="prod-extra">+ ${x.extras.map(esc).join(', ')}</div>` : ''}
