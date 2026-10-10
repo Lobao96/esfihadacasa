@@ -570,7 +570,7 @@
     { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Tuesday","Wednesday","Thursday"], "opens": "19:30", "closes": "22:00" },
     { "@type": "OpeningHoursSpecification", "dayOfWeek": "Friday", "opens": "19:30", "closes": "23:59" },
     { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "12:00", "closes": "23:59" },
-    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "12:00", "closes": "22:00" }
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "19:30", "closes": "22:30" }
   ],
   "areaServed": ["Portimão","Parchal","Praia da Rocha","Praia do Vau","Alvor","Estômbar","Ferragudo","Mexilhoeira Grande"],
   "paymentAccepted": "MB Way, Dinheiro",
@@ -628,7 +628,6 @@
   </div>
 </section>
 
-<div class="promo promo-img" id="promoBanner" style="display:none"></div>
 
 <div class="esgotado-banner" id="esgotadoBanner" style="display:none;"></div>
 
@@ -731,7 +730,7 @@
         <tr><td>Terça a quinta</td><td>19:30 – 22:00</td></tr>
         <tr><td>Sexta</td><td>19:30 – 00:00</td></tr>
         <tr><td>Sábado</td><td>12:00 – 00:00</td></tr>
-        <tr><td>Domingo</td><td>12:00 – 22:00</td></tr>
+        <tr><td>Domingo</td><td>19:30 – 22:30</td></tr>
         <tr><td>Segunda-feira</td><td>Fechado</td></tr>
       </table>
     </div>
@@ -877,7 +876,9 @@
   const EXTRAS_DOCES = [
     { id: "morango", name: "Morango", price: 0.60 },
     { id: "coco", name: "Coco", price: 0.60 },
-    { id: "amendoim", name: "Amendoim", price: 0.60 },
+    // Amendoim temporariamente fora -- esgotado, ainda nao foi possivel
+    // comprar mais (10/10). Volta a por esta linha quando tiver stock:
+    // { id: "amendoim", name: "Amendoim", price: 0.60 },
   ];
 
   // ---- COMBOS E PROMOÇÕES ----
@@ -907,6 +908,18 @@
     img: "/img/brinde-promocional.jpg",
   };
 
+  // Promocao de esfihas gratis por quantidade. O primeiro degrau (3 compra +2 gratis)
+  // e anunciado no site. O segundo (6 compra +4 gratis) fica em aberto, sem ser
+  // anunciado -- e so um bonus que aparece no proprio pedido do cliente ao chegar la.
+  // A partir de 6, o bonus fica sempre em 4 (nao cresce mais, nem com 9+).
+  const PROMO_ESFIHAS_TIERS = [
+    { min: 6, free: 4 },
+    { min: 3, free: 2 },
+  ];
+  function tierEsfihasGratis(n) {
+    return PROMO_ESFIHAS_TIERS.find(t => n >= t.min) || null;
+  }
+
   const HOURS = [
     { day: 0, open: null, close: null },           // Domingo
     { day: 1, open: null, close: null },           // Segunda — fechado
@@ -916,7 +929,7 @@
     { day: 5, open: "19:30", close: "23:59" },      // Sexta (até 00h)
     { day: 6, open: "12:00", close: "23:59" },      // Sábado (até 00h)
   ];
-  HOURS[0] = { day: 0, open: "12:00", close: "22:00" }; // Domingo
+  HOURS[0] = { day: 0, open: "19:30", close: "22:30" }; // Domingo -- so jantar para comecar (11/10)
   // ======================================================
 
   const qty = {};
@@ -987,7 +1000,15 @@
         <span class="price">Grátis</span>
       </div>
     </div>`;
-    return cards + brinde;
+    const promoEsfihas = `<div class="card combo-card">
+      <span class="combo-flag">Promoção</span>
+      <h3>Compra 3, leva 5</h3>
+      <p class="desc">Compre 3 esfihas avulsas (salgadas ou doces, à escolha) e ganhe mais 2 grátis. É automático: chegue às 3 e escolha os sabores das grátis no seu pedido. Não acumula com combos.</p>
+      <div class="card-foot">
+        <span class="price">Grátis</span>
+      </div>
+    </div>`;
+    return cards + promoEsfihas + brinde;
   }
   // Ilustracao vetorial da bebida: lata ou garrafa, na cor do sabor.
   // Nao usa marcas nem rotulos — quando tiveres fotos reais das latas e
@@ -1447,6 +1468,51 @@
     </div>`;
   }
 
+  // ---- promocao automatica: 3 esfihas avulsas dao +2 gratis; 6+ dao +4 gratis (fixo) ----
+  let gratisEsfihas = [];
+  function qtdGratisEsfihas() {
+    const t = tierEsfihasGratis(contaEsfihasAvulsas());
+    return t ? t.free : 0;
+  }
+  function syncGratisEsfihas() {
+    const n = qtdGratisEsfihas();
+    while (gratisEsfihas.length < n) gratisEsfihas.push(null);
+    if (gratisEsfihas.length > n) gratisEsfihas.length = n;
+  }
+  function setGratisEsfiha(idx, sid) {
+    gratisEsfihas[idx] = gratisEsfihas[idx] === sid ? null : sid;
+    renderOrderList(); updateTotal();
+  }
+  function esfihasGratisHtml() {
+    const n = contaEsfihasAvulsas();
+    const tier = tierEsfihasGratis(n);
+    if (!tier) {
+      if (n === 0) return '';
+      const faltam = 3 - n;
+      if (faltam <= 0) return '';
+      return `<div class="brinde-aviso">Faltam ${faltam} esfiha${faltam > 1 ? 's' : ''} para ganhar 2 esfihas grátis.</div>`;
+    }
+    syncGratisEsfihas();
+    const opcoes = [...MENU.salgadas, ...MENU.doces];
+    return gratisEsfihas.map((sid, idx) => {
+      const chips = opcoes.map(o => {
+        const disp = stockDisponivel(o.id);
+        const esgotado = disp != null && disp <= 0;
+        return esgotado
+          ? `<button class="ex-chip" disabled style="opacity:.45;text-decoration:line-through">${o.name}</button>`
+          : `<button class="ex-chip${sid === o.id ? ' on' : ''}" onclick="setGratisEsfiha(${idx}, '${o.id}')">${o.name}</button>`;
+      }).join('');
+      return `<div class="unit unit-combo">
+      <div class="unit-top">
+        <span class="unit-name">🎁 Esfiha grátis ${idx + 1}/${tier.free}</span>
+        <span class="unit-price">0,00€</span>
+      </div>
+      <p class="combo-step">Escolha o sabor ${sid ? '✓' : '(falta escolher)'}</p>
+      <div class="ex-chips">${chips}</div>
+    </div>`;
+    }).join('');
+  }
+
   function renderOrderList() {
     const el = document.getElementById('orderList');
     const barra = document.getElementById('clearRow');
@@ -1478,6 +1544,7 @@
         </div>`;
     });
     html += brindeHtml();
+    html += esfihasGratisHtml();
     el.innerHTML = html;
   }
 
@@ -1608,6 +1675,12 @@
     });
     if (temBrinde()) {
       lines.push(`${units.length + 1}. Bebida de 1L GRATIS (${PROMO_BRINDE.minEsfihas} esfihas) — ${brindeBebida ? nomeBebida(brindeBebida) : "(por escolher)"}`);
+    }
+    if (qtdGratisEsfihas() > 0) {
+      const base = units.length + (temBrinde() ? 2 : 1);
+      gratisEsfihas.forEach((sid, i) => {
+        lines.push(`${base + i}. Esfiha GRATIS (promoção) — ${sid ? nomeSabor(sid) : "(por escolher)"}`);
+      });
     }
     lines.push("");
     lines.push(orderType === 'entrega' ? "Modo: Entrega" : "Modo: Retirada");
@@ -1838,6 +1911,11 @@
     });
     if (temBrinde()) {
       linhas.push(`Bebida de 1L GRATIS — ${brindeBebida ? nomeBebida(brindeBebida) : '(por escolher)'}`);
+    }
+    if (qtdGratisEsfihas() > 0) {
+      gratisEsfihas.forEach(sid => {
+        linhas.push(`Esfiha GRATIS — ${sid ? nomeSabor(sid) : '(por escolher)'}`);
+      });
     }
     return linhas;
   }
@@ -2172,6 +2250,7 @@
       if (f.length) faltas.push(c.name + ': falta escolher ' + f.join(', '));
     });
     if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
+    if (qtdGratisEsfihas() > 0 && gratisEsfihas.some(s => !s)) faltas.push('Esfihas grátis: falta escolher o sabor de todas.');
     const nomeV = ((document.getElementById('nomeInput') || {}).value || '').trim();
     if (nomeV.length < 2) faltas.push('Falta escrever o seu nome.');
     const telV = ((document.getElementById('telInput') || {}).value || '').replace(/\D/g, '');
@@ -2370,24 +2449,12 @@
     if (!ESGOTADO) return;
     const b = document.getElementById('esgotadoBanner');
     if (b) { b.textContent = ESGOTADO_MSG; b.style.display = 'block'; }
-    const promo = document.getElementById('promoBanner');
-    if (promo) promo.style.display = 'none';
   }
 
   function applyPreLancamento() {
     if (!PRE_LANCAMENTO) return;
     const b = document.getElementById('preBanner');
     if (b) b.style.display = 'block';
-    const promo = document.getElementById('promoBanner');
-    if (promo) promo.style.display = 'none';
-  }
-
-  function updatePromo() {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), 9, 11); // 11 outubro
-    const end = new Date(now.getFullYear(), 9, 11, 23, 59); // so no dia da abertura
-    const banner = document.getElementById('promoBanner');
-    if (now < start || now > end) banner.style.display = 'none';
   }
 
   var sm = document.getElementById('seoMenu'); if (sm) sm.style.display = 'none';
@@ -2395,7 +2462,6 @@
   renderOrderList();
   setOrderType('entrega');
   updateStatus();
-  updatePromo();
   applyPreLancamento();
   applyEsgotado();
   updateTotal();
