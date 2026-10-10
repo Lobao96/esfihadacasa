@@ -2415,6 +2415,16 @@
     setTimeout(() => { b.textContent = old; }, 1500);
   }
 
+  function horarioDeHoje(now) {
+    const day = now.getDay();
+    // No proprio dia da abertura (11/10), so fazemos jantar -- facilita o primeiro dia.
+    // Nos domingos seguintes volta ao horario normal (HOURS[0]).
+    if (day === 0 && now.getMonth() === 9 && now.getDate() === 11) {
+      return { day: 0, open: "19:30", close: "22:30" };
+    }
+    return HOURS[day];
+  }
+
   function updateStatus() {
     if (MODO_TESTE) {
       const aberta = !estadoLoja || estadoLoja.aberto;
@@ -2423,8 +2433,7 @@
       return;
     }
     const now = new Date();
-    const day = now.getDay();
-    const h = HOURS[day];
+    const h = horarioDeHoje(now);
     const badge = document.getElementById('statusBadge');
     const text = document.getElementById('statusText');
     let isOpen = false;
