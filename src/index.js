@@ -257,47 +257,58 @@ async function tokenUber(env) {
 // 15min E em 20min -- confirma de vez a nota antiga mais abaixo: o campo
 // "duration" da Uber tem SEMPRE um piso de ~40min, mesmo a distancia zero,
 // e nunca reflete o tempo real. Nunca mais usar "duration" como corte de
-// zona. Quem decide e mesmo o CUSTO (ver nota "testado ao vivo" acima: sobe
-// de forma consistente e realista com a distancia -- 3,94€ na rua da loja,
-// 6,52€ ao Parchal, 9,10€ ao Alvor). O teto abaixo (1600 = 16€) e uma
-// extrapolacao a partir desses 3 pontos para cobrir tambem Lagoa Centro
-// (uns 10min, um pouco mais longe que Alvor) sem chegar a Porches/
-// Carvoeiro, que ficam bem mais longe -- por confirmar com testes reais
-// assim que o dono puder experimentar essas moradas.
-const ENTREGA_FAIXAS = [
-  { custo_max_cent: 1600, cobra_cent: 350 }, // corte real da zona (ver nota acima)
-];
-const ENTREGA_FIXA_CENT = ENTREGA_FAIXAS[0].cobra_cent; // usado tambem na rede de seguranca (ver semUber)
-
-// So fica como rede de seguranca contra uma resposta verdadeiramente
-// absurda da Uber (nao e um corte de distancia real -- ver nota acima,
-// o "duration" tem sempre um piso de ~40min mesmo a distancia zero).
-const ENTREGA_ETA_MAX_MIN = 90;
-
-function faixaDeEntrega(custoCent) {
-  return ENTREGA_FAIXAS.find(f => custoCent <= f.custo_max_cent) || null;
-}
-
-// Primeiro filtro, antes de perguntar a Uber: o codigo postal tem de ser
-// dos concelhos de Portimao ou Lagoa (Algarve) -- nunca aceita so porque a
-// Uber, num momento de pouco transito, desse uma estimativa de tempo curta
-// para um concelho errado. Confirmado nos CTT: prefixo 8500 = concelho de
-// Portimao (Portimao, Praia da Rocha, Alvor, Mexilhoeira Grande); 8400 =
-// concelho de Lagoa (Lagoa, Carvoeiro, Estombar, Ferragudo, Parchal,
-// Porches). Os vizinhos ficam sempre de fora: Lagos e 8600, Silves e 8300,
-// Monchique e 8550.
+// zona. A Andreza faz agora TODAS as entregas a tempo inteiro -- o site ja
+// nao pergunta a Uber coisa nenhuma (nem para decidir a zona nem para
+// pedir o estafeta). A decisao e 100% local, sem chamadas de rede, baseada
+// na morada que o cliente escreveu: codigo postal (concelho) + localidade
+// (texto, vindo do Google Places -- ex.: "Lagoa", "Porches", "Parchal").
 //
-// Mas o concelho de Lagoa e grande -- Porches e Carvoeiro ficam fora do
-// alcance real da Andreza, mesmo tendo codigo postal 8400. Por isso o
-// codigo postal so exclui concelhos errados de vez; quem decide a zona de
-// verdade e o tempo estimado (ENTREGA_ETA_MAX_MIN, mais abaixo), ate
-// Lagoa Centro no maximo.
+// Porque nao basta o codigo postal: o concelho de Lagoa (prefixo 8400)
+// cobre tanto Lagoa Centro como Porches e Carvoeiro, que ficam bem mais
+// longe. E os codigos postais NAO estao arrumados por zona dentro do
+// concelho -- confirmado via CTT (codigo-postal.pt): ruas de Porches
+// (8400-997, 8400-481, 8400-466, 8400-479) e de Lagoa Centro (8400-397,
+// 8400-448) misturam-se na mesma gama numerica. Por isso o codigo postal
+// so serve para confirmar o CONCELHO certo; quem decide a zona fina de
+// verdade e o nome da localidade.
+//
+// Taxa fixa de entrega: 3,50€, sempre, para qualquer morada dentro da
+// zona aprovada (sem Uber nem variacao por distancia).
+const ENTREGA_FIXA_CENT = 350;
+
 const CONCELHOS_ENTREGA = new Set(['8400', '8500']); // Lagoa, Portimao
 
 function codigoPostalSeguro(cp) {
   const m = (cp || '').trim().match(/^(\d{4})-?(\d{3})$/);
   if (!m) return false;
   return CONCELHOS_ENTREGA.has(m[1]);
+}
+
+// Localidades aceites para entrega, dos concelhos de Portimao e Lagoa, ate
+// ao limite que a Andreza confirmou como razoavel (max. Lagoa Centro/
+// Parchal -- nunca Porches nem Carvoeiro, que ficam "muito longe").
+// Comparacao sem acentos/maiusculas para aceitar "Lagôa", "PARCHAL", etc.
+const LOCALIDADES_ACEITES = [
+  'portimao', 'praia da rocha', 'alvor', 'mexilhoeira grande', // concelho de Portimao
+  'lagoa', 'parchal', 'ferragudo', 'estombar', // concelho de Lagoa, ate ao limite confirmado
+];
+// Fora de alcance mesmo tendo codigo postal 8400 (confirmado pelo dono:
+// "porches e muito longe muito longe, maximo ate lagoa centro").
+const LOCALIDADES_FORA = ['porches', 'carvoeiro'];
+
+function semAcentos(s) {
+  return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+// Decide so pela localidade (texto) escrita/escolhida pelo cliente.
+// Devolve true/false, ou null se a localidade estiver vazia ou nao for
+// reconhecida (nesse caso cai-se so no codigo postal, ver cotacao()).
+function localidadeSegura(localidade) {
+  const loc = semAcentos(localidade);
+  if (!loc) return null;
+  if (LOCALIDADES_FORA.some(f => loc.includes(f))) return false;
+  if (LOCALIDADES_ACEITES.some(a => loc.includes(a))) return true;
+  return null;
 }
 
 async function cotacao(request, env) {
@@ -307,87 +318,30 @@ async function cotacao(request, env) {
   const rua = limpar(b.morada, 200);
   if (!rua || rua.length < 5) return j({ ok: false, erro: 'morada curta' }, 400);
   const cp = limpar(b.codigo_postal, 12) || '';
+  const localidade = limpar(b.localidade, 60) || '';
 
-  // O codigo postal e quem decide a zona, sempre que o temos -- nao so
-  // quando a Uber falha. Um codigo postal fora de Portimao/Lagoa e
-  // recusado logo aqui, nem chega a perguntar a Uber (nunca aceita so
-  // porque a Uber, num momento de pouco transito, desse uma estimativa
-  // de tempo curta para um sitio fora da zona).
+  // 1) Codigo postal, se houver, tem de ser do concelho certo -- corta
+  //    logo Lagos/Silves/Monchique/etc., sem depender da localidade.
   if (cp && !codigoPostalSeguro(cp)) {
-    return j({ ok: false, erro: 'fora_de_alcance', uber_motivo: 'fora_do_concelho' }, 200);
+    return j({ ok: false, erro: 'fora_de_alcance', motivo: 'fora_do_concelho' }, 200);
   }
 
-  // Uber nao respondeu (config em falta, falha de autenticacao, erro de
-  // rede ou resposta invalida): cai-se na rede de seguranca do codigo
-  // postal em vez de aceitar as cegas. "motivo" e so para diagnostico
-  // (nunca aparece para o cliente, so quem consultar a resposta a mao) --
-  // ajuda a perceber ONDE a chamada ao Uber esta a falhar.
-  function semUber(motivo, detalhe) {
-    if (codigoPostalSeguro(cp)) {
-      return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT, custo_cent: 0, quote_id: null, minutos: null, expira: null, uber_motivo: motivo, uber_detalhe: detalhe });
-    }
-    return j({ ok: false, erro: 'fora_de_alcance', uber_motivo: motivo, uber_detalhe: detalhe }, 200);
+  // 2) A localidade decide a zona fina (Lagoa/Parchal sim, Porches/
+  //    Carvoeiro nao), mesmo dentro do mesmo codigo postal 8400.
+  const okLocalidade = localidadeSegura(localidade);
+  if (okLocalidade === false) {
+    return j({ ok: false, erro: 'fora_de_alcance', motivo: 'fora_da_zona' }, 200);
+  }
+  if (okLocalidade === true) {
+    return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT });
   }
 
-  if (!env.UBER_CLIENT_ID || !env.UBER_CLIENT_SECRET || !env.UBER_CUSTOMER_ID || !env.UBER_PICKUP) {
-    return semUber('sem_config');
+  // 3) Localidade vazia ou nao reconhecida: cai-se so no codigo postal
+  //    (concelho certo) como rede de seguranca -- mesma logica de sempre.
+  if (codigoPostalSeguro(cp)) {
+    return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT });
   }
-
-  const destino = {
-    street_address: [rua],
-    city: limpar(b.localidade, 60) || 'Portimão',
-    state: 'Faro',
-    zip_code: cp || '8500',
-    country: 'PT',
-  };
-
-  let token;
-  try { token = await tokenUber(env); }
-  catch (e) { return semUber('falha_autenticacao', String(e && e.message || e)); }
-
-  let r, d;
-  try {
-    r = await fetch(
-      `https://api.uber.com/v1/customers/${env.UBER_CUSTOMER_ID}/delivery_quotes`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + token },
-        body: JSON.stringify({
-          pickup_address: env.UBER_PICKUP,
-          dropoff_address: JSON.stringify(destino),
-          // Sem isto o Uber assume que a comida ainda nao esta pronta e
-          // devolve uma estimativa com uma folga grande por omissao (~30min)
-          // mesmo para moradas muito perto. Ao dizer que a recolha pode ser
-          // "agora", a estimativa reflete so o tempo real de despacho + estrada.
-          pickup_ready_dt: new Date().toISOString(),
-        }),
-      }
-    );
-    d = await r.json().catch(() => ({}));
-  } catch (e) {
-    return semUber('erro_de_rede', String(e && e.message || e));
-  }
-  if (!r.ok) return semUber('uber_recusou_' + r.status, (d && (d.message || d.error || JSON.stringify(d))) || null);
-
-  const minutos = d.duration || null;
-  if (minutos && minutos > ENTREGA_ETA_MAX_MIN) {
-    return j({ ok: false, erro: 'fora_de_alcance', minutos }, 200);
-  }
-  const custo = d.fee || 0;
-  const faixa = faixaDeEntrega(custo);
-  if (!faixa) {
-    return j({ ok: false, erro: 'fora_de_alcance', minutos, custo_cent: custo }, 200);
-  }
-
-  return j({
-    ok: true,
-    fee_cent: faixa.cobra_cent,
-    opcional: !!faixa.opcional,
-    custo_cent: custo,
-    quote_id: d.id || null,
-    minutos,
-    expira: d.expires || null,
-  });
+  return j({ ok: false, erro: 'fora_de_alcance', motivo: 'sem_zona_confirmada' }, 200);
 }
 
 // ---------------------------------------------------------------- pedidos
