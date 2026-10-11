@@ -1518,13 +1518,19 @@
   function contaEsfihasAvulsas() {
     return units.filter(u => isSalgada(u.itemId) || isDoce(u.itemId)).length;
   }
-  function temBrinde() { return contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas; }
+  function temBrinde() {
+    // Nao acumula com a promocao de inauguracao -- se esta ja esta ativa
+    // (hoje, 3+ esfihas avulsas), a oferta da bebida fica desligada.
+    if (tierEsfihasGratis(contaEsfihasAvulsas())) return false;
+    return contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas;
+  }
   function setBrinde(bid) {
     brindeBebida = brindeBebida === bid ? null : bid;
     renderOrderList(); updateTotal();
   }
   function brindeHtml() {
     const n = contaEsfihasAvulsas();
+    if (tierEsfihasGratis(n)) return '';
     if (!temBrinde()) {
       if (n === 0) return '';
       const faltam = PROMO_BRINDE.minEsfihas - n;
@@ -1809,8 +1815,14 @@
             ? `Pagamento por MB Way antes do envio: envia <strong>${fmt(computeTotal())}</strong> para o <strong>${MBWAY_NUMERO}</strong> e manda aqui no WhatsApp o comprovativo.`
             : 'Pagamento por MB Way antes do envio.');
     } else {
-      row.innerHTML = '<span class="pay-chip">MB Way</span><span class="pay-chip">Dinheiro</span>';
-      note.innerHTML = `Na retirada você pode pagar no MB Way (envia para <strong>${MBWAY_NUMERO}</strong> e manda o comprovativo) ou em dinheiro ao buscar o pedido.`;
+      row.innerHTML =
+        '<button type="button" class="pay-chip' + (metodoPagamento === 'mbway' ? ' sel' : '') + '" onclick="escolherPagamento(\'mbway\')">MB Way</button>' +
+        '<button type="button" class="pay-chip' + (metodoPagamento === 'dinheiro' ? ' sel' : '') + '" onclick="escolherPagamento(\'dinheiro\')">Dinheiro</button>';
+      note.innerHTML = metodoPagamento === 'dinheiro'
+        ? 'Pagas em dinheiro ao buscar o pedido.'
+        : (itemCount() > 0
+            ? `Pagamento por MB Way antes de vir buscar: envia <strong>${fmt(computeTotal())}</strong> para o <strong>${MBWAY_NUMERO}</strong> e manda aqui no WhatsApp o comprovativo.`
+            : 'Pagamento por MB Way antes de vir buscar.');
     }
   }
 
@@ -2452,10 +2464,9 @@
           n_esfihas: contaEsfihasTotal(),
           itens: {
             linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido(),
+            pagamento: { metodo_pagamento: metodoPagamento, troco_para_cent: trocoParaCent() },
             entrega: orderType === 'entrega'
               ? { cent: Math.round(deliveryFee() * 100),
-                  metodo_pagamento: metodoPagamento,
-                  troco_para_cent: trocoParaCent(),
                   cotado: !!entregaCotada,
                   quote_id: entregaCotada ? entregaCotada.quote_id : null,
                   minutos: entregaCotada ? entregaCotada.minutos : null,

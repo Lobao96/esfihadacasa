@@ -817,19 +817,18 @@
     return d || { linhas: [], producao: null, bebidas: null };
   }
 
-  // Entrega: o cliente escolhe MB Way ou dinheiro no site. Retirada: o
-  // metodo so se combina na hora de levantar, por isso nao vem gravado --
-  // mostra-se as duas opcoes.
+  // O cliente escolhe MB Way ou dinheiro no site (entrega e retirada).
+  // Pedidos antigos, feitos antes desta opcao existir na retirada, nao tem
+  // o metodo gravado -- mostram-se as duas opcoes nesse caso.
   function metodoPagamentoLabel(p) {
-    if (p.modo === 'entrega') {
-      const info = dadosDe(p).entrega || {};
-      if (info.metodo_pagamento === 'dinheiro') {
-        const tc = info.troco_para_cent;
-        return '💵 Dinheiro' + (tc ? ` — troco para ${eur(tc)}` : ' — sem troco');
-      }
-      return '💳 MB Way';
+    const dados = dadosDe(p);
+    const info = dados.pagamento || dados.entrega || {};
+    if (info.metodo_pagamento === 'dinheiro') {
+      const tc = info.troco_para_cent;
+      return '💵 Dinheiro' + (tc ? ` — troco para ${eur(tc)}` : ' — sem troco');
     }
-    return '💳 MB Way ou 💵 Dinheiro (na retirada)';
+    if (info.metodo_pagamento === 'mbway') return '💳 MB Way';
+    return p.modo === 'entrega' ? '💳 MB Way' : '💳 MB Way ou 💵 Dinheiro (na retirada)';
   }
 
   function esc(t) {
