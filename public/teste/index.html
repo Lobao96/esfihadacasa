@@ -1790,6 +1790,10 @@
     return orderType === 'entrega' ? (metodoPagamento === 'dinheiro' ? 'Dinheiro (na entrega)' : 'MB Way') : 'MB Way ou dinheiro';
   }
 
+  // Numero de telemovel para onde se envia o MB Way -- o mesmo do WhatsApp
+  // da loja. Mostrado por extenso (com espacos) para ler facil no ecra.
+  const MBWAY_NUMERO = '938 211 480';
+
   function renderPayment() {
     const row = document.getElementById('payRow');
     const note = document.getElementById('payNote');
@@ -1797,12 +1801,14 @@
       row.innerHTML =
         '<button type="button" class="pay-chip' + (metodoPagamento === 'mbway' ? ' sel' : '') + '" onclick="escolherPagamento(\'mbway\')">MB Way</button>' +
         '<button type="button" class="pay-chip' + (metodoPagamento === 'dinheiro' ? ' sel' : '') + '" onclick="escolherPagamento(\'dinheiro\')">Dinheiro</button>';
-      note.textContent = metodoPagamento === 'dinheiro'
+      note.innerHTML = metodoPagamento === 'dinheiro'
         ? 'Paga em dinheiro ao estafeta no momento da entrega.'
-        : 'Pagamento por MB Way antes do envio.';
+        : (itemCount() > 0
+            ? `Pagamento por MB Way antes do envio: envia <strong>${fmt(computeTotal())}</strong> para o <strong>${MBWAY_NUMERO}</strong> e manda aqui no WhatsApp o comprovativo.`
+            : 'Pagamento por MB Way antes do envio.');
     } else {
       row.innerHTML = '<span class="pay-chip">MB Way</span><span class="pay-chip">Dinheiro</span>';
-      note.textContent = 'Na retirada você pode pagar no MB Way ou em dinheiro ao buscar o pedido.';
+      note.innerHTML = `Na retirada você pode pagar no MB Way (envia para <strong>${MBWAY_NUMERO}</strong> e manda o comprovativo) ou em dinheiro ao buscar o pedido.`;
     }
   }
 
@@ -1824,6 +1830,7 @@
 
   function updateTotal() {
     document.getElementById('totalAmount').textContent = fmt(computeTotal());
+    renderPayment();
     refreshLink();
   }
 
