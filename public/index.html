@@ -189,6 +189,13 @@
     color: var(--cream);
     max-width: 360px;
   }
+  .promo-topo-aviso {
+    margin: 6px 0 0;
+    font-size: 0.78rem;
+    color: var(--cream);
+    opacity: 0.8;
+    max-width: 360px;
+  }
   @media (max-width: 480px) {
     .promo-topo-img { width: 88px; height: 88px; }
     .promo-topo-title { font-size: 1.35rem; }
@@ -683,6 +690,7 @@
       <span class="promo-topo-tag">🎉 Só hoje — dia de inauguração!</span>
       <h2 class="promo-topo-title">Compra 3, leva 5!</h2>
       <p class="promo-topo-desc">5 esfihas ao preço de 3, pra quem vem comemorar a inauguração com a gente. É automático, no seu pedido.</p>
+          <p class="promo-topo-aviso">Não acumula com combos nem com outras promoções — só esfihas avulsas contam, as que vêm dentro de um combo não.</p>
     </div>
   </div>
 </section>
@@ -1546,11 +1554,12 @@
       if (n === 0) return '';
       const faltam = 3 - n;
       if (faltam <= 0) return '';
-      return `<div class="brinde-aviso">Faltam ${faltam} esfiha${faltam > 1 ? 's' : ''} para ganhar 2 esfihas grátis.</div>`;
+      return `<div class="brinde-aviso">Faltam ${faltam} esfiha${faltam > 1 ? 's' : ''} para ganhar 2 esfihas grátis. (Só esfihas avulsas contam -- não acumula com combos nem outras promoções.)</div>`;
     }
     syncGratisEsfihas();
     const opcoes = [...MENU.salgadas, ...MENU.doces];
-    return gratisEsfihas.map((sid, idx) => {
+    const avisoAcumulo = '<div class="brinde-aviso">Não acumula com combos nem com outras promoções.</div>';
+    return avisoAcumulo + gratisEsfihas.map((sid, idx) => {
       const chips = opcoes.map(o => {
         const disp = stockDisponivel(o.id);
         const pedidas = qtdPedidaDoSabor(o.id) - (sid === o.id ? 1 : 0);
