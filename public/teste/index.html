@@ -358,7 +358,7 @@
     color: var(--ink); background: rgba(244,185,66,0.2);
     padding: 8px 10px; border-radius: 8px; font-weight: 600;
   }
-  #cpInput, #locInput, #telInput, #nomeInput {
+  #cpInput, #locInput, #telInput, #nomeInput, #trocoValorInput {
     width: 100%; font-family: inherit; font-size: 1rem; font-weight: 700;
     padding: 11px 13px; border: 1.5px solid rgba(58,31,18,0.18);
     border-radius: 10px; background: var(--white); color: var(--ink);
@@ -558,6 +558,11 @@
   button.pay-chip { cursor: pointer; }
   button.pay-chip.sel { background: var(--red); color: #fff; border-color: var(--red); }
   .pay-note { font-size: 0.8rem; color: var(--ink-soft); margin: 8px 0 0; }
+  .troco-box { margin-top: 10px; }
+  .troco-check { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.86rem; color: var(--ink); cursor: pointer; }
+  .troco-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--red); }
+  #trocoValorInput { margin-top: 8px; max-width: 160px; }
+  .troco-nota { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
 
   .total-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -780,6 +785,15 @@
       <p class="extras-title">Pagamento</p>
       <div class="pay-row" id="payRow"></div>
       <p class="pay-note" id="payNote"></p>
+      <div class="troco-box" id="trocoBox" style="display:none;">
+        <label class="troco-check">
+          <input type="checkbox" id="trocoCheck" onchange="toggleTrocoInput()"> Preciso de troco
+        </label>
+        <div id="trocoValorWrap" style="display:none;">
+          <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" step="0.01" aria-label="Troco para quanto">
+          <p class="troco-nota">Diz-nos o valor da nota com que vais pagar (ex.: 50€), para já levarmos o troco certo.</p>
+        </div>
+      </div>
 
       <div class="total-row">
         <span class="label">Total estimado</span>
@@ -1774,6 +1788,8 @@
     lines.push("");
     lines.push("Total estimado: " + fmt(computeTotal()));
     lines.push("Pagamento: " + payMethods());
+    const tc = trocoParaCent();
+    if (tc != null) lines.push("Troco para: " + fmt(tc / 100));
     return lines.join("\n");
   }
 
@@ -1797,6 +1813,7 @@
   function renderPayment() {
     const row = document.getElementById('payRow');
     const note = document.getElementById('payNote');
+    atualizarCaixaTroco();
     if (orderType === 'entrega') {
       row.innerHTML =
         '<button type="button" class="pay-chip' + (metodoPagamento === 'mbway' ? ' sel' : '') + '" onclick="escolherPagamento(\'mbway\')">MB Way</button>' +
@@ -1816,6 +1833,38 @@
     metodoPagamento = m;
     renderPayment();
     updateTotal();
+  }
+
+  // So faz sentido pedir troco na entrega em dinheiro -- na retirada o
+  // pagamento e combinado na hora, ao vivo, sem estafeta a levar notas.
+  function pagaDinheiroNaEntrega() {
+    return orderType === 'entrega' && metodoPagamento === 'dinheiro';
+  }
+
+  function atualizarCaixaTroco() {
+    const box = document.getElementById('trocoBox');
+    if (!box) return;
+    box.style.display = pagaDinheiroNaEntrega() ? 'block' : 'none';
+    if (!pagaDinheiroNaEntrega()) {
+      const chk = document.getElementById('trocoCheck');
+      if (chk) chk.checked = false;
+      const wrap = document.getElementById('trocoValorWrap');
+      if (wrap) wrap.style.display = 'none';
+    }
+  }
+
+  function toggleTrocoInput() {
+    const wrap = document.getElementById('trocoValorWrap');
+    const chk = document.getElementById('trocoCheck');
+    if (wrap) wrap.style.display = chk && chk.checked ? 'block' : 'none';
+  }
+
+  function trocoParaCent() {
+    if (!pagaDinheiroNaEntrega()) return null;
+    const chk = document.getElementById('trocoCheck');
+    if (!chk || !chk.checked) return null;
+    const v = parseFloat((document.getElementById('trocoValorInput') || {}).value);
+    return (v > 0) ? Math.round(v * 100) : null;
   }
 
   function setOrderType(type) {
@@ -2344,6 +2393,12 @@
     if (nomeV.length < 2) faltas.push('Falta escrever o seu nome.');
     const telV = ((document.getElementById('telInput') || {}).value || '').replace(/\D/g, '');
     if (telV.length < 9) faltas.push('Falta o número de WhatsApp (precisamos para a entrega).');
+    if (pagaDinheiroNaEntrega()) {
+      const chk = document.getElementById('trocoCheck');
+      if (chk && chk.checked && trocoParaCent() == null) {
+        faltas.push('Troco: falta dizer para quanto precisas de troco.');
+      }
+    }
     if (estadoLoja && !estadoLoja.ilimitado && contaEsfihasTotal() > (estadoLoja.restante || 0)) {
       faltas.push('Não temos esfihas suficientes em stock para este pedido (restam ' + estadoLoja.restante + ', este pedido precisa de ' + contaEsfihasTotal() + ').');
     }
@@ -2415,6 +2470,7 @@
             entrega: orderType === 'entrega'
               ? { cent: Math.round(deliveryFee() * 100),
                   metodo_pagamento: metodoPagamento,
+                  troco_para_cent: trocoParaCent(),
                   cotado: !!entregaCotada,
                   quote_id: entregaCotada ? entregaCotada.quote_id : null,
                   minutos: entregaCotada ? entregaCotada.minutos : null,

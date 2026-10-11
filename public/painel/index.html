@@ -821,7 +821,11 @@
   function metodoPagamentoLabel(p) {
     if (p.modo === 'entrega') {
       const info = dadosDe(p).entrega || {};
-      return info.metodo_pagamento === 'dinheiro' ? '💵 Dinheiro' : '💳 MB Way';
+      if (info.metodo_pagamento === 'dinheiro') {
+        const tc = info.troco_para_cent;
+        return '💵 Dinheiro' + (tc ? ` — troco para ${eur(tc)}` : ' — sem troco');
+      }
+      return '💳 MB Way';
     }
     return '💳 MB Way ou 💵 Dinheiro (na retirada)';
   }
