@@ -146,6 +146,20 @@
   .modal-box .ac.sec-fechar{width:100%;background:transparent;border-color:rgba(58,31,18,.22);color:var(--ink-soft)}
   .cancel-motivo{display:inline-block;margin-top:4px;font-weight:800;font-size:.76rem;
     color:var(--red-dark);background:#FDECEC;border-radius:999px;padding:3px 10px}
+
+  /* talao de impressao -- escondido no ecra, so aparece ao imprimir */
+  .print-ticket{display:none}
+  .print-ticket h1{font-family:'Baloo 2',sans-serif;font-size:1.4rem;margin-bottom:10px}
+  .print-ticket .pt-linha{font-size:1rem;margin:4px 0}
+  .print-ticket .pt-total{font-weight:800;font-size:1.15rem;margin-top:10px}
+  .print-ticket hr{border:none;border-top:1px dashed #999;margin:10px 0}
+  @media print{
+    body *{visibility:hidden}
+    .print-ticket, .print-ticket *{visibility:visible}
+    .print-ticket{display:block;position:absolute;top:0;left:0;width:100%;padding:14px;color:#000}
+    .print-ticket .prod-oferta{color:#000}
+    .print-ticket .prod-extra{color:#000}
+  }
 </style>
 </head>
 <body>
@@ -226,6 +240,8 @@
       <button class="ac sec-fechar" onclick="fecharModalCancelar()">Voltar (não cancelar)</button>
     </div>
   </div>
+
+  <div class="print-ticket" id="printTicket"></div>
 </div>
 
 <script>
@@ -773,6 +789,17 @@
     return d || { linhas: [], producao: null, bebidas: null };
   }
 
+  // Entrega: o cliente escolhe MB Way ou dinheiro no site. Retirada: o
+  // metodo so se combina na hora de levantar, por isso nao vem gravado --
+  // mostra-se as duas opcoes.
+  function metodoPagamentoLabel(p) {
+    if (p.modo === 'entrega') {
+      const info = dadosDe(p).entrega || {};
+      return info.metodo_pagamento === 'dinheiro' ? '💵 Dinheiro' : '💳 MB Way';
+    }
+    return '💳 MB Way ou 💵 Dinheiro (na retirada)';
+  }
+
   function esc(t) {
     return String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -849,6 +876,7 @@
           ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
+          <br>${metodoPagamentoLabel(p)}
           ${p.estado === 'cancelado' ? `<br><span class="cancel-motivo">❌ Cancelado — ${esc(motivoCancelamentoLbl(p.motivo_cancelamento))}</span>` : ''}
         </div>
         <div class="prod-lista">${producaoHtml(dados)}</div>
@@ -867,10 +895,36 @@
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
+          <button class="ac" onclick="imprimirPedido(${p.id})">🖨️ Imprimir</button>
           ${p.estado !== 'cancelado' ? `<button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>` : ''}
         </div>
       </div>`;
     }).join('');
+  }
+
+  // Monta um talao simples (so o essencial para a cozinha e para conferir
+  // o pagamento) e manda logo para a impressora -- o resto da pagina fica
+  // escondido na impressao (ver .print-ticket no CSS).
+  function imprimirPedido(id) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p) return;
+    const dados = dadosDe(p);
+    const entrega = p.modo === 'entrega';
+    const ticket = document.getElementById('printTicket');
+    if (!ticket) return;
+    ticket.innerHTML = `
+      <h1>Pedido #${p.numero}${p.ensaio ? ' (ENSAIO)' : ''}</h1>
+      <p class="pt-linha"><strong>${entrega ? '🛵 Entrega' : '🧺 Retirada'}</strong>${p.senha ? ' · senha ' + esc(p.senha) : ''}</p>
+      ${p.nome ? `<p class="pt-linha"><strong>${esc(p.nome)}</strong></p>` : ''}
+      ${entrega && p.morada ? `<p class="pt-linha">${esc(p.morada)}${p.localidade ? ' · ' + esc(p.localidade) : ''}</p>` : ''}
+      ${p.telefone ? `<p class="pt-linha">📞 ${esc(p.telefone)}</p>` : ''}
+      <p class="pt-linha"><strong>Pagamento:</strong> ${metodoPagamentoLabel(p)} ${p.pago ? '— JÁ PAGO' : '— POR CONFIRMAR'}</p>
+      <hr>
+      ${producaoHtml(dados)}
+      <hr>
+      <p class="pt-total">Total: ${eur(p.total_cent)}</p>
+    `;
+    window.print();
   }
 
   async function marcar(id, campos) {
