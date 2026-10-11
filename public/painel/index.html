@@ -241,6 +241,32 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalAdicionar" style="display:none">
+    <div class="modal-box">
+      <h3>Adicionar item ao pedido</h3>
+      <p class="nota">Pedido #<span id="maNum"></span> — para quando o cliente pede mais depois de já ter enviado o pedido.</p>
+      <select id="maSabor" style="width:100%;font-family:inherit;font-weight:700;font-size:.95rem;padding:10px 12px;border:1.5px solid rgba(58,31,18,.2);border-radius:10px;background:var(--white);color:var(--ink);margin-bottom:10px">
+        <optgroup label="Salgadas">
+          <option value="trad">A Tradicional</option>
+          <option value="suc">A Suculenta</option>
+          <option value="caip">A Caipira</option>
+          <option value="quer">A Queridinha</option>
+        </optgroup>
+        <optgroup label="Doces">
+          <option value="todo">A Que Todo Mundo Ama</option>
+          <option value="irres">A Irresistível</option>
+          <option value="dif">A Diferentona</option>
+        </optgroup>
+      </select>
+      <input type="number" id="maQtd" value="1" min="1" max="50" style="width:100%;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:.88rem;color:var(--ink-soft);margin-bottom:14px">
+        <input type="checkbox" id="maGratis" style="width:18px;height:18px"> É oferta (grátis, não soma ao total)
+      </label>
+      <button class="ac destaque" style="width:100%;margin-bottom:8px" onclick="confirmarAdicionarItem()">Adicionar</button>
+      <button class="ac sec-fechar" onclick="fecharModalAdicionar()">Fechar</button>
+    </div>
+  </div>
+
   <div class="print-ticket" id="printTicket"></div>
 </div>
 
@@ -896,6 +922,7 @@
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
           <button class="ac" onclick="imprimirPedido(${p.id})">🖨️ Imprimir</button>
+          ${p.estado !== 'cancelado' ? `<button class="ac" onclick="abrirModalAdicionar(${p.id})">➕ Adicionar item</button>` : ''}
           ${p.estado !== 'cancelado' ? `<button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>` : ''}
         </div>
       </div>`;
@@ -925,6 +952,41 @@
       <p class="pt-total">Total: ${eur(p.total_cent)}</p>
     `;
     window.print();
+  }
+
+  // Acrescentar um item a um pedido ja enviado -- o cliente ligou ou
+  // mandou mensagem a pedir mais depois do pedido original. Debita o
+  // stock e atualiza a lista de produção na hora.
+  let adicionarPedidoId = null;
+
+  function abrirModalAdicionar(id) {
+    adicionarPedidoId = id;
+    const p = pedidos.find(x => x.id === id);
+    const num = document.getElementById('maNum');
+    if (num && p) num.textContent = p.numero;
+    const qtd = document.getElementById('maQtd');
+    if (qtd) qtd.value = 1;
+    const gratis = document.getElementById('maGratis');
+    if (gratis) gratis.checked = false;
+    const modal = document.getElementById('modalAdicionar');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function fecharModalAdicionar() {
+    adicionarPedidoId = null;
+    const modal = document.getElementById('modalAdicionar');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function confirmarAdicionarItem() {
+    const id = adicionarPedidoId;
+    if (!id) return;
+    const item = document.getElementById('maSabor').value;
+    const n = Math.max(1, parseInt(document.getElementById('maQtd').value, 10) || 1);
+    const gratis = document.getElementById('maGratis').checked;
+    fecharModalAdicionar();
+    await api('/painel/pedido-item', { method: 'POST', body: JSON.stringify({ id, item, n, gratis }) });
+    await carregar();
   }
 
   async function marcar(id, campos) {

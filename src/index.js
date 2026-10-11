@@ -680,6 +680,70 @@ async function listar(request, env) {
 
 const ESTADOS = ['novo', 'preparacao', 'caminho', 'entregue', 'cancelado'];
 
+// Tabela de sabores/precos usada so para acrescentar itens a um pedido ja
+// feito (ver adicionarItemPedido) -- espelha o MENU do site (public/index.html).
+// Atualizar aqui tambem se os precos ou sabores mudarem la.
+const SABORES = {
+  trad:  { nome: 'A Tradicional',        preco_cent: 250, doce: false },
+  suc:   { nome: 'A Suculenta',          preco_cent: 250, doce: false },
+  caip:  { nome: 'A Caipira',            preco_cent: 250, doce: false },
+  quer:  { nome: 'A Queridinha',         preco_cent: 250, doce: false },
+  todo:  { nome: 'A Que Todo Mundo Ama', preco_cent: 260, doce: true },
+  irres: { nome: 'A Irresistível',       preco_cent: 260, doce: true },
+  dif:   { nome: 'A Diferentona',        preco_cent: 260, doce: true },
+};
+
+// Acrescenta esfihas a um pedido ja enviado -- para quando o cliente pede
+// mais depois (por telefone ou WhatsApp), seja a pagar ou como oferta.
+// Atualiza a lista de producao, o total, o n_esfihas e debita o stock na
+// hora, exatamente como se tivesse vindo no pedido desde o inicio.
+async function adicionarItemPedido(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  const sabor = SABORES[b.item];
+  if (!sabor) return j({ ok: false, erro: 'sabor invalido' }, 400);
+  const n = Math.max(1, Math.min(50, parseInt(b.n, 10) || 0));
+  const gratis = !!b.gratis;
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (!it || Array.isArray(it)) it = { linhas: [], producao: [], bebidas: [] };
+  if (!Array.isArray(it.producao)) it.producao = [];
+  if (!Array.isArray(it.linhas)) it.linhas = [];
+
+  it.producao.push({
+    sabor: sabor.nome, ing: '', extras: [], n, gratis: gratis ? n : 0, doce: sabor.doce ? 1 : 0,
+  });
+  it.linhas.push(`${n}x ${sabor.nome}${gratis ? ' (OFERTA -- acrescentado no painel)' : ' (acrescentado no painel)'}`);
+
+  const novoNEsfihas = (p.n_esfihas || 0) + n;
+  const novoTotalCent = (p.total_cent || 0) + (gratis ? 0 : n * sabor.preco_cent);
+  const agora = new Date().toISOString();
+
+  const lote = [
+    env.DB.prepare('UPDATE pedidos SET itens = ?, n_esfihas = ?, total_cent = ?, atualizado_em = ? WHERE id = ?')
+      .bind(JSON.stringify(it), novoNEsfihas, novoTotalCent, agora, id),
+    env.DB.prepare('UPDATE stock SET usado = usado + ? WHERE dia = ?').bind(n, p.dia),
+  ];
+  if (sabor.doce) {
+    lote.push(env.DB.prepare(
+      `UPDATE stock_doces SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE id = 1`
+    ).bind(n, agora));
+  } else {
+    lote.push(env.DB.prepare(
+      `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
+    ).bind(n, agora, sabor.nome));
+  }
+  await env.DB.batch(lote);
+
+  return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
+}
+
 async function mudarPedido(request, env) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
@@ -1138,6 +1202,7 @@ export default {
         if (!autorizado(request, env)) return j({ ok: false, erro: 'nao autorizado' }, 401);
         if (p === '/api/painel/pedidos' && request.method === 'GET') return await listar(request, env);
         if (p === '/api/painel/pedido' && request.method === 'POST') return await mudarPedido(request, env);
+        if (p === '/api/painel/pedido-item' && request.method === 'POST') return await adicionarItemPedido(request, env);
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
