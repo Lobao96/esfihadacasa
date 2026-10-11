@@ -678,7 +678,7 @@ async function listar(request, env) {
              salgadas: salgadas || [], doces: doces || { quantidade: 0, minimo: 0 } });
 }
 
-const ESTADOS = ['novo', 'preparacao', 'caminho', 'entregue', 'cancelado'];
+const ESTADOS = ['novo', 'preparacao', 'pronto', 'caminho', 'entregue', 'cancelado'];
 
 // Tabela de sabores/precos usada so para acrescentar itens a um pedido ja
 // feito (ver adicionarItemPedido) -- espelha o MENU do site (public/index.html).

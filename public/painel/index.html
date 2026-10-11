@@ -19,7 +19,7 @@
   :root{
     --red:#C8232B; --red-dark:#9E1B22; --cream:#FFF3DC; --white:#fff;
     --ink:#3A1F12; --ink-soft:#6B4A38; --gold:#F4B942;
-    --verde:#1E8E4A; --azul:#2D6FB8; --cinza:#EFE7D8;
+    --verde:#1E8E4A; --azul:#2D6FB8; --cinza:#EFE7D8; --roxo:#7A4FBF;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Nunito',-apple-system,sans-serif;background:#F6EFE1;color:var(--ink);padding-bottom:40px}
@@ -86,6 +86,7 @@
     border-left:6px solid var(--cinza)}
   .p.novo{border-left-color:var(--red)}
   .p.preparacao{border-left-color:var(--gold)}
+  .p.pronto{border-left-color:var(--roxo)}
   .p.caminho{border-left-color:var(--azul)}
   .p.entregue{border-left-color:var(--verde);opacity:.62}
   .p.cancelado{opacity:.45}
@@ -491,6 +492,7 @@
   function momentoDe(p) {
     if (p.estado === 'novo') return p.pago ? 'pago' : 'recebido';
     if (p.estado === 'preparacao') return 'preparacao';
+    if (p.estado === 'pronto') return 'pronto';
     if (p.estado === 'caminho') return 'caminho';
     if (p.estado === 'entregue') return 'entregue';
     return null;
@@ -881,7 +883,8 @@
       const dados = dadosDe(p);
       const infoEntrega = entrega ? (dados.entrega || {}) : null;
       const prox = p.estado === 'novo' ? ['preparacao', 'Começar a fazer']
-                 : p.estado === 'preparacao' ? (entrega ? ['caminho', 'Saiu para entrega'] : ['entregue', 'Foi levantado'])
+                 : p.estado === 'preparacao' ? (entrega ? ['caminho', 'Saiu para entrega'] : ['pronto', 'Pronto para levantar'])
+                 : p.estado === 'pronto' ? ['entregue', 'Foi levantado']
                  : p.estado === 'caminho' ? ['entregue', 'Entregue'] : null;
       // Na entrega paga em dinheiro, nao ha pagamento antecipado para confirmar
       // -- quem recebe o dinheiro e a propria Andreza, no ato da entrega. So trava
