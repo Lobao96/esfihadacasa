@@ -394,6 +394,8 @@
           <div class="extra">por pedido</div></div>
         <div class="tile"><div class="v">${r.esfihas || 0}</div><div class="k">Esfihas</div>
           <div class="extra">${pedidos ? (r.esfihas / pedidos).toFixed(1) : '0'} por pedido</div></div>
+        <div class="tile"><div class="v">${r.esfihasPagas || 0}</div><div class="k">Esfihas pagas</div></div>
+        <div class="tile"><div class="v">${r.esfihasGratis || 0}</div><div class="k">Esfihas em oferta</div></div>
       </div>
 
       <div class="bloco">

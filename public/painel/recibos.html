@@ -219,9 +219,15 @@
     }
 
     let total = 0;
+    let esfihasPagas = 0, esfihasGratis = 0;
     let html = '';
     pedidos.forEach((p, i) => {
       total += p.total_cent || 0;
+      (dadosDe(p).producao || []).forEach(x => {
+        const n = x.n || 0, gratis = x.gratis || 0;
+        esfihasPagas += Math.max(0, n - gratis);
+        esfihasGratis += gratis;
+      });
       html += `
         <div class="recibo">
           <div class="cabecalho">
@@ -262,7 +268,9 @@
       <div><b>💳 ${eurCent(totalMbway)}</b>em MB Way</div>
       ${totalIndefinido ? `<div><b>${eurCent(totalIndefinido)}</b>método não registado</div>` : ''}
       <div><b>${entregas}</b>entregas (estafeta)</div>
-      <div><b>${retiradas}</b>levantamentos</div>${andrezaHtml}`;
+      <div><b>${retiradas}</b>levantamentos</div>
+      <div><b>${esfihasPagas}</b>esfihas pagas</div>
+      <div><b>${esfihasGratis}</b>esfihas em oferta</div>${andrezaHtml}`;
   }
 
   (function () {
