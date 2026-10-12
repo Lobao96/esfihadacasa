@@ -1813,7 +1813,13 @@
   }
 
   function payMethods() {
-    return orderType === 'entrega' ? (metodoPagamento === 'dinheiro' ? 'Dinheiro (na entrega)' : 'MB Way') : 'MB Way ou dinheiro';
+    // Reflete sempre o metodo realmente escolhido (entrega ou retirada --
+    // os dois modos tem os botoes MB Way/Dinheiro desde a correcao da
+    // retirada), incluindo o numero para onde mandar no caso do MB Way.
+    if (metodoPagamento === 'dinheiro') {
+      return 'Dinheiro (' + (orderType === 'entrega' ? 'na entrega' : 'na retirada') + ')';
+    }
+    return 'MB Way — enviar para ' + MBWAY_NUMERO;
   }
 
   // Numero de telemovel para onde se envia o MB Way -- o mesmo do WhatsApp
