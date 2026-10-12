@@ -407,7 +407,21 @@ async function novoPedido(request, env, ctx) {
   const agora = new Date().toISOString();
   // b.itens pode ser a lista simples (formato antigo) ou o objecto com
   // linhas, producao e bebidas (formato novo). Guarda-se tal como vem.
-  const itens = JSON.stringify(b.itens && typeof b.itens === 'object' ? b.itens : []);
+  const itensObj = (b.itens && typeof b.itens === 'object') ? b.itens : [];
+  // Aviso de preco suspeito -- NAO bloqueia o pedido (o calculo exato tem
+  // combos, extras e promocoes, dificeis de reproduzir ao certo aqui sem
+  // risco de rejeitar pedidos legitimos). So sinaliza, para revisao manual
+  // no painel, quando o total enviado fica muito abaixo do que qualquer
+  // esfiha custa em qualquer oferta do site (piso de 1,50€/esfiha -- bem
+  // abaixo do preco mais barato real, 2,40€/esfiha no maior combo).
+  const PRECO_MINIMO_PLAUSIVEL_CENT = 150;
+  const totalEnviadoCent = Math.max(0, parseInt(b.total_cent, 10) || 0);
+  const pisoCent = nEsfihasPedidas * PRECO_MINIMO_PLAUSIVEL_CENT
+    + (!ensaio && b.modo === 'entrega' && nEsfihasPedidas > 0 ? ENTREGA_FIXA_CENT : 0);
+  if (!ensaio && nEsfihasPedidas > 0 && totalEnviadoCent < pisoCent && Array.isArray(itensObj) === false) {
+    itensObj.aviso_preco = `Total enviado (${(totalEnviadoCent / 100).toFixed(2)}€) parece baixo para ${nEsfihasPedidas} esfiha(s) -- confirmar o valor com o cliente antes de considerar pago.`;
+  }
+  const itens = JSON.stringify(itensObj);
   const token = novoToken();
 
   // O numero dos pedidos reais nunca reinicia -- e continuo desde o

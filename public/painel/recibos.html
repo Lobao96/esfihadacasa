@@ -103,6 +103,28 @@
 
   function eur(v) { return (v || 0).toFixed(2).replace('.', ',') + '€'; }
   function eurCent(c) { return eur((c || 0) / 100); }
+  function dadosDe(p) {
+    let d = null;
+    try { d = JSON.parse(p.itens || 'null'); } catch (e) {}
+    if (Array.isArray(d)) return { linhas: d, producao: null, bebidas: null };
+    return d || { linhas: [], producao: null, bebidas: null };
+  }
+  // Mesma regra do painel principal: pedidos antigos sem metodo gravado
+  // mostram as duas opcoes possiveis.
+  function metodoPagamentoLabel(p) {
+    const dados = dadosDe(p);
+    const info = dados.pagamento || dados.entrega || {};
+    if (info.metodo_pagamento === 'dinheiro') {
+      const tc = info.troco_para_cent;
+      return '💵 Dinheiro' + (tc ? ` — troco para ${eur(tc / 100)}` : ' — sem troco');
+    }
+    if (info.metodo_pagamento === 'mbway') return '💳 MB Way';
+    return p.modo === 'entrega' ? '💳 MB Way' : '💳 MB Way ou 💵 Dinheiro (na retirada)';
+  }
+  function metodoDe(p) {
+    const info = dadosDe(p).pagamento || dadosDe(p).entrega || {};
+    return info.metodo_pagamento === 'mbway' ? 'mbway' : (info.metodo_pagamento === 'dinheiro' ? 'dinheiro' : 'indefinido');
+  }
   function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function horaDe(iso) { try { return new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
   function dataHoraDe(iso) { try { return new Date(iso).toLocaleDateString('pt-PT') + ', ' + horaDe(iso); } catch (e) { return ''; } }
@@ -211,6 +233,7 @@
           ${enderecoHtml(p)}
           ${p.telefone ? `<p class="endereco" style="margin-top:-8px">📞 ${esc(p.telefone)}</p>` : ''}
           <div class="linha-total"><span>Total a cobrar</span><span>${eurCent(p.total_cent)}</span></div>
+          <div class="linha-pago"><span class="metodo">${metodoPagamentoLabel(p)}</span></div>
         </div>`;
     });
     lista.innerHTML = html;
@@ -219,6 +242,9 @@
     // e quanto se deve a Andreza nesse dia -- mesma regra do painel: recebe
     // o maior entre 20€ e 3,50€ por entrega; a loja so paga a diferenca nos
     // dias com 5 entregas ou menos.
+    const totalDinheiro = pedidos.filter(p => metodoDe(p) === 'dinheiro').reduce((a, p) => a + (p.total_cent || 0), 0);
+    const totalMbway = pedidos.filter(p => metodoDe(p) === 'mbway').reduce((a, p) => a + (p.total_cent || 0), 0);
+    const totalIndefinido = total - totalDinheiro - totalMbway;
     const entregas = pedidos.filter(p => p.modo === 'entrega').length;
     const retiradas = pedidos.length - entregas;
     let andrezaHtml = '';
@@ -232,6 +258,9 @@
     resumo.innerHTML = `
       <div><b>${pedidos.length}</b>recibos</div>
       <div><b>${eurCent(total)}</b>total do dia</div>
+      <div><b>💵 ${eurCent(totalDinheiro)}</b>em dinheiro</div>
+      <div><b>💳 ${eurCent(totalMbway)}</b>em MB Way</div>
+      ${totalIndefinido ? `<div><b>${eurCent(totalIndefinido)}</b>método não registado</div>` : ''}
       <div><b>${entregas}</b>entregas (estafeta)</div>
       <div><b>${retiradas}</b>levantamentos</div>${andrezaHtml}`;
   }

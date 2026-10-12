@@ -99,13 +99,13 @@
   const ESTADOS = [
     { id: 'novo',       tit: 'Pedido recebido',   desc: 'Chegou certinho. Já vamos confirmar e começar.' },
     { id: 'preparacao', tit: 'A ser preparado',   desc: 'A massa já está nas mãos. Sai quentinho daqui a pouco.' },
-    { id: 'caminho',    tit: 'A caminho',         desc: 'Saiu para entrega. Fica atento ao telemóvel.' },
-    { id: 'entregue',   tit: 'Entregue',          desc: 'Bom apetite! Obrigado por pedir na gente.' },
+    { id: 'caminho',    tit: 'A caminho',         desc: 'Saiu para entrega. Fica atento ao celular.' },
+    { id: 'entregue',   tit: 'Entregue',          desc: 'Bom apetite! Obrigado por pedir com a gente.' },
   ];
   const ESTADOS_RET = [
     { id: 'novo',       tit: 'Pedido recebido',   desc: 'Chegou certinho. Já vamos confirmar e começar.' },
     { id: 'preparacao', tit: 'A ser preparado',   desc: 'A massa já está nas mãos. Avisamos quando puder vir.' },
-    { id: 'entregue',   tit: 'Pronto / levantado', desc: 'Bom apetite! Obrigado por pedir na gente.' },
+    { id: 'entregue',   tit: 'Pronto / levantado', desc: 'Bom apetite! Obrigado por pedir com a gente.' },
   ];
 
   function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + '€'; }
@@ -217,7 +217,7 @@
 
     const cancelado = p.estado === 'cancelado'
       ? `<div class="erro" style="margin-bottom:14px"><h2>Pedido cancelado</h2>
-         <p>Se isto lhe parecer um engano, fale com a gente no WhatsApp.</p></div>` : '';
+         <p>Se isto parecer um engano, fala com a gente no WhatsApp.</p></div>` : '';
 
     document.getElementById('conteudo').innerHTML = `
       ${cancelado}

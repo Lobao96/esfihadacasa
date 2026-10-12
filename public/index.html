@@ -782,7 +782,7 @@
         </label>
         <div id="trocoValorWrap" style="display:none;">
           <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" step="0.01" aria-label="Troco para quanto">
-          <p class="troco-nota">Diz-nos o valor da nota com que vais pagar (ex.: 50€), para já levarmos o troco certo.</p>
+          <p class="troco-nota">Nos diga o valor da nota com que você vai pagar (ex.: 50€), para já levarmos o troco certo.</p>
         </div>
       </div>
 
@@ -830,18 +830,20 @@
       <div id="legal-info" class="legal-panel">
         <h4>Informação legal</h4>
         <p><strong>Esfiha da Casa</strong><br>
-        Portimão, Algarve, Portugal<br>
+        Titular da atividade: Letícia Gonçalves Machado · NIF 298630338<br>
+        Rua Infante Dom Henrique, nº 98, 8500-692 Portimão, Algarve, Portugal<br>
         Contato: 938 211 480 (WhatsApp)<br>
         Instagram: @esfihadacasaptm</p>
+        <p>Reclamações: <a href="https://www.livroreclamacoes.pt/Inicio/" target="_blank" rel="noopener">Livro de Reclamações Eletrónico</a> — tem direito a reclamar diretamente aqui.</p>
         <p>Produtos alimentícios feitos artesanalmente. Todas as esfihas contêm glúten. Os alérgenos de cada sabor estão indicados no cardápio. Tudo é preparado na mesma cozinha, então pode ter traços de outros alérgenos. Se você tem alguma alergia, avisa a gente antes de pedir.</p>
       </div>
 
       <div id="legal-priv" class="legal-panel">
         <h4>Privacidade</h4>
-        <p>Este site não coleta nem guarda dados pessoais. Não usa cookies, não tem publicidade nem perfis de usuário.</p>
-        <p>Quando você toca em "Enviar pedido no WhatsApp", a mensagem é montada no seu celular e só é enviada por você. Nada vai para nenhum servidor nosso.</p>
-        <p>Os dados que você passa no WhatsApp (nome, endereço, telefone) são usados só pra preparar e entregar seu pedido, e ficam guardados nessa conversa. Você pode pedir a qualquer momento que a gente apague seus dados, é só escrever no WhatsApp.</p>
-        <p>A gente usa uma ferramenta de estatísticas que conta visitas de forma anônima e agregada, sem cookies e sem identificar ninguém.</p>
+        <p><strong>Responsável pelo tratamento de dados:</strong> Letícia Gonçalves Machado (NIF 298630338), titular da Esfiha da Casa. Contato: 938 211 480 (WhatsApp).</p>
+        <p>Ao enviar seu pedido, seu nome, telefone e morada (quando for entrega) ficam guardados no nosso sistema de pedidos, só para preparar, entregar e dar suporte ao seu pedido. A mensagem final também é enviada por você pelo WhatsApp, que é um serviço fornecido pela Meta — a conversa fica guardada lá também, sujeita à política de privacidade da própria Meta.</p>
+        <p>Você tem direito a acessar, corrigir ou pedir a eliminação dos seus dados a qualquer momento, é só escrever no WhatsApp. Se não resolvermos, você pode reclamar à CNPD (Comissão Nacional de Proteção de Dados) — <a href="https://www.cnpd.pt" target="_blank" rel="noopener">cnpd.pt</a>.</p>
+        <p>A gente usa uma ferramenta de estatísticas que conta visitas de forma anônima e agregada, sem cookies e sem identificar ninguém. O site não tem publicidade nem perfis de usuário.</p>
       </div>
 
       <div id="legal-termos" class="legal-panel">
@@ -862,6 +864,7 @@
         <h4>Resolução de problemas</h4>
         <p>Se alguma coisa der errado com seu pedido — item trocado, faltando, ou que não chegou como devia — fala com a gente no WhatsApp no mesmo dia.</p>
         <p>A gente sempre resolve: refaz o item, desconta no valor ou devolve o dinheiro, conforme o caso e o que fizer mais sentido pra você.</p>
+        <p>Se não chegarmos a um acordo, você pode recorrer a uma entidade de Resolução Alternativa de Litígios de Consumo, como o <a href="https://www.consumidor.gov.pt/parceiros/entidades-ral.aspx" target="_blank" rel="noopener">Centro de Arbitragem de Conflitos de Consumo do Algarve</a>.</p>
         <p>Sua opinião ajuda a gente a melhorar. Se tiver uma sugestão ou uma crítica, fala direto com a gente — a gente prefere saber.</p>
       </div>
     </div>
@@ -871,9 +874,9 @@
 <script>
   // ============ CONFIGURAÇÃO — editar aqui ============
   const WHATSAPP_NUMBER = "351938211480";
-  // Zonas de entrega a partir da cozinha, em Portimão
-  // TODO: afinar as taxas quando souberes o custo real do Uber Direct por distância
-  // Taxa de entrega única e fixa (Portimão e arredores até 10 km).
+  // Zonas de entrega a partir da cozinha, em Portimão.
+  // Taxa de entrega única e fixa (Portimão e arredores até 10 km),
+  // feita pela estafeta própria (Andreza).
   const TAXA_ENTREGA = 3.50;
 
   // Mantido só para decodificar códigos de pedidos antigos (feitos quando
@@ -884,8 +887,7 @@
     z2: { label: "Zona 2", fee: 5.00 },   // 5 a 10 km por estrada
   };
 
-  // Distâncias por estrada a partir da cozinha, em Portimão
-  // TODO: afinar as taxas com o custo real do Uber Direct
+  // Distâncias por estrada a partir da cozinha, em Portimão.
   // Antes da inauguração: mantém o site em modo "em breve" (sem aceitar pedidos).
   // Mudar para false no dia 11 de outubro para abrir os pedidos.
   const PRE_LANCAMENTO = false;
@@ -997,7 +999,9 @@
   // Promocao valida so no dia da inauguracao (11 de outubro) -- nao e um
   // beneficio permanente do site.
   function ehDiaDaInauguracao(now) {
-    return now.getMonth() === 9 && now.getDate() === 11;
+    // So no dia real da inauguracao (11/10/2026) -- sem o ano, isto
+    // reativava-se sozinho todos os anos a 11 de outubro.
+    return now.getFullYear() === 2026 && now.getMonth() === 9 && now.getDate() === 11;
   }
   function tierEsfihasGratis(n) {
     if (!ehDiaDaInauguracao(new Date())) return null;
@@ -1772,7 +1776,7 @@
       const addr = ruaCompleta();
       const loc = ((document.getElementById('locInput') || {}).value || '').trim();
       const cp = (document.getElementById('cpInput') || {}).value.trim();
-      lines.push("Endereço: " + (addr || "(mando em seguida)") + (loc ? ", " + loc : "") + (cp ? ", " + cp : ""));
+      lines.push("Morada: " + (addr || "(mando em seguida)") + (loc ? ", " + loc : "") + (cp ? ", " + cp : ""));
       if (moradaConfirmada) lines.push("Morada confirmada pelo cliente ✔");
       lines.push("Taxa de entrega: " + fmt(deliveryFee()));
     }
@@ -2320,7 +2324,7 @@
         foraDeAlcance = true;
         caixaCotacao('falha',
           '<strong>Ainda não entregamos nessa morada</strong> — fica longe demais da nossa cozinha ' +
-          'para chegar quente e a tempo. Pode escolher <strong>levantamento no local</strong>, se quiser.');
+          'para chegar quente e a tempo. Pode escolher <strong>retirada</strong>, se quiser.');
       }
     } catch (e) {
       // nao foi possivel sequer contactar o nosso servidor: mais vale
@@ -2330,7 +2334,7 @@
       foraDeAlcance = true;
       caixaCotacao('falha',
         '<strong>Não consegui confirmar a entrega agora.</strong> Tente novamente daqui a pouco, ' +
-        'ou escolha <strong>levantamento no local</strong>.');
+        'ou escolha <strong>retirada</strong>.');
     }
     updateTotal();
   }
@@ -2393,7 +2397,7 @@
     if (pagaDinheiroNaEntrega()) {
       const chk = document.getElementById('trocoCheck');
       if (chk && chk.checked && trocoParaCent() == null) {
-        faltas.push('Troco: falta dizer para quanto precisas de troco.');
+        faltas.push('Troco: falta dizer para quanto você precisa de troco.');
       }
     }
     if (estadoLoja && !estadoLoja.ilimitado && contaEsfihasTotal() > (estadoLoja.restante || 0)) {
@@ -2414,8 +2418,8 @@
       if (addr.length < 6) faltas.push('Entrega: falta escrever a morada completa (rua, número e andar).');
       else if (loc.length < 2) faltas.push('Entrega: falta escrever a localidade.');
       else if (!cpValido(cp)) faltas.push('Entrega: falta o código postal, no formato 0000-000.');
-      else if (foraDeAlcance) faltas.push('Entrega: não fazemos entrega para essa morada. Escolha levantamento no local.');
-      else if (entregaOpcionalPendente) faltas.push('Entrega: falta escolher se aceita a taxa de entrega mais alta para esta morada, ou opte por levantamento no local.');
+      else if (foraDeAlcance) faltas.push('Entrega: não fazemos entrega para essa morada. Escolha retirada.');
+      else if (entregaOpcionalPendente) faltas.push('Entrega: falta escolher se aceita a taxa de entrega mais alta para esta morada, ou opte por retirada.');
       else if (moradaConfirmada !== m) faltas.push('Entrega: falta confirmar a morada na caixa amarela.');
     }
     return faltas;
@@ -2558,9 +2562,10 @@
 
   function horarioDeHoje(now) {
     const day = now.getDay();
-    // No proprio dia da abertura (11/10), so fazemos jantar -- facilita o primeiro dia.
-    // Nos domingos seguintes volta ao horario normal (HOURS[0]).
-    if (day === 0 && now.getMonth() === 9 && now.getDate() === 11) {
+    // No proprio dia da abertura (11/10/2026), so fazemos jantar -- facilita
+    // o primeiro dia. Nos domingos seguintes (e nos anos seguintes) volta ao
+    // horario normal (HOURS[0]) -- por isso tambem verifica o ano aqui.
+    if (day === 0 && now.getFullYear() === 2026 && now.getMonth() === 9 && now.getDate() === 11) {
       return { day: 0, open: "19:30", close: "22:30" };
     }
     return HOURS[day];

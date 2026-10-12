@@ -909,6 +909,7 @@
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
           <br>${metodoPagamentoLabel(p)}
+          ${dados.aviso_preco ? `<br><span class="cancel-motivo">⚠️ ${esc(dados.aviso_preco)}</span>` : ''}
           ${p.estado === 'cancelado' ? `<br><span class="cancel-motivo">❌ Cancelado — ${esc(motivoCancelamentoLbl(p.motivo_cancelamento))}</span>` : ''}
         </div>
         <div class="prod-lista">${producaoHtml(dados)}</div>
