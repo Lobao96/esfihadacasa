@@ -2590,10 +2590,13 @@
       const nowMin = now.getHours() * 60 + now.getMinutes();
       isOpen = nowMin >= openMin && nowMin <= closeMin;
     }
-    // O horario diz quando costumamos abrir, mas a loja fechada manualmente ou
-    // sem stock (estadoLoja) manda sempre mais que o horario.
+    // O horario diz quando costumamos abrir, mas o interruptor manual do
+    // painel ("Loja aberta"/"Loja fechada") manda sempre mais que o horario,
+    // nos dois sentidos -- incluindo para ABRIR fora do horario habitual
+    // (ex.: um evento especial, ou so para corrigir o selo mais rapido do
+    // que esperar pela proxima mudanca de hora).
     const fechadaPelaLoja = !!(estadoLoja && !estadoLoja.aberto);
-    if (fechadaPelaLoja) isOpen = false;
+    if (estadoLoja) isOpen = !!estadoLoja.aberto;
     badge.className = 'status ' + (isOpen ? 'open' : 'closed');
     text.textContent = isOpen ? 'Aberto agora' : (fechadaPelaLoja ? 'Loja fechada' : 'Fechado agora');
   }

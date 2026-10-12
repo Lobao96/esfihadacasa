@@ -2611,6 +2611,7 @@
       const nowMin = now.getHours() * 60 + now.getMinutes();
       isOpen = nowMin >= openMin && nowMin <= closeMin;
     }
+    if (estadoLoja) isOpen = !!estadoLoja.aberto;
     badge.className = 'status ' + (isOpen ? 'open' : 'closed');
     text.textContent = isOpen ? 'Aberto agora' : 'Fechado agora';
   }
