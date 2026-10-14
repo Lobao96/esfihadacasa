@@ -795,7 +795,7 @@
         <div id="trocoValorWrap" style="display:none;">
           <div class="troco-notas" id="trocoNotas"></div>
           <div class="troco-input-wrap">
-            <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" max="200" step="0.01" aria-label="Nota com que vai pagar, em euros" oninput="limitarNotaInput(); atualizarTrocoCalculado()">
+            <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" max="200" step="1" aria-label="Nota com que vai pagar, em euros" oninput="limitarNotaInput(); atualizarTrocoCalculado()">
             <span class="troco-input-suffix">€</span>
           </div>
           <p class="troco-nota">Diga o valor da nota com que vai pagar (ex.: 50€) — calculamos o troco na hora, já pronto seja na entrega ou quando vier buscar.</p>
@@ -2626,6 +2626,17 @@
         if (d.estado) estadoLoja = d.estado;
         const nomeSabor = d.sabor === 'doce' ? 'esse sabor doce' : (d.sabor || 'esse sabor');
         mostrarFaltas(['Esgotou ' + nomeSabor + ' (restam ' + (d.restante_sabor || 0) + '). Tire esse sabor do pedido ou escolha outro.']);
+        return false;
+      }
+      else if (d && d.erro === 'total_invalido') {
+        // O servidor recalculou e o total enviado ficou abaixo do minimo
+        // plausivel para os itens reais do pedido -- normalmente sinal de
+        // um erro ao recalcular o total no proprio site (nunca aconteceu
+        // de propósito ate agora), nao de fraude. Pede para recarregar a
+        // página e montar o pedido de novo, em vez de deixar continuar
+        // com um total que o servidor nao aceita.
+        btn.textContent = textoOriginal;
+        mostrarFaltas(['O valor do pedido não ficou certo. Recarregue a página, monte o pedido de novo e tente enviar outra vez. Se continuar, fale com a gente pelo WhatsApp.']);
         return false;
       }
       else if (!d || d.ok !== true) {

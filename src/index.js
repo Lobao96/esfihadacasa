@@ -356,10 +356,26 @@ async function novoPedido(request, env, ctx) {
   if (!ensaio && !st.aberto) {
     return j({ ok: false, erro: 'esgotado', estado: st }, 409);
   }
+  // O numero de esfihas usado em TODO o resto desta funcao (stock, piso de
+  // preco) vem sempre de itens.producao, nunca do n_esfihas que o cliente
+  // manda a parte -- caso contrario bastava mandar itens reais com
+  // n_esfihas: 0 para fugir ao check de stock agregado e ao piso de preco
+  // mais abaixo. gratisReal conta so as esfihas marcadas como oferta
+  // (brinde automatico de 10+ esfihas) -- essas continuam a gastar stock,
+  // mas nao entram no preco minimo exigido.
+  const producaoRecebida = (b.itens && typeof b.itens === 'object' && !Array.isArray(b.itens) && Array.isArray(b.itens.producao)) ? b.itens.producao : [];
+  let nEsfihasReal = 0, nEsfihasGratisReal = 0;
+  for (const x of producaoRecebida) {
+    const n = Math.max(0, parseInt(x && x.n, 10) || 0);
+    const g = Math.min(n, Math.max(0, parseInt(x && x.gratis, 10) || 0));
+    nEsfihasReal += n;
+    nEsfihasGratisReal += g;
+  }
+  const nEsfihasPedidas = nEsfihasReal;
+
   // Mesmo com a loja aberta, um pedido individual pode pedir mais esfihas do
   // que o stock que resta (ex: restam 10 e o pedido tem um combo de 20).
   // Isso tem de ser travado aqui, nao so quando o stock geral chega a zero.
-  const nEsfihasPedidas = Math.max(0, parseInt(b.n_esfihas, 10) || 0);
   if (!ensaio && !st.ilimitado && nEsfihasPedidas > st.restante) {
     return j({ ok: false, erro: 'sem_stock', estado: st }, 409);
   }
@@ -408,18 +424,21 @@ async function novoPedido(request, env, ctx) {
   // b.itens pode ser a lista simples (formato antigo) ou o objecto com
   // linhas, producao e bebidas (formato novo). Guarda-se tal como vem.
   const itensObj = (b.itens && typeof b.itens === 'object') ? b.itens : [];
-  // Aviso de preco suspeito -- NAO bloqueia o pedido (o calculo exato tem
-  // combos, extras e promocoes, dificeis de reproduzir ao certo aqui sem
-  // risco de rejeitar pedidos legitimos). So sinaliza, para revisao manual
-  // no painel, quando o total enviado fica muito abaixo do que qualquer
-  // esfiha custa em qualquer oferta do site (piso de 1,50€/esfiha -- bem
-  // abaixo do preco mais barato real, 2,40€/esfiha no maior combo).
+  // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
+  // pelo browser tem de cobrir, no minimo, as esfihas REALMENTE pagas
+  // (exclui as marcadas como oferta/brinde) a 1,50€ cada -- bem abaixo do
+  // preco mais barato real (2,40€/esfiha no maior combo), para nunca
+  // rejeitar por engano um pedido legitimo com combos/extras/promocoes.
+  // So fecha o buraco de um total manipulado no cliente para ficar abaixo
+  // do que os itens reais custam (ex.: mandar itens.producao reais com
+  // total_cent: 1). Isto REJEITA o pedido (antes so avisava, sem travar).
   const PRECO_MINIMO_PLAUSIVEL_CENT = 150;
   const totalEnviadoCent = Math.max(0, parseInt(b.total_cent, 10) || 0);
-  const pisoCent = nEsfihasPedidas * PRECO_MINIMO_PLAUSIVEL_CENT
-    + (!ensaio && b.modo === 'entrega' && nEsfihasPedidas > 0 ? ENTREGA_FIXA_CENT : 0);
-  if (!ensaio && nEsfihasPedidas > 0 && totalEnviadoCent < pisoCent && Array.isArray(itensObj) === false) {
-    itensObj.aviso_preco = `Total enviado (${(totalEnviadoCent / 100).toFixed(2)}€) parece baixo para ${nEsfihasPedidas} esfiha(s) -- confirmar o valor com o cliente antes de considerar pago.`;
+  const nEsfihasPagasReal = Math.max(0, nEsfihasReal - nEsfihasGratisReal);
+  const pisoCent = nEsfihasPagasReal * PRECO_MINIMO_PLAUSIVEL_CENT
+    + (!ensaio && b.modo === 'entrega' && nEsfihasPagasReal > 0 ? ENTREGA_FIXA_CENT : 0);
+  if (!ensaio && pisoCent > 0 && totalEnviadoCent < pisoCent) {
+    return j({ ok: false, erro: 'total_invalido' }, 400);
   }
   const itens = JSON.stringify(itensObj);
   const token = novoToken();
@@ -440,8 +459,8 @@ async function novoPedido(request, env, ctx) {
      RETURNING id, numero, token`
   ).bind(
     dia, limpar(b.senha, 40), ensaio, limpar(b.modo, 20), limpar(b.localidade, 80),
-    limpar(b.morada, 300), Math.max(0, parseInt(b.total_cent, 10) || 0),
-    Math.max(0, parseInt(b.n_esfihas, 10) || 0), itens, limpar(b.mensagem, 4000), agora,
+    limpar(b.morada, 300), totalEnviadoCent,
+    nEsfihasReal, itens, limpar(b.mensagem, 4000), agora,
     token, telCliente, limpar(b.origem, 60), limpar(b.campanha, 80), nomeCliente,
     ...(ensaio ? [dia] : [])
   ).first();

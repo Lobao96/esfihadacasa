@@ -824,8 +824,12 @@
     const dados = dadosDe(p);
     const info = dados.pagamento || dados.entrega || {};
     if (info.metodo_pagamento === 'dinheiro') {
-      const tc = info.troco_para_cent;
-      return '💵 Dinheiro' + (tc ? ` — troco para ${eur(tc)}` : ' — sem troco');
+      const tc = info.troco_para_cent; // valor da NOTA com que o cliente paga, nao o troco
+      if (tc) {
+        const trocoReal = Math.max(0, tc - (p.total_cent || 0));
+        return `💵 Dinheiro — paga com nota de ${eur(tc)} (troco ${eur(trocoReal)})`;
+      }
+      return '💵 Dinheiro — sem troco';
     }
     if (info.metodo_pagamento === 'mbway') return '💳 MB Way';
     return p.modo === 'entrega' ? '💳 MB Way' : '💳 MB Way ou 💵 Dinheiro (na retirada)';
