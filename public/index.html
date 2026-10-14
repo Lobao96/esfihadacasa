@@ -557,6 +557,13 @@
   .troco-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--red); }
   #trocoValorInput { margin-top: 8px; max-width: 160px; }
   .troco-nota { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
+  .troco-notas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .nota-chip {
+    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+    background: #fff; font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: inherit;
+  }
+  .nota-chip:hover { border-color: var(--red); }
+  .troco-calc { font-size: 0.86rem; font-weight: 700; color: var(--red); margin-top: 8px; min-height: 1.2em; }
 
   .total-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -629,10 +636,11 @@
     "addressCountry": "PT"
   },
   "openingHoursSpecification": [
-    { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Tuesday","Wednesday","Thursday"], "opens": "19:30", "closes": "22:00" },
     { "@type": "OpeningHoursSpecification", "dayOfWeek": "Friday", "opens": "19:30", "closes": "23:59" },
-    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "12:00", "closes": "23:59" },
-    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "12:00", "closes": "22:30" }
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "12:00", "closes": "15:30" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "18:30", "closes": "23:59" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "12:00", "closes": "15:30" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "18:30", "closes": "22:00" }
   ],
   "areaServed": ["Portimão","Parchal","Praia da Rocha","Praia do Vau","Alvor","Estômbar","Ferragudo","Mexilhoeira Grande"],
   "paymentAccepted": "MB Way, Dinheiro",
@@ -781,8 +789,10 @@
           <input type="checkbox" id="trocoCheck" onchange="toggleTrocoInput()"> Preciso de troco
         </label>
         <div id="trocoValorWrap" style="display:none;">
-          <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" step="0.01" aria-label="Troco para quanto">
-          <p class="troco-nota">Nos diga o valor da nota com que você vai pagar (ex.: 50€), para já levarmos o troco certo.</p>
+          <div class="troco-notas" id="trocoNotas"></div>
+          <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" step="0.01" aria-label="Nota com que vai pagar" oninput="atualizarTrocoCalculado()">
+          <p class="troco-nota">Diga o valor da nota com que vai pagar (ex.: 50€) — calculamos o troco na hora, já pronto seja na entrega ou quando vier buscar.</p>
+          <p class="troco-calc" id="trocoCalculado"></p>
         </div>
       </div>
 
@@ -807,11 +817,10 @@
     <div class="hours">
       <h4 class="hours-title">Horário</h4>
       <table class="hours-table">
-        <tr><td>Terça a quinta</td><td>19:30 – 22:00</td></tr>
         <tr><td>Sexta</td><td>19:30 – 00:00</td></tr>
-        <tr><td>Sábado</td><td>12:00 – 00:00</td></tr>
-        <tr><td>Domingo</td><td>12:00 – 22:30</td></tr>
-        <tr><td>Segunda-feira</td><td>Fechado</td></tr>
+        <tr><td>Sábado</td><td>12:00 – 15:30, 18:30 – 00:00</td></tr>
+        <tr><td>Domingo</td><td>12:00 – 15:30, 18:30 – 22:00</td></tr>
+        <tr><td>Segunda a quinta</td><td>Fechado</td></tr>
       </table>
     </div>
     <p class="foot-loc">Portimão · Algarve</p>
@@ -832,7 +841,7 @@
         <p><strong>Esfiha da Casa</strong><br>
         Titular da atividade: Letícia Gonçalves Machado · NIF 298630338<br>
         Rua Infante Dom Henrique, nº 98, 8500-692 Portimão, Algarve, Portugal<br>
-        Contato: 938 211 480 (WhatsApp)<br>
+        Contato: 938 211 480 (WhatsApp) · esfihadacasaptm@gmail.com<br>
         Instagram: @esfihadacasaptm</p>
         <p>Reclamações: <a href="https://www.livroreclamacoes.pt/Inicio/" target="_blank" rel="noopener">Livro de Reclamações Eletrónico</a> — tem direito a reclamar diretamente aqui.</p>
         <p>Produtos alimentícios feitos artesanalmente. Todas as esfihas contêm glúten. Os alérgenos de cada sabor estão indicados no cardápio. Tudo é preparado na mesma cozinha, então pode ter traços de outros alérgenos. Se você tem alguma alergia, avisa a gente antes de pedir.</p>
@@ -840,7 +849,7 @@
 
       <div id="legal-priv" class="legal-panel">
         <h4>Privacidade</h4>
-        <p><strong>Responsável pelo tratamento de dados:</strong> Letícia Gonçalves Machado (NIF 298630338), titular da Esfiha da Casa. Contato: 938 211 480 (WhatsApp).</p>
+        <p><strong>Responsável pelo tratamento de dados:</strong> Letícia Gonçalves Machado (NIF 298630338), titular da Esfiha da Casa. Contato: 938 211 480 (WhatsApp) ou esfihadacasaptm@gmail.com.</p>
         <p>Ao enviar seu pedido, seu nome, telefone e morada (quando for entrega) ficam guardados no nosso sistema de pedidos, só para preparar, entregar e dar suporte ao seu pedido. A mensagem final também é enviada por você pelo WhatsApp, que é um serviço fornecido pela Meta — a conversa fica guardada lá também, sujeita à política de privacidade da própria Meta.</p>
         <p>Você tem direito a acessar, corrigir ou pedir a eliminação dos seus dados a qualquer momento, é só escrever no WhatsApp. Se não resolvermos, você pode reclamar à CNPD (Comissão Nacional de Proteção de Dados) — <a href="https://www.cnpd.pt" target="_blank" rel="noopener">cnpd.pt</a>.</p>
         <p>A gente usa uma ferramenta de estatísticas que conta visitas de forma anônima e agregada, sem cookies e sem identificar ninguém. O site não tem publicidade nem perfis de usuário.</p>
@@ -862,10 +871,10 @@
 
       <div id="legal-resol" class="legal-panel">
         <h4>Resolução de problemas</h4>
-        <p>Se alguma coisa der errado com seu pedido — item trocado, faltando, ou que não chegou como devia — fala com a gente no WhatsApp no mesmo dia.</p>
+        <p>Se alguma coisa der errado com seu pedido — item trocado, faltando, ou que não chegou como devia — fale com a gente no WhatsApp no mesmo dia.</p>
         <p>A gente sempre resolve: refaz o item, desconta no valor ou devolve o dinheiro, conforme o caso e o que fizer mais sentido pra você.</p>
         <p>Se não chegarmos a um acordo, você pode recorrer a uma entidade de Resolução Alternativa de Litígios de Consumo, como o <a href="https://www.consumidor.gov.pt/parceiros/entidades-ral.aspx" target="_blank" rel="noopener">Centro de Arbitragem de Conflitos de Consumo do Algarve</a>.</p>
-        <p>Sua opinião ajuda a gente a melhorar. Se tiver uma sugestão ou uma crítica, fala direto com a gente — a gente prefere saber.</p>
+        <p>Sua opinião ajuda a gente a melhorar. Se tiver uma sugestão ou uma crítica, fale direto com a gente — a gente prefere saber.</p>
       </div>
     </div>
   </div>
@@ -897,7 +906,7 @@
   // O site deixa de aceitar pedidos e mostra a mensagem abaixo.
   const ESGOTADO = false;
   const MODO_TESTE = false;
-  const ESGOTADO_MSG = "Acabou a massa de hoje! Foi tudo mais rapido do que a gente imaginava e ficamos sem palavras. Obrigado de coracao a quem pediu. Amanha tem fornada nova — a gente te espera.";
+  const ESGOTADO_MSG = "Acabou a massa de hoje! Foi tudo mais rápido do que a gente imaginava e ficamos sem palavras. Obrigado de coração a quem pediu. Amanhã tem fornada nova — a gente te espera.";
 
   const MENU = {
     salgadas: [
@@ -1008,16 +1017,20 @@
     return PROMO_ESFIHAS_TIERS.find(t => n >= t.min) || null;
   }
 
+  // Fase inicial do negocio (a par do emprego principal): so abrimos
+  // sexta, sabado e domingo -- segunda a quinta ficam fechados para dar
+  // tempo de preparar massa/recheios com calma e reduzir as horas pagas
+  // a estafeta nos dias parados. Sabado e domingo tem dois turnos (pausa
+  // a meio da tarde); sexta continua com um turno so.
   const HOURS = [
-    { day: 0, open: null, close: null },           // Domingo
-    { day: 1, open: null, close: null },           // Segunda — fechado
-    { day: 2, open: "19:30", close: "22:00" },      // Terça
-    { day: 3, open: "19:30", close: "22:00" },      // Quarta
-    { day: 4, open: "19:30", close: "22:00" },      // Quinta
-    { day: 5, open: "19:30", close: "23:59" },      // Sexta (até 00h)
-    { day: 6, open: "12:00", close: "23:59" },      // Sábado (até 00h)
+    { day: 0, shifts: [{ open: "12:00", close: "15:30" }, { open: "18:30", close: "22:00" }] }, // Domingo
+    { day: 1, shifts: [] },                                                                     // Segunda — fechado
+    { day: 2, shifts: [] },                                                                     // Terça — fechado
+    { day: 3, shifts: [] },                                                                     // Quarta — fechado
+    { day: 4, shifts: [] },                                                                      // Quinta — fechado
+    { day: 5, shifts: [{ open: "19:30", close: "23:59" }] },                                     // Sexta (até 00h)
+    { day: 6, shifts: [{ open: "12:00", close: "15:30" }, { open: "18:30", close: "23:59" }] },  // Sábado (até 00h)
   ];
-  HOURS[0] = { day: 0, open: "12:00", close: "22:30" }; // Domingo (horario normal)
   // ======================================================
 
   const qty = {};
@@ -1263,7 +1276,7 @@
   }
 
   function avisarEsgotado(id) {
-    mostrarFaltas(['Esgotou ' + nomeSabor(id) + ' por hoje. Escolhe outro sabor.']);
+    mostrarFaltas(['Esgotou ' + nomeSabor(id) + ' por hoje. Escolha outro sabor.']);
   }
 
   // Chamada sempre que o /estado responde: marca os sabores sem stock como
@@ -1346,7 +1359,7 @@
     const btn = document.querySelector('.btn-clear');
     if (!limparArmado) {
       limparArmado = true;
-      if (btn) { btn.textContent = 'Tem a certeza? Toque outra vez'; btn.classList.add('armado'); }
+      if (btn) { btn.textContent = 'Tem certeza? Toque outra vez'; btn.classList.add('armado'); }
       clearTimeout(limparTimer);
       limparTimer = setTimeout(desarmarLimpar, 4000);
       return;
@@ -1784,7 +1797,11 @@
     lines.push("Total estimado: " + fmt(computeTotal()));
     lines.push("Pagamento: " + payMethods());
     const tc = trocoParaCent();
-    if (tc != null) lines.push("Troco para: " + fmt(tc / 100));
+    if (tc != null) {
+      lines.push("Paga com nota de: " + fmt(tc / 100));
+      const trocoCalc = trocoCalculadoCent();
+      if (trocoCalc != null) lines.push("Troco: " + fmt(trocoCalc / 100));
+    }
     return lines.join("\n");
   }
 
@@ -1842,21 +1859,32 @@
     updateTotal();
   }
 
-  // So faz sentido pedir troco na entrega em dinheiro -- na retirada o
-  // pagamento e combinado na hora, ao vivo, sem estafeta a levar notas.
-  function pagaDinheiroNaEntrega() {
-    return orderType === 'entrega' && metodoPagamento === 'dinheiro';
+  // Pedimos a nota com que o cliente vai pagar sempre que escolhe dinheiro --
+  // seja entrega (o estafeta ja leva o troco) ou retirada (o troco fica
+  // pronto no balcao antes do cliente chegar).
+  function pagaDinheiro() {
+    return metodoPagamento === 'dinheiro';
   }
+
+  // Troco maximo que calculamos sozinhos: nota ate 20€ acima do total do
+  // pedido. Evita o caso chato de alguem pagar 5€ de esfihas com uma nota
+  // de 50 -- acima disso pedimos para combinar antes pelo WhatsApp.
+  const LIMITE_TROCO_CENT = 2000;
+
+  const NOTAS_PADRAO_EUR = [5, 10, 20, 50, 100];
 
   function atualizarCaixaTroco() {
     const box = document.getElementById('trocoBox');
     if (!box) return;
-    box.style.display = pagaDinheiroNaEntrega() ? 'block' : 'none';
-    if (!pagaDinheiroNaEntrega()) {
+    box.style.display = pagaDinheiro() ? 'block' : 'none';
+    if (!pagaDinheiro()) {
       const chk = document.getElementById('trocoCheck');
       if (chk) chk.checked = false;
       const wrap = document.getElementById('trocoValorWrap');
       if (wrap) wrap.style.display = 'none';
+    } else {
+      renderNotasTroco();
+      atualizarTrocoCalculado();
     }
   }
 
@@ -1864,14 +1892,57 @@
     const wrap = document.getElementById('trocoValorWrap');
     const chk = document.getElementById('trocoCheck');
     if (wrap) wrap.style.display = chk && chk.checked ? 'block' : 'none';
+    renderNotasTroco();
+    atualizarTrocoCalculado();
   }
 
-  function trocoParaCent() {
-    if (!pagaDinheiroNaEntrega()) return null;
+  // Mostra so as notas que fazem sentido para o total do pedido (nota >=
+  // total e troco dentro do limite), para nao oferecer uma nota de 50€
+  // para um pedido de 5€.
+  function renderNotasTroco() {
+    const wrap = document.getElementById('trocoNotas');
+    if (!wrap) return;
+    const totalCent = Math.round(computeTotal() * 100);
+    const opcoes = NOTAS_PADRAO_EUR.filter(n => {
+      const nCent = n * 100;
+      return nCent >= totalCent && (nCent - totalCent) <= LIMITE_TROCO_CENT;
+    });
+    wrap.innerHTML = opcoes.map(n =>
+      '<button type="button" class="nota-chip" onclick="escolherNotaTroco(' + n + ')">' + n + '€</button>'
+    ).join('');
+  }
+
+  function escolherNotaTroco(n) {
+    const input = document.getElementById('trocoValorInput');
+    if (input) input.value = n;
+    atualizarTrocoCalculado();
+  }
+
+  // So a NOTA que o cliente vai usar para pagar (ex.: 50€) -- o troco em
+  // si e sempre calculado a partir daqui, nunca pedido diretamente.
+  function notaPagamentoCent() {
+    if (!pagaDinheiro()) return null;
     const chk = document.getElementById('trocoCheck');
     if (!chk || !chk.checked) return null;
     const v = parseFloat((document.getElementById('trocoValorInput') || {}).value);
     return (v > 0) ? Math.round(v * 100) : null;
+  }
+
+  // Mantido por compatibilidade com o resto do codigo -- o campo gravado
+  // no pedido chama-se troco_para_cent e guarda o valor da nota usada.
+  function trocoParaCent() { return notaPagamentoCent(); }
+
+  function trocoCalculadoCent() {
+    const nota = notaPagamentoCent();
+    if (nota == null) return null;
+    return Math.max(0, nota - Math.round(computeTotal() * 100));
+  }
+
+  function atualizarTrocoCalculado() {
+    const el = document.getElementById('trocoCalculado');
+    if (!el) return;
+    const troco = trocoCalculadoCent();
+    el.textContent = troco != null ? ('Troco: ' + fmt(troco / 100)) : '';
   }
 
   function setOrderType(type) {
@@ -2313,10 +2384,10 @@
         entregaOpcionalPendente = { fee_cent: d.fee_cent, quote_id: d.quote_id, minutos: d.minutos || null, custo_cent: d.custo_cent || null };
         caixaCotacao('opcional',
           `<strong>Esta morada fica numa zona de entrega mais cara.</strong> A empresa de entregas cobra mais para lá chegar.<br>` +
-          `Quer pagar <strong>${fmt(d.fee_cent / 100)}</strong> de taxa de entrega, ou prefere levantar no local?` +
+          `Quer pagar <strong>${fmt(d.fee_cent / 100)}</strong> de taxa de entrega, ou prefere a retirada?` +
           `<div class="cotacao-opcoes">` +
           `<button type="button" class="aceitar" onclick="aceitarEntregaOpcional()">Aceito, quero entrega</button>` +
-          `<button type="button" class="recusar" onclick="recusarEntregaOpcional()">Prefiro levantamento</button>` +
+          `<button type="button" class="recusar" onclick="recusarEntregaOpcional()">Prefiro retirada</button>` +
           `</div>`);
       } else if (d && d.ok) {
         entregaOpcionalPendente = null;
@@ -2400,10 +2471,20 @@
     if (nomeV.length < 2) faltas.push('Falta escrever o seu nome.');
     const telV = ((document.getElementById('telInput') || {}).value || '').replace(/\D/g, '');
     if (telV.length < 9) faltas.push('Falta o número de WhatsApp (precisamos para a entrega).');
-    if (pagaDinheiroNaEntrega()) {
+    if (pagaDinheiro()) {
       const chk = document.getElementById('trocoCheck');
-      if (chk && chk.checked && trocoParaCent() == null) {
-        faltas.push('Troco: falta dizer para quanto você precisa de troco.');
+      if (chk && chk.checked) {
+        const nota = notaPagamentoCent();
+        if (nota == null) {
+          faltas.push('Troco: falta dizer com que nota você vai pagar.');
+        } else {
+          const totalCent = Math.round(computeTotal() * 100);
+          if (nota < totalCent) {
+            faltas.push('Troco: a nota tem de ser maior ou igual ao total do pedido.');
+          } else if (nota - totalCent > LIMITE_TROCO_CENT) {
+            faltas.push('Troco: nota muito maior que o pedido -- escolha uma nota mais próxima do total ou fale connosco pelo WhatsApp antes de enviar.');
+          }
+        }
       }
     }
     if (estadoLoja && !estadoLoja.ilimitado && contaEsfihasTotal() > (estadoLoja.restante || 0)) {
@@ -2413,7 +2494,7 @@
       const disp = stockDisponivel(i.id);
       const pedidas = qtdPedidaDoSabor(i.id);
       if (disp != null && pedidas > disp) {
-        faltas.push('Esgotou ' + i.name + ' (restam ' + disp + '). Tira esse sabor do pedido ou escolhe outro.');
+        faltas.push('Esgotou ' + i.name + ' (restam ' + disp + '). Tire esse sabor do pedido ou escolha outro.');
       }
     });
     if (orderType === 'entrega') {
@@ -2506,7 +2587,7 @@
         btn.textContent = textoOriginal;
         if (d.estado) estadoLoja = d.estado;
         const nomeSabor = d.sabor === 'doce' ? 'esse sabor doce' : (d.sabor || 'esse sabor');
-        mostrarFaltas(['Esgotou ' + nomeSabor + ' (restam ' + (d.restante_sabor || 0) + '). Tira esse sabor do pedido ou escolhe outro.']);
+        mostrarFaltas(['Esgotou ' + nomeSabor + ' (restam ' + (d.restante_sabor || 0) + '). Tire esse sabor do pedido ou escolha outro.']);
         return false;
       }
       else if (!d || d.ok !== true) {
@@ -2572,7 +2653,7 @@
     // o primeiro dia. Nos domingos seguintes (e nos anos seguintes) volta ao
     // horario normal (HOURS[0]) -- por isso tambem verifica o ano aqui.
     if (day === 0 && now.getFullYear() === 2026 && now.getMonth() === 9 && now.getDate() === 11) {
-      return { day: 0, open: "19:30", close: "22:30" };
+      return { day: 0, shifts: [{ open: "19:30", close: "22:30" }] };
     }
     return HOURS[day];
   }
@@ -2588,13 +2669,13 @@
       text.textContent = 'Abrimos a 11 de outubro';
       return;
     }
-    if (h && h.open) {
-      const [oh, om] = h.open.split(':').map(Number);
-      const [ch, cm] = h.close.split(':').map(Number);
-      const openMin = oh * 60 + om;
-      const closeMin = ch * 60 + cm;
+    if (h && h.shifts && h.shifts.length) {
       const nowMin = now.getHours() * 60 + now.getMinutes();
-      isOpen = nowMin >= openMin && nowMin <= closeMin;
+      isOpen = h.shifts.some(s => {
+        const [oh, om] = s.open.split(':').map(Number);
+        const [ch, cm] = s.close.split(':').map(Number);
+        return nowMin >= (oh * 60 + om) && nowMin <= (ch * 60 + cm);
+      });
     }
     // O horario diz quando costumamos abrir, mas o interruptor manual do
     // painel ("Loja aberta"/"Loja fechada") manda sempre mais que o horario,

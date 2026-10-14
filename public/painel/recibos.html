@@ -205,6 +205,10 @@
   async function carregar() {
     const dia = document.getElementById('diaSel').value;
     const r = await api('/painel/pedidos?dia=' + encodeURIComponent(dia));
+    // Todas as entregas reais do dia (pagas ou nao) -- usado so para o
+    // calculo da Andreza, que e paga pelas entregas feitas, nao pelas ja
+    // confirmadas como pagas no painel (ver bot de pagamentos, ponto 4).
+    const entregasReaisDia = (r.pedidos || []).filter(p => !p.ensaio && p.estado !== 'cancelado' && p.modo === 'entrega');
     const pedidos = (r.pedidos || [])
       .filter(p => !p.ensaio && p.pago && p.estado !== 'cancelado')
       .sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || ''));
@@ -253,9 +257,10 @@
     const totalIndefinido = total - totalDinheiro - totalMbway;
     const entregas = pedidos.filter(p => p.modo === 'entrega').length;
     const retiradas = pedidos.length - entregas;
+    const entregasAndreza = entregasReaisDia.length;
     let andrezaHtml = '';
-    if (entregas) {
-      const taxa = entregas * 3.5;
+    if (entregasAndreza) {
+      const taxa = entregasAndreza * 3.5;
       const recebe = Math.max(20, taxa);
       const complemento = Math.max(0, recebe - taxa);
       andrezaHtml = `

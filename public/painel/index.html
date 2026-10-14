@@ -300,7 +300,7 @@
         `Você pode acompanhar tudo por aqui:\n${link}`,
       pago: `Pagamento recebido, obrigado! 🙌\nJá vamos colocar seu pedido ${n} na bancada.\n\n👇 Veja seu pedido e a fatura aqui:\n${link}`,
       preparacao: `Seu pedido ${n} já está sendo feito 🔥\n\n${link}`,
-      caminho: `Seu pedido ${n} saiu para entrega 🛵\nFica de olho no telemóvel!\n\n${link}`,
+      caminho: `Seu pedido ${n} saiu para entrega 🛵\nFica de olho no celular!\n\n${link}`,
       pronto: `Seu pedido ${n} está pronto pra retirada 🫓\nQuando puder vir, é só avisar aqui.`,
       entregue: `Entregue! Bom apetite 😊\nSe curtiu, uma avaliação rápida no Google ajuda muito a gente (é rapidinho):\n⭐ https://g.page/r/CfdTFYTIhpoLECA/review\n\nE se rolou algum perrengue, conta pra gente também — a gente quer saber.`,
     };
@@ -332,7 +332,7 @@
     if (motivo === 'entrega') {
       return `Oi! Infelizmente não foi possível fazer a entrega do seu pedido ${n} e tivemos que cancelá-lo.\nDesculpe o transtorno! Se quiser tentar de novo, a gente tá por aqui: ${location.origin}`;
     }
-    return `Oi! Infelizmente seu pedido ${n} foi cancelado.\nSe quiser saber mais ou fazer um novo pedido, fala com a gente por aqui: ${location.origin}`;
+    return `Oi! Infelizmente seu pedido ${n} foi cancelado.\nSe quiser saber mais ou fazer um novo pedido, fale com a gente por aqui: ${location.origin}`;
   }
 
   function abrirWhats(id, momento) {
@@ -432,7 +432,7 @@
   function cancelarPedido(id) {
     const p = pedidos.find(x => x.id === id);
     if (!p) return;
-    if (!confirm(`Tem a certeza que quer cancelar o pedido #${p.numero}? Esta ação não pode ser desfeita.`)) return;
+    if (!confirm(`Tem certeza que quer cancelar o pedido #${p.numero}? Esta ação não pode ser desfeita.`)) return;
     cancelarPedidoId = id;
     const num = document.getElementById('mcNum');
     if (num) num.textContent = p.numero;
@@ -902,9 +902,9 @@
         <div class="meta">
           ${p.nome ? `<strong>${esc(p.nome)}</strong><br>` : ''}
           ${horaDe(p.criado_em)} · ${p.n_esfihas || 0} esfiha${p.n_esfihas === 1 ? '' : 's'}
-          ${p.senha ? ' · senha ' + p.senha : ''}
-          ${entrega ? ' · ' + (p.localidade || 'localidade por confirmar') : ''}
-          ${entrega && p.morada ? '<br>' + p.morada : ''}
+          ${p.senha ? ' · senha ' + esc(p.senha) : ''}
+          ${entrega ? ' · ' + esc(p.localidade || 'localidade por confirmar') : ''}
+          ${entrega && p.morada ? '<br>' + esc(p.morada) : ''}
           ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}

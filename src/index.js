@@ -1155,6 +1155,28 @@ async function guardarCustos(request, env) {
 
 export default {
   async fetch(request, env, ctx) {
+    const resp = await handleRequest(request, env, ctx);
+    return comHeadersSeguranca(resp);
+  },
+};
+
+// Cabecalhos de seguranca basicos, aplicados a toda a resposta (paginas e
+// API). CSP fica de fora de proposito -- o painel usa onclick inline em
+// varios sitios e uma CSP mal afinada parte esses botoes sem se poder
+// testar em producao; a via mais segura e configurar a CSP na Cloudflare
+// (Regras > Transformar Regras > Modificar Cabecalho de Resposta), onde da
+// para desligar num segundo se algo partir.
+function comHeadersSeguranca(resp) {
+  const h = new Headers(resp.headers);
+  h.set('X-Content-Type-Options', 'nosniff');
+  h.set('X-Frame-Options', 'DENY');
+  h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  h.set('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=()');
+  h.set('Strict-Transport-Security', 'max-age=31536000');
+  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
+}
+
+async function handleRequest(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
 
@@ -1240,5 +1262,4 @@ export default {
     } catch (e) {
       return j({ ok: false, erro: 'falha no servidor', detalhe: String(e && e.message || e) }, 500);
     }
-  },
-};
+}
