@@ -561,7 +561,7 @@
   .troco-box { margin-top: 10px; }
   .troco-check { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.86rem; color: var(--ink); cursor: pointer; }
   .troco-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--red); }
-  #trocoValorInput { margin-top: 8px; max-width: 160px; }
+  #trocoValorInput { max-width: 160px; }
   .troco-nota { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
   .troco-notas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .nota-chip {
@@ -570,6 +570,10 @@
   }
   .nota-chip:hover { border-color: var(--red); }
   .troco-calc { font-size: 0.86rem; font-weight: 700; color: var(--red); margin-top: 8px; min-height: 1.2em; }
+  .troco-input-wrap { position: relative; display: inline-block; margin-top: 8px; }
+  .troco-input-wrap input { padding-right: 26px; }
+  .troco-input-suffix { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-weight: 700; color: var(--ink-soft); pointer-events: none; }
+  .troco-aviso { font-size: 0.8rem; color: #8a5a00; background: #FFF3CD; border: 1px solid #ffe08a; border-radius: 8px; padding: 8px 10px; margin-top: 8px; line-height: 1.4; }
 
   .total-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -799,9 +803,13 @@
         </label>
         <div id="trocoValorWrap" style="display:none;">
           <div class="troco-notas" id="trocoNotas"></div>
-          <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" step="0.01" aria-label="Nota com que vai pagar" oninput="atualizarTrocoCalculado()">
+          <div class="troco-input-wrap">
+            <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" max="200" step="0.01" aria-label="Nota com que vai pagar, em euros" oninput="limitarNotaInput(); atualizarTrocoCalculado()">
+            <span class="troco-input-suffix">€</span>
+          </div>
           <p class="troco-nota">Diga o valor da nota com que vai pagar (ex.: 50€) — calculamos o troco na hora, já pronto seja na entrega ou quando vier buscar.</p>
           <p class="troco-calc" id="trocoCalculado"></p>
+          <p class="troco-aviso" id="trocoAviso" style="display:none;"></p>
         </div>
       </div>
 
@@ -1816,6 +1824,9 @@
       lines.push("Paga com nota de: " + fmt(tc / 100));
       const trocoCalc = trocoCalculadoCent();
       if (trocoCalc != null) lines.push("Troco: " + fmt(trocoCalc / 100));
+      if (trocoCalc != null && trocoCalc > LIMITE_TROCO_CENT) {
+        lines.push("⚠️ Troco alto -- confirmar com o cliente se temos disponível antes de aceitar.");
+      }
     }
     return lines.join("\n");
   }
@@ -1933,6 +1944,15 @@
     atualizarTrocoCalculado();
   }
 
+  // Nao deixa escrever um valor maior que a maior nota comum (200€) --
+  // so para evitar um numero sem sentido no campo.
+  function limitarNotaInput() {
+    const input = document.getElementById('trocoValorInput');
+    if (!input) return;
+    const v = parseFloat(input.value);
+    if (!isNaN(v) && v > 200) input.value = 200;
+  }
+
   // So a NOTA que o cliente vai usar para pagar (ex.: 50€) -- o troco em
   // si e sempre calculado a partir daqui, nunca pedido diretamente.
   function notaPagamentoCent() {
@@ -1955,9 +1975,26 @@
 
   function atualizarTrocoCalculado() {
     const el = document.getElementById('trocoCalculado');
+    const aviso = document.getElementById('trocoAviso');
     if (!el) return;
-    const troco = trocoCalculadoCent();
-    el.textContent = troco != null ? ('Troco: ' + fmt(troco / 100)) : '';
+    const nota = notaPagamentoCent();
+    if (nota == null) {
+      el.textContent = '';
+      if (aviso) aviso.style.display = 'none';
+      return;
+    }
+    const totalCent = Math.round(computeTotal() * 100);
+    const troco = Math.max(0, nota - totalCent);
+    el.textContent = 'Troco: ' + fmt(troco / 100);
+    const excedeLimite = nota >= totalCent && (nota - totalCent) > LIMITE_TROCO_CENT;
+    if (aviso) {
+      if (excedeLimite) {
+        aviso.textContent = '⚠️ Não garantimos troco para notas tão altas. Prefere pagar por MB Way? Se não der, fala connosco no WhatsApp antes de enviar, para confirmarmos se temos troco disponível.';
+        aviso.style.display = 'block';
+      } else {
+        aviso.style.display = 'none';
+      }
+    }
   }
 
   function setOrderType(type) {
@@ -2496,9 +2533,10 @@
           const totalCent = Math.round(computeTotal() * 100);
           if (nota < totalCent) {
             faltas.push('Troco: a nota tem de ser maior ou igual ao total do pedido.');
-          } else if (nota - totalCent > LIMITE_TROCO_CENT) {
-            faltas.push('Troco: nota muito maior que o pedido -- escolha uma nota mais próxima do total ou fale connosco pelo WhatsApp antes de enviar.');
           }
+          // Nota bem maior que o pedido: nao bloqueia o envio (perderia a
+          // venda a toa) -- so avisa na propria caixa de troco e sinaliza na
+          // mensagem do WhatsApp para a equipa confirmar antes de aceitar.
         }
       }
     }
