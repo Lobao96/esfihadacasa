@@ -913,6 +913,125 @@ async function adicionarItemPedido(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
 }
 
+// Corrige a PRODUCAO de um pedido ja enviado (o que vai para a cozinha e
+// para o talao), sem alterar o preco cobrado ao cliente -- para o caso de
+// um pedido especial dentro de um combo (ex.: cliente preferiu 17 salgadas
+// e 3 doces em vez da proporcao normal do combo): o total de esfihas e o
+// total a pagar ja estavam certos desde o inicio, so a REPARTICAO por
+// sabor/doce e que ficou errada. Serve tambem para simplesmente remover
+// uma linha (novo_n = 0) quando uma esfiha foi lancada a mais por engano.
+// idx identifica a linha dentro de itens.producao (a ordem em que aparece
+// no painel). O stock (salgada/doce especifico) e ajustado pela diferenca
+// entre a quantidade antiga e a nova -- novo_n maior debita mais stock,
+// menor devolve. n_esfihas e stock.usado tambem seguem essa diferenca
+// (reflete o que esta mesmo a ser produzido), mas total_cent NUNCA muda
+// aqui -- quem quiser alterar o valor cobrado usa "Adicionar item" (que
+// soma ao total) ou cancela o pedido.
+async function ajustarProducaoPedido(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  const idx = parseInt(b.idx, 10);
+  if (!Number.isInteger(idx) || idx < 0) return j({ ok: false, erro: 'linha invalida' }, 400);
+  const novoN = Math.max(0, Math.min(999, parseInt(b.novo_n, 10) || 0));
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (!it || Array.isArray(it) || !Array.isArray(it.producao) || !it.producao[idx]) {
+    return j({ ok: false, erro: 'linha nao encontrada' }, 404);
+  }
+  const linha = it.producao[idx];
+  const antigoN = Math.max(0, parseInt(linha.n, 10) || 0);
+  const delta = novoN - antigoN;   // positivo = produzir mais (gasta mais stock); negativo = devolve stock
+  const doce = !!linha.doce;
+  const sabor = linha.sabor;
+
+  if (novoN === 0) {
+    it.producao.splice(idx, 1);
+  } else {
+    linha.n = novoN;
+    linha.gratis = Math.min(novoN, Math.max(0, parseInt(linha.gratis, 10) || 0));
+  }
+  it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
+  it.linhas.push(novoN === 0
+    ? `Correção no painel: removida a linha ${antigoN}x ${sabor}`
+    : `Correção no painel: ${sabor} passou de ${antigoN}x para ${novoN}x`);
+
+  const novoNEsfihas = Math.max(0, (p.n_esfihas || 0) + delta);
+  const agora = new Date().toISOString();
+
+  const lote = [
+    env.DB.prepare('UPDATE pedidos SET itens = ?, n_esfihas = ?, atualizado_em = ? WHERE id = ?')
+      .bind(JSON.stringify(it), novoNEsfihas, agora, id),
+  ];
+  if (delta !== 0) {
+    lote.push(env.DB.prepare('UPDATE stock SET usado = MAX(0, usado + ?) WHERE dia = ?').bind(delta, p.dia));
+    if (doce) {
+      lote.push(env.DB.prepare(
+        `UPDATE stock_doces SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE id = 1`
+      ).bind(delta, agora));
+    } else if (sabor) {
+      lote.push(env.DB.prepare(
+        `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
+      ).bind(delta, agora, sabor));
+    }
+  }
+  await env.DB.batch(lote);
+
+  return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
+}
+
+// Acrescenta uma linha de producao NOVA a um pedido ja enviado, sem
+// alterar o preco (irmao de ajustarProducaoPedido -- esse corrige uma
+// linha existente, este cria uma linha onde antes nao havia nenhuma, ex.:
+// trocar uma esfiha de um sabor por outro dentro do mesmo combo).
+async function adicionarProducaoPedido(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  const sabor = SABORES[b.item];
+  if (!sabor) return j({ ok: false, erro: 'sabor invalido' }, 400);
+  const n = Math.max(1, Math.min(999, parseInt(b.n, 10) || 0));
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (!it || Array.isArray(it)) it = { linhas: [], producao: [], bebidas: [] };
+  if (!Array.isArray(it.producao)) it.producao = [];
+  if (!Array.isArray(it.linhas)) it.linhas = [];
+
+  it.producao.push({ sabor: sabor.nome, ing: '', extras: [], n, gratis: 0, doce: sabor.doce ? 1 : 0 });
+  it.linhas.push(`Correção no painel: + ${n}x ${sabor.nome} (sem alterar o preço)`);
+
+  const novoNEsfihas = (p.n_esfihas || 0) + n;
+  const agora = new Date().toISOString();
+
+  const lote = [
+    env.DB.prepare('UPDATE pedidos SET itens = ?, n_esfihas = ?, atualizado_em = ? WHERE id = ?')
+      .bind(JSON.stringify(it), novoNEsfihas, agora, id),
+    env.DB.prepare('UPDATE stock SET usado = usado + ? WHERE dia = ?').bind(n, p.dia),
+  ];
+  if (sabor.doce) {
+    lote.push(env.DB.prepare(
+      `UPDATE stock_doces SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE id = 1`
+    ).bind(n, agora));
+  } else {
+    lote.push(env.DB.prepare(
+      `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
+    ).bind(n, agora, sabor.nome));
+  }
+  await env.DB.batch(lote);
+
+  return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
+}
+
 async function mudarPedido(request, env) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
@@ -1406,6 +1525,8 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedidos' && request.method === 'GET') return await listar(request, env);
         if (p === '/api/painel/pedido' && request.method === 'POST') return await mudarPedido(request, env);
         if (p === '/api/painel/pedido-item' && request.method === 'POST') return await adicionarItemPedido(request, env);
+        if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
+        if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);

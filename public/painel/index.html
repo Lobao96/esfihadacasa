@@ -146,6 +146,9 @@
   .modal-opcoes{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
   .modal-opcoes .ac{width:100%;text-align:left}
   .modal-box .ac.sec-fechar{width:100%;background:transparent;border-color:rgba(58,31,18,.22);color:var(--ink-soft)}
+  .ma-linha{display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid rgba(58,31,18,.1)}
+  .ma-linha-nome{flex:1;font-size:.88rem;font-weight:700}
+  .ma-linha .ac{padding:4px 10px;font-size:.9rem;flex:none}
   .cancel-motivo{display:inline-block;margin-top:4px;font-weight:800;font-size:.76rem;
     color:var(--red-dark);background:#FDECEC;border-radius:999px;padding:3px 10px}
 
@@ -250,8 +253,13 @@
 
   <div class="modal-overlay" id="modalAdicionar" style="display:none">
     <div class="modal-box">
-      <h3>Adicionar item ao pedido</h3>
-      <p class="nota">Pedido #<span id="maNum"></span> — para quando o cliente pede mais depois de já ter enviado o pedido.</p>
+      <h3>Editar itens do pedido</h3>
+      <p class="nota">Pedido #<span id="maNum"></span></p>
+
+      <p class="nota" style="font-weight:800;margin-top:14px">Produção atual</p>
+      <div id="maLinhasAtuais"></div>
+
+      <p class="nota" style="font-weight:800;margin-top:18px">Acrescentar item novo</p>
       <select id="maSabor" style="width:100%;font-family:inherit;font-weight:700;font-size:.95rem;padding:10px 12px;border:1.5px solid rgba(58,31,18,.2);border-radius:10px;background:var(--white);color:var(--ink);margin-bottom:10px">
         <optgroup label="Salgadas">
           <option value="trad">A Tradicional</option>
@@ -266,8 +274,12 @@
         </optgroup>
       </select>
       <input type="number" id="maQtd" value="1" min="1" max="50" style="width:100%;margin-bottom:10px">
-      <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:.88rem;color:var(--ink-soft);margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:.88rem;color:var(--ink-soft);margin-bottom:8px">
         <input type="checkbox" id="maGratis" style="width:18px;height:18px"> É oferta (grátis, não soma ao total)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:.88rem;color:var(--ink-soft);margin-bottom:14px">
+        <input type="checkbox" id="maSemPreco" style="width:18px;height:18px" onchange="document.getElementById('maGratis').disabled=this.checked">
+        Correção de produção (não altera o valor já cobrado)
       </label>
       <button class="ac destaque" style="width:100%;margin-bottom:8px" onclick="confirmarAdicionarItem()">Adicionar</button>
       <button class="ac sec-fechar" onclick="fecharModalAdicionar()">Fechar</button>
@@ -960,7 +972,7 @@
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
           <button class="ac" onclick="imprimirPedido(${p.id})">🖨️ Imprimir</button>
-          ${p.estado !== 'cancelado' ? `<button class="ac" onclick="abrirModalAdicionar(${p.id})">➕ Adicionar item</button>` : ''}
+          ${p.estado !== 'cancelado' ? `<button class="ac" onclick="abrirModalAdicionar(${p.id})">✏️ Editar itens</button>` : ''}
           ${p.estado !== 'cancelado' ? `<button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>` : ''}
         </div>
       </div>`;
@@ -1006,7 +1018,10 @@
     const qtd = document.getElementById('maQtd');
     if (qtd) qtd.value = 1;
     const gratis = document.getElementById('maGratis');
-    if (gratis) gratis.checked = false;
+    if (gratis) { gratis.checked = false; gratis.disabled = false; }
+    const semPreco = document.getElementById('maSemPreco');
+    if (semPreco) semPreco.checked = false;
+    renderLinhasAtuais(id);
     const modal = document.getElementById('modalAdicionar');
     if (modal) modal.style.display = 'flex';
   }
@@ -1017,15 +1032,60 @@
     if (modal) modal.style.display = 'none';
   }
 
+  // Mostra as linhas de produção já lançadas neste pedido, cada uma com
+  // −/+ (corrige a quantidade sem tocar no valor cobrado) e 🗑 (remove a
+  // linha toda) -- é o que faltava para conseguir corrigir um pedido já
+  // enviado (antes só se conseguia acrescentar, nunca retirar).
+  function renderLinhasAtuais(id) {
+    const cont = document.getElementById('maLinhasAtuais');
+    if (!cont) return;
+    const p = pedidos.find(x => x.id === id);
+    const dados = p ? dadosDe(p) : null;
+    const prod = (dados && dados.producao) || [];
+    if (!prod.length) { cont.innerHTML = '<p class="nota"><em>Sem itens na produção.</em></p>'; return; }
+    cont.innerHTML = prod.map((x, idx) => `
+      <div class="ma-linha">
+        <span class="ma-linha-nome">${x.n}&times; ${esc(x.sabor)}${x.gratis ? ' <small>(oferta)</small>' : ''}</span>
+        <button class="ac" onclick="ajustarLinhaProducao(${id}, ${idx}, -1)" title="Tirar uma">−</button>
+        <button class="ac" onclick="ajustarLinhaProducao(${id}, ${idx}, 1)" title="Pôr mais uma">+</button>
+        <button class="ac" onclick="removerLinhaProducao(${id}, ${idx})" title="Remover esta linha">🗑</button>
+      </div>`).join('');
+  }
+
+  async function ajustarLinhaProducao(id, idx, delta) {
+    const p = pedidos.find(x => x.id === id);
+    const dados = p ? dadosDe(p) : null;
+    const linha = dados && dados.producao && dados.producao[idx];
+    if (!linha) return;
+    const novo_n = Math.max(0, (linha.n || 0) + delta);
+    await api('/painel/pedido-producao-ajustar', { method: 'POST', body: JSON.stringify({ id, idx, novo_n }) });
+    await carregar();
+    renderLinhasAtuais(id);
+  }
+
+  async function removerLinhaProducao(id, idx) {
+    if (!confirm('Remover esta linha da produção? Isto não altera o valor já cobrado ao cliente.')) return;
+    await api('/painel/pedido-producao-ajustar', { method: 'POST', body: JSON.stringify({ id, idx, novo_n: 0 }) });
+    await carregar();
+    renderLinhasAtuais(id);
+  }
+
   async function confirmarAdicionarItem() {
     const id = adicionarPedidoId;
     if (!id) return;
     const item = document.getElementById('maSabor').value;
     const n = Math.max(1, parseInt(document.getElementById('maQtd').value, 10) || 1);
     const gratis = document.getElementById('maGratis').checked;
-    fecharModalAdicionar();
-    await api('/painel/pedido-item', { method: 'POST', body: JSON.stringify({ id, item, n, gratis }) });
+    const semPreco = document.getElementById('maSemPreco').checked;
+    if (semPreco) {
+      await api('/painel/pedido-producao-adicionar', { method: 'POST', body: JSON.stringify({ id, item, n }) });
+    } else {
+      await api('/painel/pedido-item', { method: 'POST', body: JSON.stringify({ id, item, n, gratis }) });
+    }
     await carregar();
+    renderLinhasAtuais(id);
+    const qtd = document.getElementById('maQtd');
+    if (qtd) qtd.value = 1;
   }
 
   async function marcar(id, campos) {
