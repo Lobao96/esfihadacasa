@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS stock (
   dia           TEXT PRIMARY KEY,
   total         INTEGER NOT NULL DEFAULT 0,   -- quantas esfihas foram feitas hoje
   usado         INTEGER NOT NULL DEFAULT 0,   -- quantas já foram confirmadas
-  aberto        INTEGER NOT NULL DEFAULT 1,   -- valor do override manual (só importa se tem_override = 1)
-  tem_override  INTEGER NOT NULL DEFAULT 0    -- 0 = segue o horário automático; 1 = usa o valor de "aberto" (só vale para este dia)
+  aberto          INTEGER NOT NULL DEFAULT 1,   -- valor do override manual (só importa enquanto override_expira estiver no futuro)
+  tem_override    INTEGER NOT NULL DEFAULT 0,   -- coluna antiga, sem uso (ver override_expira) -- mantida para não partir migrações já aplicadas
+  override_expira TEXT                          -- instante (ISO, UTC) até quando o override de "aberto" vale; NULL = sem override, segue o horário automático. Expira na próxima abertura/fecho automático ou à meia-noite seguinte, o que vier primeiro.
 );

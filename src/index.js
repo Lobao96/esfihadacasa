@@ -62,6 +62,70 @@ function estaAbertoAutomatico(agora = new Date()) {
   });
 }
 
+// Converte um dia (AAAA-MM-DD) e hora (HH:MM) DE LISBOA no instante UTC
+// correspondente -- preciso para calcular a expiracao do override (ver
+// expiraOverride mais abaixo). Tem de lidar com o deslize de fuso (Lisboa
+// esta a UTC+0 ou UTC+1 segundo a epoca do ano) e com a mudanca de dia
+// civil entre UTC e Lisboa perto da meia-noite.
+function instanteLisboa(diaStr, horaStr) {
+  const palpite = new Date(`${diaStr}T${horaStr}:00Z`);
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(palpite);
+  const obj = {};
+  for (const p of partes) obj[p.type] = p.value;
+  const comoUTC = Date.UTC(
+    Number(obj.year), Number(obj.month) - 1, Number(obj.day),
+    Number(obj.hour), Number(obj.minute), Number(obj.second)
+  );
+  const desvio = comoUTC - palpite.getTime();
+  return new Date(palpite.getTime() - desvio);
+}
+
+// Proxima vez (depois de "agora") em que o horario automatico abre ou
+// fecha a loja -- e quando um override manual deve deixar de valer (ver
+// comentario em expiraOverride).
+function proximaTransicaoAutomatica(agora) {
+  for (let i = 0; i < 9; i++) {
+    const data = new Date(agora.getTime() + i * 86400000);
+    const diaStr = diaLisboa(data);
+    const diaSemana = new Date(diaStr + 'T00:00:00Z').getUTCDay();
+    const horario = HORARIO_AUTOMATICO.find(h => h.day === diaSemana);
+    const shifts = (horario && horario.shifts) || [];
+    const candidatos = [];
+    for (const s of shifts) { candidatos.push(s.open); candidatos.push(s.close); }
+    for (const horaStr of candidatos.sort()) {
+      const instante = instanteLisboa(diaStr, horaStr);
+      if (instante.getTime() > agora.getTime()) return instante;
+    }
+  }
+  // Nunca deveria chegar aqui (ha sempre um turno nos proximos 9 dias),
+  // mas por seguranca devolve algo no futuro em vez de travar.
+  return new Date(agora.getTime() + 9 * 86400000);
+}
+
+// Meia-noite de Lisboa seguinte a "agora" -- limite de seguranca para a
+// expiracao do override, para nunca ficar pendurado de um dia para o outro
+// mesmo em semanas sem mais nenhum turno automatico (ex.: segunda-feira).
+function meiaNoiteSeguinte(agora) {
+  const amanha = new Date(agora.getTime() + 86400000);
+  const amanhaStr = diaLisboa(amanha);
+  return instanteLisboa(amanhaStr, '00:00');
+}
+
+// Quando um override manual (forcar abrir/fechar no painel) deixa de
+// valer: na proxima transicao automatica (abrir ou fechar, o que vier
+// primeiro) -- ou a meia-noite seguinte, se isso vier primeiro (ex.: numa
+// segunda-feira, sem mais nenhum turno essa semana). A partir desse
+// instante a loja volta a seguir o horario automatico sozinha.
+function expiraOverride(agora) {
+  return new Date(Math.min(
+    proximaTransicaoAutomatica(agora).getTime(),
+    meiaNoiteSeguinte(agora).getTime()
+  ));
+}
+
 // Comparacao da palavra-passe sem revelar onde falhou.
 function autorizado(request, env) {
   const dada = request.headers.get('x-painel-pass') || '';
@@ -73,14 +137,15 @@ function autorizado(request, env) {
 }
 
 async function estadoDoDia(db, dia) {
-  let r = await db.prepare('SELECT total, usado, aberto, tem_override FROM stock WHERE dia = ?').bind(dia).first();
+  let r = await db.prepare('SELECT total, usado, aberto, override_expira FROM stock WHERE dia = ?').bind(dia).first();
   if (!r) {
-    // tem_override = 0 -- um dia novo nasce sempre a seguir o horario
-    // automatico, nunca "aberto por defeito" como acontecia antes. So fica
-    // forcado (aberto ou fechado) quando o dono usa o botao no painel, e
-    // mesmo assim so vale para o dia de hoje (ver comentario acima).
-    await db.prepare('INSERT OR IGNORE INTO stock (dia, total, usado, aberto, tem_override) VALUES (?, 0, 0, 1, 0)').bind(dia).run();
-    r = { total: 0, usado: 0, aberto: 1, tem_override: 0 };
+    // override_expira = NULL -- um dia novo nasce sempre a seguir o
+    // horario automatico, nunca "aberto por defeito" como acontecia antes.
+    // So fica forcado (aberto ou fechado) quando o dono usa o botao no
+    // painel, e mesmo assim so ate a proxima transicao automatica ou a
+    // meia-noite seguinte, o que vier primeiro (ver expiraOverride).
+    await db.prepare('INSERT OR IGNORE INTO stock (dia, total, usado, aberto, override_expira) VALUES (?, 0, 0, 1, NULL)').bind(dia).run();
+    r = { total: 0, usado: 0, aberto: 1, override_expira: null };
   }
   // O total de esfihas por vender deixou de ser um numero escrito a mao:
   // e sempre a soma do stock real (salgadas congeladas por sabor + massa
@@ -97,13 +162,16 @@ async function estadoDoDia(db, dia) {
   const total = somaSalg + doceRestante;
   const restante = Math.max(0, total);
   // automatico: o que o horario semanal diz AGORA, sem nenhum override.
-  // overrideAtivo: se o dono usou o botao do painel hoje para forcar um
-  // valor diferente do automatico (nos dois sentidos -- abrir fora de horas
-  // ou fechar dentro de horas). Sem override, o automatico manda sempre;
-  // com override, o override manda, mas SO PARA HOJE -- amanha e um dia
-  // novo, sem override, a seguir o automatico outra vez.
-  const automatico = estaAbertoAutomatico(new Date());
-  const overrideAtivo = !!r.tem_override;
+  // overrideAtivo: se o dono forcou um valor diferente do automatico (nos
+  // dois sentidos -- abrir fora de horas ou fechar dentro de horas) e esse
+  // forcar ainda nao expirou. Sem override ativo, o automatico manda
+  // sempre; com override ativo, o override manda -- ate a proxima
+  // transicao automatica (abrir ou fechar) ou a meia-noite seguinte, o que
+  // vier primeiro (ver expiraOverride), altura em que volta a seguir o
+  // automatico sozinho, sem precisar de nenhuma acao do dono.
+  const agora = new Date();
+  const automatico = estaAbertoAutomatico(agora);
+  const overrideAtivo = !!(r.override_expira && new Date(r.override_expira).getTime() > agora.getTime());
   const abertoManual = overrideAtivo ? !!r.aberto : automatico;
   return {
     dia,
@@ -118,6 +186,7 @@ async function estadoDoDia(db, dia) {
     doceRestante,
     automatico,
     overrideAtivo,
+    overrideExpira: overrideAtivo ? r.override_expira : null,
     // abertoManual (nome mantido por compatibilidade com o painel) e o
     // estado "deveria estar aberta" antes de olhar ao stock -- automatico,
     // exceto com override ativo hoje. aberto e o estado real que bloqueia
@@ -914,12 +983,18 @@ async function mudarStock(request, env) {
   const dia = limpar(b.dia, 10) || diaLisboa();
   await estadoDoDia(env.DB, dia);
   if (b.aberto === null) {
-    // Limpa o override de hoje e volta a seguir o horario automatico (botao
-    // "Usar horario automatico" no painel) -- util se o dono se enganou ao
-    // forcar aberto/fechado e quer desfazer sem esperar pelo dia seguinte.
-    await env.DB.prepare('UPDATE stock SET tem_override = 0 WHERE dia = ?').bind(dia).run();
+    // Limpa o override e volta a seguir o horario automatico ja (botao
+    // "Usar horario automatico agora" no painel) -- util se o dono se
+    // enganou ao forcar aberto/fechado e quer desfazer sem esperar pela
+    // proxima transicao.
+    await env.DB.prepare('UPDATE stock SET override_expira = NULL WHERE dia = ?').bind(dia).run();
   } else if (b.aberto !== undefined) {
-    await env.DB.prepare('UPDATE stock SET aberto = ?, tem_override = 1 WHERE dia = ?').bind(b.aberto ? 1 : 0, dia).run();
+    // O override forcado agora so vale ATE a proxima transicao automatica
+    // (abrir ou fechar) ou a meia-noite seguinte, o que vier primeiro --
+    // depois disso a loja volta a seguir o horario sozinha, sem precisar
+    // de nenhum botao.
+    const expira = expiraOverride(new Date()).toISOString();
+    await env.DB.prepare('UPDATE stock SET aberto = ?, override_expira = ? WHERE dia = ?').bind(b.aberto ? 1 : 0, expira, dia).run();
   }
   return j({ ok: true, estado: await estadoDoDia(env.DB, dia) });
 }
