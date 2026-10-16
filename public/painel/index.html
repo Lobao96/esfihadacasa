@@ -193,6 +193,10 @@
       </div>
       <div class="barra"><i id="barra" style="width:0%"></i></div>
       <div id="stockAviso" style="display:none;flex-basis:100%;font-size:.8rem;font-weight:700;color:var(--red);margin-top:4px"></div>
+      <div id="overrideInfo" style="display:none;flex-basis:100%;font-size:.78rem;color:var(--ink-soft);margin-top:4px">
+        Fora do horário automático desde hoje.
+        <button type="button" onclick="voltarAutomatico()" style="font-size:.78rem;background:none;border:none;text-decoration:underline;color:inherit;cursor:pointer;padding:0">Usar horário automático agora</button>
+      </div>
     </div>
 
     <div class="saboresbox">
@@ -723,6 +727,11 @@
     // o stock chegou a zero.
     bt.textContent = est.abertoManual ? 'Loja aberta' : 'Loja fechada';
     bt.classList.toggle('on', !est.abertoManual);
+    // overrideAtivo = o dono forcou um estado diferente do horario
+    // automatico, so vale para hoje (amanha volta a seguir o automatico
+    // sozinho). Sem override, mostra-se so o essencial, sem alarme.
+    const overrideInfo = document.getElementById('overrideInfo');
+    if (overrideInfo) overrideInfo.style.display = est.overrideAtivo ? 'flex' : 'none';
     const aviso = document.getElementById('stockAviso');
     if (aviso) {
       if (est.abertoManual && !est.aberto) {
@@ -772,10 +781,16 @@
   async function alternarLoja() {
     const vaiAbrir = !est.abertoManual;
     const pergunta = vaiAbrir
-      ? 'Quer mesmo abrir a loja agora e aceitar novos pedidos?'
-      : 'Quer mesmo fechar a loja agora e bloquear novos pedidos?';
+      ? 'Quer mesmo abrir a loja agora e aceitar novos pedidos, fora do horário automático se for o caso? Isto só vale até ao fim do dia de hoje.'
+      : 'Quer mesmo fechar a loja agora e bloquear novos pedidos? Isto só vale até ao fim do dia de hoje -- amanhã volta a seguir o horário automático.';
     if (!confirm(pergunta)) return;
     const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ aberto: vaiAbrir ? 1 : 0 }) });
+    est = d.estado; pintarStock();
+  }
+
+  async function voltarAutomatico() {
+    if (!confirm('Quer voltar a seguir o horário automático, em vez do estado forçado manualmente?')) return;
+    const d = await api('/painel/stock', { method: 'POST', body: JSON.stringify({ aberto: null }) });
     est = d.estado; pintarStock();
   }
 

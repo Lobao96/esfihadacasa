@@ -21,8 +21,9 @@ CREATE TABLE IF NOT EXISTS pedidos (
 CREATE INDEX IF NOT EXISTS idx_pedidos_dia ON pedidos (dia, ensaio, numero);
 
 CREATE TABLE IF NOT EXISTS stock (
-  dia    TEXT PRIMARY KEY,
-  total  INTEGER NOT NULL DEFAULT 0,   -- quantas esfihas foram feitas hoje
-  usado  INTEGER NOT NULL DEFAULT 0,   -- quantas já foram confirmadas
-  aberto INTEGER NOT NULL DEFAULT 1    -- 0 = loja fechada por hoje
+  dia           TEXT PRIMARY KEY,
+  total         INTEGER NOT NULL DEFAULT 0,   -- quantas esfihas foram feitas hoje
+  usado         INTEGER NOT NULL DEFAULT 0,   -- quantas já foram confirmadas
+  aberto        INTEGER NOT NULL DEFAULT 1,   -- valor do override manual (só importa se tem_override = 1)
+  tem_override  INTEGER NOT NULL DEFAULT 0    -- 0 = segue o horário automático; 1 = usa o valor de "aberto" (só vale para este dia)
 );

@@ -19,6 +19,49 @@ function horaLisboa(d = new Date()) {
   }).format(d);
 }
 
+// Horario automatico da loja -- tem de ficar sempre igual ao HOURS em
+// public/index.html e public/teste/index.html (se mudares o horario, muda
+// aqui tambem). Usado para saber se a loja deve estar aberta AGORA quando
+// nao ha nenhum override manual ativo para o dia (ver estadoDoDia mais
+// abaixo) -- e o que garante que um "abrir manualmente" de uma segunda-feira
+// nunca fica pendurado para os dias seguintes: cada dia novo (linha nova na
+// tabela stock) comeca sem override, e por isso segue logo este horario.
+// day: 0=domingo .. 6=sabado (mesma convencao do Date.getDay()).
+const HORARIO_AUTOMATICO = [
+  { day: 0, shifts: [{ open: '12:00', close: '15:30' }, { open: '18:30', close: '22:00' }] }, // Domingo
+  { day: 1, shifts: [] }, // Segunda - fechado
+  { day: 2, shifts: [] }, // Terca - fechado
+  { day: 3, shifts: [] }, // Quarta - fechado
+  { day: 4, shifts: [] }, // Quinta - fechado
+  { day: 5, shifts: [{ open: '19:30', close: '23:59' }] }, // Sexta (ate 00h)
+  { day: 6, shifts: [{ open: '12:00', close: '15:30' }, { open: '18:30', close: '23:59' }] }, // Sabado (ate 00h)
+];
+
+function horaMinutoLisboa(d = new Date()) {
+  const partes = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Lisbon', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const h = Number((partes.find(p => p.type === 'hour') || {}).value || 0);
+  const m = Number((partes.find(p => p.type === 'minute') || {}).value || 0);
+  return h * 60 + m;
+}
+
+function estaAbertoAutomatico(agora = new Date()) {
+  const dia = diaLisboa(agora);
+  // Dia da semana a partir da data (texto AAAA-MM-DD) em vez da hora atual,
+  // para nao depender do fuso do runtime -- o dia-da-semana de uma data e
+  // sempre o mesmo, seja a que horas for.
+  const diaSemana = new Date(dia + 'T00:00:00Z').getUTCDay();
+  const horario = HORARIO_AUTOMATICO.find(h => h.day === diaSemana);
+  if (!horario || !horario.shifts.length) return false;
+  const agoraMin = horaMinutoLisboa(agora);
+  return horario.shifts.some(s => {
+    const [oh, om] = s.open.split(':').map(Number);
+    const [ch, cm] = s.close.split(':').map(Number);
+    return agoraMin >= (oh * 60 + om) && agoraMin <= (ch * 60 + cm);
+  });
+}
+
 // Comparacao da palavra-passe sem revelar onde falhou.
 function autorizado(request, env) {
   const dada = request.headers.get('x-painel-pass') || '';
@@ -30,10 +73,14 @@ function autorizado(request, env) {
 }
 
 async function estadoDoDia(db, dia) {
-  let r = await db.prepare('SELECT total, usado, aberto FROM stock WHERE dia = ?').bind(dia).first();
+  let r = await db.prepare('SELECT total, usado, aberto, tem_override FROM stock WHERE dia = ?').bind(dia).first();
   if (!r) {
-    await db.prepare('INSERT OR IGNORE INTO stock (dia, total, usado, aberto) VALUES (?, 0, 0, 1)').bind(dia).run();
-    r = { total: 0, usado: 0, aberto: 1 };
+    // tem_override = 0 -- um dia novo nasce sempre a seguir o horario
+    // automatico, nunca "aberto por defeito" como acontecia antes. So fica
+    // forcado (aberto ou fechado) quando o dono usa o botao no painel, e
+    // mesmo assim so vale para o dia de hoje (ver comentario acima).
+    await db.prepare('INSERT OR IGNORE INTO stock (dia, total, usado, aberto, tem_override) VALUES (?, 0, 0, 1, 0)').bind(dia).run();
+    r = { total: 0, usado: 0, aberto: 1, tem_override: 0 };
   }
   // O total de esfihas por vender deixou de ser um numero escrito a mao:
   // e sempre a soma do stock real (salgadas congeladas por sabor + massa
@@ -49,6 +96,15 @@ async function estadoDoDia(db, dia) {
   const doceRestante = (doce && doce.quantidade) || 0;
   const total = somaSalg + doceRestante;
   const restante = Math.max(0, total);
+  // automatico: o que o horario semanal diz AGORA, sem nenhum override.
+  // overrideAtivo: se o dono usou o botao do painel hoje para forcar um
+  // valor diferente do automatico (nos dois sentidos -- abrir fora de horas
+  // ou fechar dentro de horas). Sem override, o automatico manda sempre;
+  // com override, o override manda, mas SO PARA HOJE -- amanha e um dia
+  // novo, sem override, a seguir o automatico outra vez.
+  const automatico = estaAbertoAutomatico(new Date());
+  const overrideAtivo = !!r.tem_override;
+  const abertoManual = overrideAtivo ? !!r.aberto : automatico;
   return {
     dia,
     total,
@@ -60,11 +116,14 @@ async function estadoDoDia(db, dia) {
     // deixar saber la para o fim, ao tentar enviar o pedido.
     porSabor,
     doceRestante,
-    // abertoManual e o que o dono escolheu no botao do painel (fechar/abrir loja).
-    // aberto e o estado real que bloqueia pedidos: so fica aberto se o dono
-    // quis abrir E ainda houver stock.
-    abertoManual: !!r.aberto,
-    aberto: !!r.aberto && restante > 0,
+    automatico,
+    overrideAtivo,
+    // abertoManual (nome mantido por compatibilidade com o painel) e o
+    // estado "deveria estar aberta" antes de olhar ao stock -- automatico,
+    // exceto com override ativo hoje. aberto e o estado real que bloqueia
+    // pedidos: so fica aberto se abertoManual E ainda houver stock.
+    abertoManual,
+    aberto: abertoManual && restante > 0,
   };
 }
 
@@ -854,8 +913,13 @@ async function mudarStock(request, env) {
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const dia = limpar(b.dia, 10) || diaLisboa();
   await estadoDoDia(env.DB, dia);
-  if (b.aberto !== undefined) {
-    await env.DB.prepare('UPDATE stock SET aberto = ? WHERE dia = ?').bind(b.aberto ? 1 : 0, dia).run();
+  if (b.aberto === null) {
+    // Limpa o override de hoje e volta a seguir o horario automatico (botao
+    // "Usar horario automatico" no painel) -- util se o dono se enganou ao
+    // forcar aberto/fechado e quer desfazer sem esperar pelo dia seguinte.
+    await env.DB.prepare('UPDATE stock SET tem_override = 0 WHERE dia = ?').bind(dia).run();
+  } else if (b.aberto !== undefined) {
+    await env.DB.prepare('UPDATE stock SET aberto = ?, tem_override = 1 WHERE dia = ?').bind(b.aberto ? 1 : 0, dia).run();
   }
   return j({ ok: true, estado: await estadoDoDia(env.DB, dia) });
 }
