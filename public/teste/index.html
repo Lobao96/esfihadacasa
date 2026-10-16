@@ -281,10 +281,6 @@
   .extra-row label { flex: 1; font-size: 0.92rem; cursor: pointer; }
   .extra-row .price { font-size: 0.85rem; color: var(--ink-soft); }
   .extra-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--red); }
-  .obs-input { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; padding: 7px 10px;
-    font-size: 0.85rem; border: 1px solid var(--line); border-radius: 8px; font-family: inherit;
-    background: var(--bg); color: var(--ink); }
-  .obs-input::placeholder { color: var(--ink-soft); }
 
   .toggle-group {
     display: flex; gap: 8px; margin-top: 18px;
@@ -1365,7 +1361,7 @@
     if (delta > 0) {
       const disp = stockDisponivel(id);
       if (disp != null && qtdPedidaDoSabor(id) >= disp) { avisarEsgotado(id); return; }
-      units.push({ uid: ++uidCounter, itemId: id, extras: {}, picks: [], picksDoces: [], bebidas: [], obs: '' });
+      units.push({ uid: ++uidCounter, itemId: id, extras: {}, picks: [], picksDoces: [], bebidas: [] });
     } else {
       for (let k = units.length - 1; k >= 0; k--) {
         if (units[k].itemId === id) { units.splice(k, 1); break; }
@@ -1416,7 +1412,7 @@
     const atual = units.filter(u => u.itemId === id).length;
     if (n > atual) {
       for (let k = atual; k < n; k++) {
-        units.push({ uid: ++uidCounter, itemId: id, extras: {}, picks: [], picksDoces: [], bebidas: [], obs: '' });
+        units.push({ uid: ++uidCounter, itemId: id, extras: {}, picks: [], picksDoces: [], bebidas: [] });
       }
     } else if (n < atual) {
       let tirar = atual - n;
@@ -1434,28 +1430,6 @@
     syncCounts();
     renderOrderList();
     updateTotal();
-  }
-
-  // Observacao livre do cliente por esfiha (ex.: "sem cebola", "alergia a
-  // queijo") -- sem efeito no preco, so informativa para a cozinha. Corta
-  // quebras de linha e limita o tamanho para nao desformatar o painel nem
-  // a mensagem de WhatsApp.
-  function limparObs(v) {
-    return String(v || '').replace(/[\r\n]+/g, ' ').slice(0, 70);
-  }
-
-  function setUnitObs(uid, valor) {
-    const u = units.find(x => x.uid === uid);
-    if (!u) return;
-    u.obs = limparObs(valor);
-  }
-
-  function setPickObs(uid, tipo, idx, valor) {
-    const u = units.find(x => x.uid === uid);
-    if (!u) return;
-    const pk = picksDe(u, tipo)[idx];
-    if (!pk) return;
-    pk.obs = limparObs(valor);
   }
 
   function toggleUnitExtra(uid, extraId) {
@@ -1484,7 +1458,7 @@
     const max = tipo === 'doce' ? c.nDoces : c.nSalgadas;
     const arr = picksDe(u, tipo);
     if (arr.length >= max) return;
-    arr.push({ sid: sid, extras: {}, obs: '' });
+    arr.push({ sid: sid, extras: {} });
     renderOrderList(); updateTotal();
   }
 
@@ -1533,8 +1507,6 @@
           <button class="unit-del" onclick="comboRemovePick(${u.uid}, '${tipo}', ${idx})" title="Tirar esta esfiha" aria-label="Tirar esta esfiha">🗑</button>
         </div>
         <div class="ex-chips">${chips}</div>
-        <input type="text" class="obs-input" maxlength="70" placeholder="Observação (opcional) — ex.: sem cebola"
-               value="${(pk.obs || '').replace(/"/g, '&quot;')}" oninput="setPickObs(${u.uid}, '${tipo}', ${idx}, this.value)">
       </div>`;
     }).join('');
   }
@@ -1683,9 +1655,7 @@
         corpo = '<div class="ex-chips">' + extrasFor(u.itemId).map(e => {
           const on = u.extras[e.id] ? ' on' : '';
           return `<button class="ex-chip${on}" onclick="toggleUnitExtra(${u.uid}, '${e.id}')">${e.name} +${fmt(e.price)}</button>`;
-        }).join('') + '</div>'
-          + `<input type="text" class="obs-input" maxlength="70" placeholder="Observação (opcional) — ex.: sem cebola"
-               value="${(u.obs || '').replace(/"/g, '&quot;')}" oninput="setUnitObs(${u.uid}, this.value)">`;
+        }).join('') + '</div>';
       }
       html += `
         <div class="unit${isCombo(u.itemId) ? ' unit-combo' : ''}">
@@ -1811,8 +1781,7 @@
           lines.push(`   ${t === 'doce' ? 'Doces' : 'Salgadas'}:`);
           arr.forEach((pk, i) => {
             const ex = extrasDoPick(t).filter(e => pk.extras[e.id]).map(e => e.name);
-            const obsTxt = pk.obs ? ` [Obs: ${pk.obs}]` : '';
-            lines.push(`     ${i + 1}) ${nomeSabor(pk.sid)}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}${obsTxt}`);
+            lines.push(`     ${i + 1}) ${nomeSabor(pk.sid)}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}`);
           });
         });
         if (item.bebidaFixa) {
@@ -1826,8 +1795,7 @@
       }
       const ex = extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name);
       const exTxt = ex.length ? ` (com ${ex.join(", ")})` : "";
-      const obsTxt = u.obs ? ` [Obs: ${u.obs}]` : "";
-      lines.push(`${idx + 1}. ${item.name}${exTxt}${obsTxt} — ${fmt(unitPrice(u))}`);
+      lines.push(`${idx + 1}. ${item.name}${exTxt} — ${fmt(unitPrice(u))}`);
     });
     if (temBrinde()) {
       lines.push(`${units.length + 1}. Bebida de 1L GRATIS (${PROMO_BRINDE.minEsfihas} esfihas) — ${brindeBebida ? nomeBebida(brindeBebida) : "(por escolher)"}`);
@@ -2134,16 +2102,11 @@
 
   function listaProducao() {
     const mapa = new Map();
-    const juntar = (sid, extras, gratis, obs) => {
-      obs = limparObs(obs);
-      // obs entra na chave: duas esfihas do mesmo sabor/extras mas com
-      // observacoes diferentes (ou uma delas sem observacao) nunca podem
-      // aparecer como uma so linha "2x" -- cada pedido especial do cliente
-      // tem de chegar a cozinha na sua propria linha, bem visivel.
-      const chave = sid + '|' + extras.slice().sort().join(',') + '|' + obs;
+    const juntar = (sid, extras, gratis) => {
+      const chave = sid + '|' + extras.slice().sort().join(',');
       if (!mapa.has(chave)) {
         mapa.set(chave, { sabor: nomeSabor(sid), ing: ingDe(sid), extras: extras, n: 0, gratis: 0,
-                          doce: isDoce(sid) ? 1 : 0, obs: obs || undefined });
+                          doce: isDoce(sid) ? 1 : 0 });
       }
       mapa.get(chave).n++;
       if (gratis) mapa.get(chave).gratis++;
@@ -2153,13 +2116,13 @@
       if (c) {
         ['salgada', 'doce'].forEach(t => {
           picksDe(u, t).forEach(pk => {
-            juntar(pk.sid, extrasDoPick(t).filter(e => pk.extras[e.id]).map(e => e.name), false, pk.obs);
+            juntar(pk.sid, extrasDoPick(t).filter(e => pk.extras[e.id]).map(e => e.name));
           });
         });
         return;
       }
       if (isSalgada(u.itemId) || isDoce(u.itemId)) {
-        juntar(u.itemId, extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name), false, u.obs);
+        juntar(u.itemId, extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name));
       }
     });
     gratisEsfihas.forEach(sid => { if (sid) juntar(sid, [], true); });
@@ -2199,8 +2162,7 @@
         ['salgada', 'doce'].forEach(t => {
           picksDe(u, t).forEach(pk => {
             const ex = extrasDoPick(t).filter(e => pk.extras[e.id]).map(e => e.name);
-            const obsTxt = pk.obs ? ` [Obs: ${pk.obs}]` : '';
-            linhas.push(`   ${nomeSabor(pk.sid)}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}${obsTxt}`);
+            linhas.push(`   ${nomeSabor(pk.sid)}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}`);
           });
         });
         if (item.bebidaFixa) {
@@ -2213,8 +2175,7 @@
         return;
       }
       const ex = extrasFor(u.itemId).filter(e => u.extras[e.id]).map(e => e.name);
-      const obsTxt = u.obs ? ` [Obs: ${u.obs}]` : '';
-      linhas.push(`${item.name}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''}${obsTxt} — ${fmt(unitPrice(u))}`);
+      linhas.push(`${item.name}${ex.length ? ' (com ' + ex.join(', ') + ')' : ''} — ${fmt(unitPrice(u))}`);
     });
     if (temBrinde()) {
       linhas.push(`Bebida de 1L GRATIS — ${brindeBebida ? nomeBebida(brindeBebida) : '(por escolher)'}`);
