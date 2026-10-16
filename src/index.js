@@ -550,8 +550,20 @@ async function novoPedido(request, env, ctx) {
 
   const agora = new Date().toISOString();
   // b.itens pode ser a lista simples (formato antigo) ou o objecto com
-  // linhas, producao e bebidas (formato novo). Guarda-se tal como vem.
+  // linhas, producao e bebidas (formato novo). Guarda-se tal como vem --
+  // exceto a observacao livre de cada esfiha (itens.producao[].obs), que e
+  // texto escrito pelo cliente e por isso tem de ser limitada aqui (nunca
+  // confiar so no limite do browser) antes de ir para a base de dados e,
+  // depois, para o HTML do painel.
   const itensObj = (b.itens && typeof b.itens === 'object') ? b.itens : [];
+  if (itensObj && !Array.isArray(itensObj) && Array.isArray(itensObj.producao)) {
+    for (const x of itensObj.producao) {
+      if (x && typeof x === 'object' && x.obs != null) {
+        const obsLimpa = limpar(x.obs, 70).replace(/[\r\n]+/g, ' ').trim();
+        if (obsLimpa) x.obs = obsLimpa; else delete x.obs;
+      }
+    }
+  }
   // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
   // pelo browser tem de cobrir, no minimo, as esfihas REALMENTE pagas
   // (exclui as marcadas como oferta/brinde) a 1,50€ cada -- bem abaixo do
