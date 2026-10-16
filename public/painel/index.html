@@ -110,6 +110,7 @@
   .prod-oferta{font-weight:800;font-size:.82rem;color:var(--gold,#B8860B)}
   .prod-ing{font-size:.82rem;color:var(--ink-soft);line-height:1.35;margin-top:1px}
   .prod-extra{font-size:.82rem;font-weight:800;color:var(--red);margin-top:2px}
+  .obs-pedido{font-weight:800;color:var(--ink);background:#FFF3CD;display:inline-block;padding:2px 6px;border-radius:5px}
   .prod-bebs{margin-top:9px;padding-top:8px;border-top:1px solid rgba(58,31,18,.08);
     font-size:.85rem;font-weight:700;color:var(--ink-soft)}
   .acoes{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
@@ -160,6 +161,7 @@
     .print-ticket{display:block;position:absolute;top:0;left:0;width:100%;padding:14px;color:#000}
     .print-ticket .prod-oferta{color:#000}
     .print-ticket .prod-extra{color:#000}
+    .print-ticket .obs-pedido{background:none;padding:0;color:#000}
   }
 </style>
 </head>
@@ -937,6 +939,7 @@
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
           ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
           <br>${metodoPagamentoLabel(p)}
+          ${dados.observacao ? `<br><span class="obs-pedido">📝 ${esc(dados.observacao)}</span>` : ''}
           ${dados.aviso_preco ? `<br><span class="cancel-motivo">⚠️ ${esc(dados.aviso_preco)}</span>` : ''}
           ${p.estado === 'cancelado' ? `<br><span class="cancel-motivo">❌ Cancelado — ${esc(motivoCancelamentoLbl(p.motivo_cancelamento))}</span>` : ''}
         </div>
@@ -981,6 +984,7 @@
       ${entrega && p.morada ? `<p class="pt-linha">${esc(p.morada)}${p.localidade ? ' · ' + esc(p.localidade) : ''}</p>` : ''}
       ${p.telefone ? `<p class="pt-linha">📞 ${esc(p.telefone)}</p>` : ''}
       <p class="pt-linha"><strong>Pagamento:</strong> ${metodoPagamentoLabel(p)} ${p.pago ? '— JÁ PAGO' : '— POR CONFIRMAR'}</p>
+      ${dados.observacao ? `<p class="pt-linha obs-pedido">📝 ${esc(dados.observacao)}</p>` : ''}
       <hr>
       ${producaoHtml(dados)}
       <hr>

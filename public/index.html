@@ -280,6 +280,10 @@
   .extra-row label { flex: 1; font-size: 0.92rem; cursor: pointer; }
   .extra-row .price { font-size: 0.85rem; color: var(--ink-soft); }
   .extra-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--red); }
+  .obs-pedido-input { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; padding: 10px 12px;
+    font-size: 0.92rem; border: 1px solid var(--line); border-radius: 10px; font-family: inherit;
+    background: var(--bg); color: var(--ink); resize: vertical; }
+  .obs-pedido-input::placeholder { color: var(--ink-soft); }
 
   .toggle-group {
     display: flex; gap: 8px; margin-top: 18px;
@@ -803,6 +807,11 @@
           <p class="troco-aviso" id="trocoAviso" style="display:none;"></p>
         </div>
       </div>
+
+      <p class="extras-title">Observações (opcional)</p>
+      <textarea id="obsPedidoInput" class="obs-pedido-input" maxlength="300" rows="2"
+        placeholder="Alguma observação sobre o pedido? Ex.: alergia a algum ingrediente, preferência, ponto de referência..."
+        aria-label="Observações sobre o pedido"></textarea>
 
       <div class="total-row">
         <span class="label">Total estimado</span>
@@ -1752,6 +1761,15 @@
     return z(d.getDate()) + z(d.getMonth() + 1) + "-" + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + "-" + r;
   }
 
+  // Observacao unica da encomenda toda (nao e por esfiha) -- texto livre do
+  // cliente, sem efeito no preco. Colapsa quebras de linha a mais e limita
+  // o tamanho para nao desformatar a mensagem de WhatsApp nem o painel.
+  function obsPedido() {
+    const el = document.getElementById('obsPedidoInput');
+    const v = el ? el.value : '';
+    return String(v || '').replace(/\s*[\r\n]+\s*/g, ' ').trim().slice(0, 300);
+  }
+
   function buildMessage() {
     if (!senhaAtual) senhaAtual = novaSenha();
     const cabecalho = numeroFila ? ('Pedido #' + numeroFila + '  ·  Senha: ' + senhaAtual) : ('Senha: ' + senhaAtual);
@@ -1790,6 +1808,11 @@
       gratisEsfihas.forEach((sid, i) => {
         lines.push(`${base + i}. Esfiha GRATIS (promoção) — ${sid ? nomeSabor(sid) : "(por escolher)"}`);
       });
+    }
+    const obsTxt = obsPedido();
+    if (obsTxt) {
+      lines.push("");
+      lines.push("📝 Observação: " + obsTxt);
     }
     lines.push("");
     lines.push(orderType === 'entrega' ? "Modo: Entrega" : "Modo: Retirada");
@@ -2593,6 +2616,7 @@
           n_esfihas: contaEsfihasTotal(),
           itens: {
             linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido(),
+            observacao: obsPedido() || undefined,
             pagamento: { metodo_pagamento: metodoPagamento, troco_para_cent: trocoParaCent() },
             entrega: orderType === 'entrega'
               ? { cent: Math.round(deliveryFee() * 100),
