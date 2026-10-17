@@ -232,6 +232,18 @@ function ehGratis(nome) {
 function ehOfertaOpaca(nome) {
   return /^Oferta\s/i.test(String(nome || '').trim());
 }
+// Le "Oferta Nx bebida em lata (a escolha da casa)" / "...de 1L..." e devolve
+// { n, prefixo } onde prefixo e o inicio do nome real da bebida em stock
+// (stock_bebidas.nome comeca sempre por "Lata" ou "Garrafa 1 litro"), para
+// resolverOfertaBebida() saber quantas escolhas pedir e que garrafas aceitar.
+function parseOfertaOpaca(nome) {
+  const m = /^Oferta\s+(\d+)x\s+bebida\s+(em lata|de 1L)/i.exec(String(nome || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 10) || 0;
+  if (!n) return null;
+  const prefixo = /lata/i.test(m[2]) ? 'Lata' : 'Garrafa 1 litro';
+  return { n, prefixo };
+}
 function producaoDoItens(itensJson) {
   let it = null;
   try { it = JSON.parse(itensJson || 'null'); } catch (e) {}
@@ -1032,6 +1044,67 @@ async function adicionarProducaoPedido(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
 }
 
+// Resolve uma linha opaca "Oferta Nx bebida... (a escolha da casa)" (do
+// Combo Junta a Malta) nas garrafas reais escolhidas pelo Miguel/estafeta.
+// Em vez de ficar por conta de alguem ir ao stock no fim do dia reconciliar
+// o que foi oferecido, o painel pergunta aqui quais bebidas foram dadas e
+// so entao desconta o stock -- a oferta so nao descontava automaticamente
+// porque, ate agora, nao se sabia qual garrafa tinha sido de facto usada.
+async function resolverOfertaBebida(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  const idx = parseInt(b.idx, 10);
+  if (!Number.isInteger(idx) || idx < 0) return j({ ok: false, erro: 'linha invalida' }, 400);
+  const escolhas = Array.isArray(b.escolhas) ? b.escolhas.map(x => limpar(x, 80)).filter(Boolean) : [];
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (!it || Array.isArray(it) || !Array.isArray(it.bebidas) || !it.bebidas[idx]) {
+    return j({ ok: false, erro: 'linha nao encontrada' }, 404);
+  }
+  const linha = it.bebidas[idx];
+  const info = parseOfertaOpaca(linha.nome);
+  if (!info) return j({ ok: false, erro: 'esta linha ja esta resolvida' }, 400);
+  if (escolhas.length !== info.n) {
+    return j({ ok: false, erro: `sao precisas ${info.n} escolha(s), vieram ${escolhas.length}` }, 400);
+  }
+
+  const validas = await env.DB.prepare(
+    'SELECT nome FROM stock_bebidas WHERE por_pedido = 0 AND nome LIKE ?'
+  ).bind(info.prefixo + '%').all();
+  const nomesValidos = new Set((validas.results || []).map(r => r.nome));
+  for (const esc of escolhas) {
+    if (!nomesValidos.has(esc)) return j({ ok: false, erro: `bebida invalida: ${esc}` }, 400);
+  }
+
+  const contagem = new Map();
+  for (const esc of escolhas) contagem.set(esc, (contagem.get(esc) || 0) + 1);
+
+  const novasLinhas = Array.from(contagem.entries()).map(([nome, n]) => ({ nome: `${nome} (grátis)`, n }));
+  it.bebidas = [...it.bebidas.slice(0, idx), ...novasLinhas, ...it.bebidas.slice(idx + 1)];
+  it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
+  it.linhas.push(`Oferta de bebidas resolvida: ${escolhas.join(', ')}`);
+
+  const agora = new Date().toISOString();
+  const lote = [
+    env.DB.prepare('UPDATE pedidos SET itens = ?, atualizado_em = ? WHERE id = ?')
+      .bind(JSON.stringify(it), agora, id),
+  ];
+  for (const [nome, n] of contagem.entries()) {
+    lote.push(env.DB.prepare(
+      `UPDATE stock_bebidas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
+    ).bind(n, agora, nome));
+  }
+  await env.DB.batch(lote);
+
+  return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
+}
+
 async function mudarPedido(request, env) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
@@ -1527,6 +1600,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido-item' && request.method === 'POST') return await adicionarItemPedido(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
+        if (p === '/api/painel/pedido-oferta-bebida' && request.method === 'POST') return await resolverOfertaBebida(request, env);
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);

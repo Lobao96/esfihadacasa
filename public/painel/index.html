@@ -111,6 +111,10 @@
   .prod-ing{font-size:.82rem;color:var(--ink-soft);line-height:1.35;margin-top:1px}
   .prod-extra{font-size:.82rem;font-weight:800;color:var(--red);margin-top:2px}
   .obs-pedido{font-weight:800;color:var(--ink);background:#FFF3CD;display:inline-block;padding:2px 6px;border-radius:5px}
+  .oferta-pendente{margin:8px 0;padding:9px 10px;background:#FFF3CD;border:1px solid #E8CF7A;border-radius:10px}
+  .oferta-pendente-txt{font-weight:800;font-size:.85rem;margin-bottom:6px}
+  .oferta-pendente-selects{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .of-beb-select{font-size:.85rem;padding:5px 6px;border-radius:7px;border:1px solid var(--line);font-family:inherit;background:#fff;color:var(--ink)}
   .prod-bebs{margin-top:9px;padding-top:8px;border-top:1px solid rgba(58,31,18,.08);
     font-size:.85rem;font-weight:700;color:var(--ink-soft)}
   .acoes{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
@@ -577,6 +581,7 @@
     }
     pintarStock();
     pintarEstafeta();
+    await carregarBebidasStock();
     pintarLista();
     if (!diaVisto) avisarNovos();
   }
@@ -856,6 +861,54 @@
     return d || { linhas: [], producao: null, bebidas: null };
   }
 
+  // Combo "Junta a Malta" oferece N bebidas "a escolha da casa" -- chega do
+  // site como uma linha opaca ("Oferta Nx bebida em lata/de 1L (a escolha
+  // da casa)") porque o cliente nao escolhe a garrafa, so quem esta na loja
+  // sabe qual foi de facto dada. Em vez de ter que ir ao stock no fim do dia
+  // reconciliar o que sobrou, perguntamos aqui mesmo, no pedido.
+  let bebidasStockCache = [];
+  async function carregarBebidasStock() {
+    try {
+      const d = await api('/stock-bebidas');
+      bebidasStockCache = (d && d.bebidas) || [];
+    } catch (e) {}
+  }
+  function parseOfertaOpacaCliente(nome) {
+    const m = /^Oferta\s+(\d+)x\s+bebida\s+(em lata|de 1L)/i.exec(String(nome || '').trim());
+    if (!m) return null;
+    const n = parseInt(m[1], 10) || 0;
+    if (!n) return null;
+    const prefixo = /lata/i.test(m[2]) ? 'Lata' : 'Garrafa 1 litro';
+    return { n, prefixo };
+  }
+  function ofertaBebidaHtml(p, dados) {
+    const bebs = dados.bebidas || [];
+    const idx = bebs.findIndex(b => parseOfertaOpacaCliente(b.nome));
+    if (idx < 0) return '';
+    const info = parseOfertaOpacaCliente(bebs[idx].nome);
+    const opcoes = bebidasStockCache.filter(b => b.nome.indexOf(info.prefixo) === 0);
+    const selects = Array.from({ length: info.n }, (_, i) => `
+      <select id="ofBeb${p.id}_${i}" class="of-beb-select">
+        ${opcoes.map(o => `<option value="${esc(o.nome)}">${esc(o.nome)} (${o.quantidade})</option>`).join('')}
+      </select>`).join('');
+    return `
+      <div class="oferta-pendente">
+        <div class="oferta-pendente-txt">🎁 Que bebida${info.n > 1 ? 's' : ''} foi${info.n > 1 ? 'ram' : ''} oferecida${info.n > 1 ? 's' : ''} neste combo?</div>
+        <div class="oferta-pendente-selects">${selects}</div>
+        <button class="ac destaque" onclick="confirmarOfertaBebida(${p.id}, ${idx}, ${info.n})">Confirmar</button>
+      </div>`;
+  }
+  async function confirmarOfertaBebida(id, idx, n) {
+    const escolhas = [];
+    for (let i = 0; i < n; i++) {
+      const el = document.getElementById(`ofBeb${id}_${i}`);
+      if (el) escolhas.push(el.value);
+    }
+    const r = await api('/painel/pedido-oferta-bebida', { method: 'POST', body: JSON.stringify({ id, idx, escolhas }) });
+    if (!r.ok) { alert(r.erro || 'Não foi possível gravar a oferta.'); return; }
+    await carregar();
+  }
+
   // O cliente escolhe MB Way ou dinheiro no site (entrega e retirada).
   // Pedidos antigos, feitos antes desta opcao existir na retirada, nao tem
   // o metodo gravado -- mostram-se as duas opcoes nesse caso.
@@ -960,6 +1013,7 @@
           ${dados.aviso_preco ? `<br><span class="cancel-motivo">⚠️ ${esc(dados.aviso_preco)}</span>` : ''}
           ${p.estado === 'cancelado' ? `<br><span class="cancel-motivo">❌ Cancelado — ${esc(motivoCancelamentoLbl(p.motivo_cancelamento))}</span>` : ''}
         </div>
+        ${p.estado !== 'cancelado' ? ofertaBebidaHtml(p, dados) : ''}
         <div class="prod-lista">${producaoHtml(dados)}</div>
         <div class="acoes">
           <button class="ac pago ${p.pago ? 'on' : ''}" onclick="marcarPago(${p.id}, ${p.pago ? 0 : 1})">
