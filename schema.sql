@@ -28,3 +28,12 @@ CREATE TABLE IF NOT EXISTS stock (
   tem_override    INTEGER NOT NULL DEFAULT 0,   -- coluna antiga, sem uso (ver override_expira) -- mantida para não partir migrações já aplicadas
   override_expira TEXT                          -- instante (ISO, UTC) até quando o override de "aberto" vale; NULL = sem override, segue o horário automático. Expira na próxima abertura/fecho automático ou à meia-noite seguinte, o que vier primeiro.
 );
+
+CREATE TABLE IF NOT EXISTS codigos_promo (
+  codigo          TEXT PRIMARY KEY,   -- sempre em maiusculas
+  descricao       TEXT,
+  usado           INTEGER NOT NULL DEFAULT 0,
+  usado_pedido_id INTEGER,
+  usado_em        TEXT,
+  criado_em       TEXT    NOT NULL
+);

@@ -598,6 +598,13 @@
   }
   .hint { font-size: 0.78rem; color: var(--ink-soft); text-align: center; margin-top: 10px; }
   .avaliar-btn { display: block; text-align: center; margin-top: 12px; padding: 12px; border-radius: 999px; border: 2px solid var(--gold, #F4B942); font-weight: 800; font-size: 0.92rem; color: var(--ink); text-decoration: none; background: #fff; }
+  .promo-toggle { font-size: 0.82rem; color: var(--ink-soft); font-weight: 700; text-decoration: underline; cursor: pointer; margin-top: 14px; text-align: center; }
+  .promo-code-row { display: flex; gap: 8px; margin-top: 10px; }
+  .promo-code-input { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-family: inherit; font-size: 0.92rem; background: var(--bg); color: var(--ink); text-transform: uppercase; }
+  .promo-code-btn { padding: 10px 16px; border-radius: 10px; border: none; background: var(--red); color: #fff; font-weight: 800; font-size: 0.88rem; cursor: pointer; }
+  .promo-code-status { font-size: 0.84rem; font-weight: 700; margin-top: 6px; min-height: 1.1em; text-align: center; }
+  .promo-code-status.ok { color: #1E8E4A; }
+  .promo-code-status.erro { color: var(--red-dark); }
 
   footer {
     text-align: center; padding: 36px 20px 44px;
@@ -813,6 +820,13 @@
       <textarea id="obsPedidoInput" class="obs-pedido-input" maxlength="300" rows="2"
         placeholder="Alguma observação sobre o pedido? Ex.: alergia a algum ingrediente, preferência, ponto de referência..."
         aria-label="Observações sobre o pedido"></textarea>
+
+      <p class="promo-toggle" id="promoToggle" onclick="mostrarPromoInput()">Tenho um código promocional</p>
+      <div class="promo-code-row" id="promoRow" style="display:none;">
+        <input type="text" id="promoInput" class="promo-code-input" maxlength="30" placeholder="Código" aria-label="Código promocional" oninput="limparEstadoPromo()">
+        <button type="button" class="promo-code-btn" onclick="aplicarPromo()">Aplicar</button>
+      </div>
+      <p class="promo-code-status" id="promoStatus"></p>
 
       <div class="total-row">
         <span class="label">Total estimado</span>
@@ -1056,6 +1070,7 @@
   const extraSel = {};
   let orderType = "entrega";
   let metodoPagamento = "mbway";   // "mbway" ou "dinheiro" -- so importa no modo entrega
+  let promoAplicado = null;   // codigo promocional ja validado no servidor, ou null
 
   let estoqueBebidas = {};
   function qtdBebida(id) {
@@ -1673,6 +1688,7 @@
   function itemCount() { return units.length; }
 
   function computeTotal() {
+    if (promoAplicado) return 0;
     let total = units.reduce((a, u) => a + unitPrice(u), 0);
     if (orderType === 'entrega' && units.length > 0) total += deliveryFee();
     return total;
@@ -1766,6 +1782,54 @@
   // Observacao unica da encomenda toda (nao e por esfiha) -- texto livre do
   // cliente, sem efeito no preco. Colapsa quebras de linha a mais e limita
   // o tamanho para nao desformatar a mensagem de WhatsApp nem o painel.
+  function mostrarPromoInput() {
+    const toggle = document.getElementById('promoToggle');
+    const row = document.getElementById('promoRow');
+    if (toggle) toggle.style.display = 'none';
+    if (row) row.style.display = 'flex';
+    const inp = document.getElementById('promoInput');
+    if (inp) inp.focus();
+  }
+
+  function limparEstadoPromo() {
+    if (promoAplicado) {
+      promoAplicado = null;
+      const status = document.getElementById('promoStatus');
+      if (status) { status.textContent = ''; status.className = 'promo-code-status'; }
+      updateTotal();
+    }
+  }
+
+  async function aplicarPromo() {
+    const input = document.getElementById('promoInput');
+    const status = document.getElementById('promoStatus');
+    const codigo = ((input && input.value) || '').trim().toUpperCase();
+    if (!codigo) return;
+    if (status) { status.textContent = 'A verificar…'; status.className = 'promo-code-status'; }
+    try {
+      const r = await fetch(API + '/validar-promo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ codigo }),
+      });
+      const d = await r.json();
+      if (d && d.ok) {
+        promoAplicado = codigo;
+        if (status) { status.textContent = '✅ Código aplicado — este pedido fica grátis!'; status.className = 'promo-code-status ok'; }
+      } else {
+        promoAplicado = null;
+        if (status) {
+          status.textContent = (d && d.erro === 'usado') ? 'Este código já foi usado.' : 'Código inválido.';
+          status.className = 'promo-code-status erro';
+        }
+      }
+    } catch (e) {
+      promoAplicado = null;
+      if (status) { status.textContent = 'Não foi possível verificar agora. Tenta de novo.'; status.className = 'promo-code-status erro'; }
+    }
+    updateTotal();
+  }
+
   function obsPedido() {
     const el = document.getElementById('obsPedidoInput');
     const v = el ? el.value : '';
@@ -1776,6 +1840,10 @@
     if (!senhaAtual) senhaAtual = novaSenha();
     const cabecalho = numeroFila ? ('Pedido #' + numeroFila + '  ·  Senha: ' + senhaAtual) : ('Senha: ' + senhaAtual);
     let lines = ["Oi! Gostaria de fazer o seguinte pedido:", "", cabecalho, ""];
+    if (promoAplicado) {
+      lines.push("🎁 Código promocional aplicado: " + promoAplicado + " — pedido grátis");
+      lines.push("");
+    }
     units.forEach((u, idx) => {
       const item = itemById(u.itemId);
       if (isCombo(u.itemId)) {
@@ -1824,7 +1892,7 @@
       const cp = (document.getElementById('cpInput') || {}).value.trim();
       lines.push("Morada: " + (addr || "(mando em seguida)") + (loc ? ", " + loc : "") + (cp ? ", " + cp : ""));
       if (moradaConfirmada) lines.push("Morada confirmada pelo cliente ✔");
-      lines.push("Taxa de entrega: " + fmt(deliveryFee()));
+      lines.push("Taxa de entrega: " + (promoAplicado ? "grátis (incluída no prémio)" : fmt(deliveryFee())));
     }
     lines.push("");
     lines.push("Total estimado: " + fmt(computeTotal()));
@@ -1851,6 +1919,7 @@
   }
 
   function payMethods() {
+    if (promoAplicado) return 'Grátis 🎁 — código promocional (' + promoAplicado + ')';
     // Reflete sempre o metodo realmente escolhido (entrega ou retirada --
     // os dois modos tem os botoes MB Way/Dinheiro desde a correcao da
     // retirada), incluindo o numero para onde mandar no caso do MB Way.
@@ -1868,6 +1937,11 @@
     const row = document.getElementById('payRow');
     const note = document.getElementById('payNote');
     atualizarCaixaTroco();
+    if (promoAplicado) {
+      row.innerHTML = '';
+      note.innerHTML = '🎁 Este pedido é grátis — código promocional aplicado.';
+      return;
+    }
     if (orderType === 'entrega') {
       row.innerHTML =
         '<button type="button" class="pay-chip' + (metodoPagamento === 'mbway' ? ' sel' : '') + '" onclick="escolherPagamento(\'mbway\')">MB Way</button>' +
@@ -2616,10 +2690,11 @@
           campanha: ORIGEM.campanha,
           total_cent: Math.round(computeTotal() * 100),
           n_esfihas: contaEsfihasTotal(),
+          codigoPromo: promoAplicado || undefined,
           itens: {
             linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido(),
             observacao: obsPedido() || undefined,
-            pagamento: { metodo_pagamento: metodoPagamento, troco_para_cent: trocoParaCent() },
+            pagamento: { metodo_pagamento: promoAplicado ? 'promo' : metodoPagamento, troco_para_cent: trocoParaCent() },
             entrega: orderType === 'entrega'
               ? { cent: Math.round(deliveryFee() * 100),
                   cotado: !!entregaCotada,
@@ -2663,6 +2738,17 @@
         // com um total que o servidor nao aceita.
         btn.textContent = textoOriginal;
         mostrarFaltas(['O valor do pedido não ficou certo. Recarregue a página, monte o pedido de novo e tente enviar outra vez. Se continuar, fale com a gente pelo WhatsApp.']);
+        return false;
+      }
+      else if (d && (d.erro === 'promo_invalido' || d.erro === 'promo_usado')) {
+        // O codigo passou na verificacao ao vivo mas, entre isso e o envio,
+        // deixou de ser valido (ex.: usado por outro pedido entretanto).
+        btn.textContent = textoOriginal;
+        promoAplicado = null;
+        const status = document.getElementById('promoStatus');
+        if (status) { status.textContent = 'Este código já não é válido. Tente outra vez sem ele, ou fale com a gente.'; status.className = 'promo-code-status erro'; }
+        updateTotal();
+        mostrarFaltas(['O código promocional deixou de ser válido. Veja a nota junto ao campo do código.']);
         return false;
       }
       else if (!d || d.ok !== true) {

@@ -312,9 +312,13 @@
     const entrega = p.modo === 'entrega';
     const infoPagto = dadosDe(p).pagamento || dadosDe(p).entrega || {};
     const pagaDinheiro = entrega && infoPagto.metodo_pagamento === 'dinheiro';
+    const pedidoGratisPromo = infoPagto.metodo_pagamento === 'promo';
     const M = {
       recebido: `Oi! Recebemos seu pedido ${n} 🫓\n\n` +
-        (entrega && !p.pago && !pagaDinheiro
+        (pedidoGratisPromo
+          ? `Esse pedido é grátis 🎁 (código promocional) — não precisa pagar nada!\n\n`
+          : '') +
+        (entrega && !p.pago && !pagaDinheiro && !pedidoGratisPromo
           ? `Pra gente começar, falta só o pagamento por MB Way de ${eur(p.total_cent)} para o 936 788 461.\n\n`
           : '') +
         (entrega && pagaDinheiro
@@ -915,6 +919,7 @@
   function metodoPagamentoLabel(p) {
     const dados = dadosDe(p);
     const info = dados.pagamento || dados.entrega || {};
+    if (info.metodo_pagamento === 'promo') return '🎁 Grátis — código promocional';
     if (info.metodo_pagamento === 'dinheiro') {
       const tc = info.troco_para_cent; // valor da NOTA com que o cliente paga, nao o troco
       if (tc) {
@@ -990,7 +995,8 @@
       // separado -- igual ao que metodoPagamentoLabel ja faz.
       const infoPagto = dados.pagamento || infoEntrega || {};
       const pagaDinheiro = entrega && infoPagto.metodo_pagamento === 'dinheiro';
-      const travado = entrega && p.estado === 'novo' && !p.pago && !pagaDinheiro;
+      const pedidoGratisPromo = infoPagto.metodo_pagamento === 'promo';
+      const travado = entrega && p.estado === 'novo' && !p.pago && !pagaDinheiro && !pedidoGratisPromo;
       return `
       <div class="p ${p.estado}">
         <div class="p-top">

@@ -572,6 +572,23 @@ async function novoPedido(request, env, ctx) {
     const obsLimpa = limpar(itensObj.observacao, 300).replace(/\s*[\r\n]+\s*/g, ' ').trim();
     if (obsLimpa) itensObj.observacao = obsLimpa; else delete itensObj.observacao;
   }
+  // Codigo promocional (ex.: premio de sorteio) -- aplica-se a um pedido
+  // inteiro e e sempre uso unico. So valida aqui; o consumo (marcar usado)
+  // so acontece depois do pedido ser mesmo criado, mais abaixo, para nunca
+  // gastar um codigo num pedido que falhou a criar por outro motivo.
+  let promoAplicado = null;
+  const codigoPromoBruto = limpar(b.codigoPromo, 40);
+  if (codigoPromoBruto && codigoPromoBruto.trim()) {
+    const codigoPromo = codigoPromoBruto.trim().toUpperCase();
+    const linhaPromo = await env.DB.prepare('SELECT * FROM codigos_promo WHERE codigo = ?').bind(codigoPromo).first();
+    if (!linhaPromo) return j({ ok: false, erro: 'promo_invalido' }, 400);
+    if (linhaPromo.usado) return j({ ok: false, erro: 'promo_usado' }, 400);
+    promoAplicado = linhaPromo;
+    if (itensObj && !Array.isArray(itensObj)) {
+      if (!Array.isArray(itensObj.linhas)) itensObj.linhas = [];
+      itensObj.linhas.push(`🎁 Código promocional aplicado: ${promoAplicado.codigo} — pedido grátis`);
+    }
+  }
   // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
   // pelo browser tem de cobrir, no minimo, as esfihas REALMENTE pagas
   // (exclui as marcadas como oferta/brinde) a 1,50€ cada -- bem abaixo do
@@ -581,11 +598,11 @@ async function novoPedido(request, env, ctx) {
   // do que os itens reais custam (ex.: mandar itens.producao reais com
   // total_cent: 1). Isto REJEITA o pedido (antes so avisava, sem travar).
   const PRECO_MINIMO_PLAUSIVEL_CENT = 150;
-  const totalEnviadoCent = Math.max(0, parseInt(b.total_cent, 10) || 0);
+  const totalEnviadoCent = promoAplicado ? 0 : Math.max(0, parseInt(b.total_cent, 10) || 0);
   const nEsfihasPagasReal = Math.max(0, nEsfihasReal - nEsfihasGratisReal);
   const pisoCent = nEsfihasPagasReal * PRECO_MINIMO_PLAUSIVEL_CENT
     + (!ensaio && b.modo === 'entrega' && nEsfihasPagasReal > 0 ? ENTREGA_FIXA_CENT : 0);
-  if (!ensaio && pisoCent > 0 && totalEnviadoCent < pisoCent) {
+  if (!ensaio && !promoAplicado && pisoCent > 0 && totalEnviadoCent < pisoCent) {
     return j({ ok: false, erro: 'total_invalido' }, 400);
   }
   const itens = JSON.stringify(itensObj);
@@ -612,6 +629,17 @@ async function novoPedido(request, env, ctx) {
     token, telCliente, limpar(b.origem, 60), limpar(b.campanha, 80), nomeCliente,
     ...(ensaio ? [dia] : [])
   ).first();
+
+  // Consome o codigo promocional so agora que o pedido foi mesmo criado, e
+  // marca logo o pedido como pago (nao ha nada a cobrar). O "WHERE usado = 0"
+  // evita gastar duas vezes o mesmo codigo em pedidos simultaneos.
+  if (promoAplicado) {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE codigos_promo SET usado = 1, usado_pedido_id = ?, usado_em = ? WHERE codigo = ? AND usado = 0')
+        .bind(res.id, agora, promoAplicado.codigo),
+      env.DB.prepare('UPDATE pedidos SET pago = 1 WHERE id = ?').bind(res.id),
+    ]);
+  }
 
   // O stock desce logo aqui, assim que o pedido e feito (vendido) -- nao so
   // quando o staff o marca "em preparacao" -- para o painel mostrar sempre
@@ -1199,6 +1227,20 @@ async function mudarStock(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, dia) });
 }
 
+// Validacao "so de leitura" de um codigo promocional -- usada no site para
+// dar feedback imediato ao cliente (nao consome o codigo; o consumo real so
+// acontece quando o pedido e de facto criado, em novoPedido()).
+async function validarPromo(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const codigo = String(b.codigo || '').trim().toUpperCase();
+  if (!codigo) return j({ ok: false, erro: 'codigo em falta' }, 400);
+  const linha = await env.DB.prepare('SELECT codigo, usado FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
+  if (!linha) return j({ ok: false, erro: 'invalido' }, 404);
+  if (linha.usado) return j({ ok: false, erro: 'usado' }, 409);
+  return j({ ok: true });
+}
+
 async function stockPublicoBebidas(request, env) {
   const { results } = await env.DB.prepare(
     'SELECT nome, quantidade FROM stock_bebidas WHERE por_pedido = 0'
@@ -1588,6 +1630,9 @@ async function handleRequest(request, env, ctx) {
       }
       if (p === '/api/stock-bebidas' && request.method === 'GET') {
         return await stockPublicoBebidas(request, env);
+      }
+      if (p === '/api/validar-promo' && request.method === 'POST') {
+        return await validarPromo(request, env);
       }
       if (p === '/api/cotacao' && request.method === 'POST') {
         return await cotacao(request, env);
