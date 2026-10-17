@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS stock (
 CREATE TABLE IF NOT EXISTS codigos_promo (
   codigo          TEXT PRIMARY KEY,   -- sempre em maiusculas
   descricao       TEXT,
+  desconto_cent   INTEGER NOT NULL DEFAULT 0,  -- desconto fixo, nunca o pedido todo gratis
   usado           INTEGER NOT NULL DEFAULT 0,
   usado_pedido_id INTEGER,
   usado_em        TEXT,

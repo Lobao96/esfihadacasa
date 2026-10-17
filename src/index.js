@@ -572,10 +572,13 @@ async function novoPedido(request, env, ctx) {
     const obsLimpa = limpar(itensObj.observacao, 300).replace(/\s*[\r\n]+\s*/g, ' ').trim();
     if (obsLimpa) itensObj.observacao = obsLimpa; else delete itensObj.observacao;
   }
-  // Codigo promocional (ex.: premio de sorteio) -- aplica-se a um pedido
-  // inteiro e e sempre uso unico. So valida aqui; o consumo (marcar usado)
-  // so acontece depois do pedido ser mesmo criado, mais abaixo, para nunca
-  // gastar um codigo num pedido que falhou a criar por outro motivo.
+  // Codigo promocional (ex.: premio de sorteio) -- e um DESCONTO fixo em
+  // centimos (nunca o pedido inteiro gratis), para cobrir so o premio
+  // exacto (ex.: as 3 esfihas + 1 bebida do combo) -- qualquer coisa a mais
+  // no pedido (extras, mais itens) continua a ser cobrada normalmente.
+  // Sempre uso unico. So valida aqui; o consumo (marcar usado) so acontece
+  // depois do pedido ser mesmo criado, mais abaixo, para nunca gastar um
+  // codigo num pedido que falhou a criar por outro motivo.
   let promoAplicado = null;
   const codigoPromoBruto = limpar(b.codigoPromo, 40);
   if (codigoPromoBruto && codigoPromoBruto.trim()) {
@@ -584,10 +587,6 @@ async function novoPedido(request, env, ctx) {
     if (!linhaPromo) return j({ ok: false, erro: 'promo_invalido' }, 400);
     if (linhaPromo.usado) return j({ ok: false, erro: 'promo_usado' }, 400);
     promoAplicado = linhaPromo;
-    if (itensObj && !Array.isArray(itensObj)) {
-      if (!Array.isArray(itensObj.linhas)) itensObj.linhas = [];
-      itensObj.linhas.push(`🎁 Código promocional aplicado: ${promoAplicado.codigo} — pedido grátis`);
-    }
   }
   // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
   // pelo browser tem de cobrir, no minimo, as esfihas REALMENTE pagas
@@ -597,13 +596,23 @@ async function novoPedido(request, env, ctx) {
   // So fecha o buraco de um total manipulado no cliente para ficar abaixo
   // do que os itens reais custam (ex.: mandar itens.producao reais com
   // total_cent: 1). Isto REJEITA o pedido (antes so avisava, sem travar).
+  // Este piso aplica-se sempre ao total ORIGINAL (antes do desconto do
+  // codigo promocional) -- o desconto nunca serve para disfarçar um total
+  // manipulado nos itens reais.
   const PRECO_MINIMO_PLAUSIVEL_CENT = 150;
-  const totalEnviadoCent = promoAplicado ? 0 : Math.max(0, parseInt(b.total_cent, 10) || 0);
+  const totalOriginalCent = Math.max(0, parseInt(b.total_cent, 10) || 0);
   const nEsfihasPagasReal = Math.max(0, nEsfihasReal - nEsfihasGratisReal);
   const pisoCent = nEsfihasPagasReal * PRECO_MINIMO_PLAUSIVEL_CENT
     + (!ensaio && b.modo === 'entrega' && nEsfihasPagasReal > 0 ? ENTREGA_FIXA_CENT : 0);
-  if (!ensaio && !promoAplicado && pisoCent > 0 && totalEnviadoCent < pisoCent) {
+  if (!ensaio && pisoCent > 0 && totalOriginalCent < pisoCent) {
     return j({ ok: false, erro: 'total_invalido' }, 400);
+  }
+  const descontoPromoCent = promoAplicado ? Math.max(0, Math.min(parseInt(promoAplicado.desconto_cent, 10) || 0, totalOriginalCent)) : 0;
+  const totalEnviadoCent = totalOriginalCent - descontoPromoCent;
+  if (promoAplicado && itensObj && !Array.isArray(itensObj)) {
+    if (!Array.isArray(itensObj.linhas)) itensObj.linhas = [];
+    const descontoTxt = (descontoPromoCent / 100).toFixed(2).replace('.', ',') + '€';
+    itensObj.linhas.push(`🎁 Código promocional aplicado: ${promoAplicado.codigo} — desconto de ${descontoTxt}`);
   }
   const itens = JSON.stringify(itensObj);
   const token = novoToken();
@@ -630,15 +639,20 @@ async function novoPedido(request, env, ctx) {
     ...(ensaio ? [dia] : [])
   ).first();
 
-  // Consome o codigo promocional so agora que o pedido foi mesmo criado, e
-  // marca logo o pedido como pago (nao ha nada a cobrar). O "WHERE usado = 0"
-  // evita gastar duas vezes o mesmo codigo em pedidos simultaneos.
+  // Consome o codigo promocional so agora que o pedido foi mesmo criado --
+  // o "WHERE usado = 0" evita gastar duas vezes o mesmo codigo em pedidos
+  // simultaneos. So marca o pedido como ja pago se o desconto cobriu tudo;
+  // se sobrou algo a pagar (extras, mais itens), segue o fluxo normal de
+  // pagamento (MB Way/dinheiro) para esse valor.
   if (promoAplicado) {
-    await env.DB.batch([
+    const loteOpsPromo = [
       env.DB.prepare('UPDATE codigos_promo SET usado = 1, usado_pedido_id = ?, usado_em = ? WHERE codigo = ? AND usado = 0')
         .bind(res.id, agora, promoAplicado.codigo),
-      env.DB.prepare('UPDATE pedidos SET pago = 1 WHERE id = ?').bind(res.id),
-    ]);
+    ];
+    if (totalEnviadoCent === 0) {
+      loteOpsPromo.push(env.DB.prepare('UPDATE pedidos SET pago = 1 WHERE id = ?').bind(res.id));
+    }
+    await env.DB.batch(loteOpsPromo);
   }
 
   // O stock desce logo aqui, assim que o pedido e feito (vendido) -- nao so
@@ -1235,10 +1249,10 @@ async function validarPromo(request, env) {
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const codigo = String(b.codigo || '').trim().toUpperCase();
   if (!codigo) return j({ ok: false, erro: 'codigo em falta' }, 400);
-  const linha = await env.DB.prepare('SELECT codigo, usado FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
+  const linha = await env.DB.prepare('SELECT codigo, usado, desconto_cent FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
   if (!linha) return j({ ok: false, erro: 'invalido' }, 404);
   if (linha.usado) return j({ ok: false, erro: 'usado' }, 409);
-  return j({ ok: true });
+  return j({ ok: true, desconto_cent: linha.desconto_cent || 0 });
 }
 
 async function stockPublicoBebidas(request, env) {

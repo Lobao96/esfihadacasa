@@ -605,6 +605,7 @@
   .promo-code-status { font-size: 0.84rem; font-weight: 700; margin-top: 6px; min-height: 1.1em; text-align: center; }
   .promo-code-status.ok { color: #1E8E4A; }
   .promo-code-status.erro { color: var(--red-dark); }
+  .promo-desconto-nota { font-weight: 800; color: #1E8E4A; margin-bottom: 6px; }
 
   footer {
     text-align: center; padding: 36px 20px 44px;
@@ -1071,6 +1072,7 @@
   let orderType = "entrega";
   let metodoPagamento = "mbway";   // "mbway" ou "dinheiro" -- so importa no modo entrega
   let promoAplicado = null;   // codigo promocional ja validado no servidor, ou null
+  let promoDescontoCent = 0;  // desconto (em centimos) desse codigo -- nunca o pedido todo
 
   let estoqueBebidas = {};
   function qtdBebida(id) {
@@ -1688,9 +1690,9 @@
   function itemCount() { return units.length; }
 
   function computeTotal() {
-    if (promoAplicado) return 0;
     let total = units.reduce((a, u) => a + unitPrice(u), 0);
     if (orderType === 'entrega' && units.length > 0) total += deliveryFee();
+    if (promoAplicado) total = Math.max(0, total - (promoDescontoCent / 100));
     return total;
   }
 
@@ -1794,6 +1796,7 @@
   function limparEstadoPromo() {
     if (promoAplicado) {
       promoAplicado = null;
+      promoDescontoCent = 0;
       const status = document.getElementById('promoStatus');
       if (status) { status.textContent = ''; status.className = 'promo-code-status'; }
       updateTotal();
@@ -1815,9 +1818,11 @@
       const d = await r.json();
       if (d && d.ok) {
         promoAplicado = codigo;
-        if (status) { status.textContent = '✅ Código aplicado — este pedido fica grátis!'; status.className = 'promo-code-status ok'; }
+        promoDescontoCent = parseInt(d.desconto_cent, 10) || 0;
+        if (status) { status.textContent = '✅ Código aplicado — desconto de ' + fmt(promoDescontoCent / 100) + '!'; status.className = 'promo-code-status ok'; }
       } else {
         promoAplicado = null;
+        promoDescontoCent = 0;
         if (status) {
           status.textContent = (d && d.erro === 'usado') ? 'Este código já foi usado.' : 'Código inválido.';
           status.className = 'promo-code-status erro';
@@ -1825,6 +1830,7 @@
       }
     } catch (e) {
       promoAplicado = null;
+      promoDescontoCent = 0;
       if (status) { status.textContent = 'Não foi possível verificar agora. Tenta de novo.'; status.className = 'promo-code-status erro'; }
     }
     updateTotal();
@@ -1841,7 +1847,7 @@
     const cabecalho = numeroFila ? ('Pedido #' + numeroFila + '  ·  Senha: ' + senhaAtual) : ('Senha: ' + senhaAtual);
     let lines = ["Oi! Gostaria de fazer o seguinte pedido:", "", cabecalho, ""];
     if (promoAplicado) {
-      lines.push("🎁 Código promocional aplicado: " + promoAplicado + " — pedido grátis");
+      lines.push("🎁 Código promocional aplicado: " + promoAplicado + " — desconto de " + fmt(promoDescontoCent / 100));
       lines.push("");
     }
     units.forEach((u, idx) => {
@@ -1919,14 +1925,14 @@
   }
 
   function payMethods() {
-    if (promoAplicado) return 'Grátis 🎁 — código promocional (' + promoAplicado + ')';
+    if (promoAplicado && computeTotal() <= 0) return 'Grátis 🎁 — código promocional (' + promoAplicado + ')';
     // Reflete sempre o metodo realmente escolhido (entrega ou retirada --
     // os dois modos tem os botoes MB Way/Dinheiro desde a correcao da
     // retirada), incluindo o numero para onde mandar no caso do MB Way.
-    if (metodoPagamento === 'dinheiro') {
-      return 'Dinheiro (' + (orderType === 'entrega' ? 'na entrega' : 'na retirada') + ')';
-    }
-    return 'MB Way — enviar para ' + MBWAY_NUMERO;
+    const base = metodoPagamento === 'dinheiro'
+      ? 'Dinheiro (' + (orderType === 'entrega' ? 'na entrega' : 'na retirada') + ')'
+      : 'MB Way — enviar para ' + MBWAY_NUMERO;
+    return promoAplicado ? base + ' (com desconto do código ' + promoAplicado + ')' : base;
   }
 
   // Numero de telemovel para onde se envia o MB Way -- o mesmo do WhatsApp
@@ -1937,29 +1943,32 @@
     const row = document.getElementById('payRow');
     const note = document.getElementById('payNote');
     atualizarCaixaTroco();
-    if (promoAplicado) {
+    if (promoAplicado && computeTotal() <= 0) {
       row.innerHTML = '';
-      note.innerHTML = '🎁 Este pedido é grátis — código promocional aplicado.';
+      note.innerHTML = '🎁 Este pedido fica grátis — código promocional aplicado.';
       return;
     }
+    const notaDesconto = promoAplicado
+      ? `<div class="promo-desconto-nota">🎁 Desconto de ${fmt(promoDescontoCent / 100)} aplicado (código ${promoAplicado}) — falta pagar ${fmt(computeTotal())}.</div>`
+      : '';
     if (orderType === 'entrega') {
       row.innerHTML =
         '<button type="button" class="pay-chip' + (metodoPagamento === 'mbway' ? ' sel' : '') + '" onclick="escolherPagamento(\'mbway\')">MB Way</button>' +
         '<button type="button" class="pay-chip' + (metodoPagamento === 'dinheiro' ? ' sel' : '') + '" onclick="escolherPagamento(\'dinheiro\')">Dinheiro</button>';
-      note.innerHTML = metodoPagamento === 'dinheiro'
+      note.innerHTML = notaDesconto + (metodoPagamento === 'dinheiro'
         ? 'Paga em dinheiro ao estafeta no momento da entrega.'
         : (itemCount() > 0
             ? `Pagamento por MB Way antes do envio: envia <strong>${fmt(computeTotal())}</strong> para o <strong>${MBWAY_NUMERO}</strong> e manda aqui no WhatsApp o comprovativo.`
-            : 'Pagamento por MB Way antes do envio.');
+            : 'Pagamento por MB Way antes do envio.'));
     } else {
       row.innerHTML =
         '<button type="button" class="pay-chip' + (metodoPagamento === 'mbway' ? ' sel' : '') + '" onclick="escolherPagamento(\'mbway\')">MB Way</button>' +
         '<button type="button" class="pay-chip' + (metodoPagamento === 'dinheiro' ? ' sel' : '') + '" onclick="escolherPagamento(\'dinheiro\')">Dinheiro</button>';
-      note.innerHTML = metodoPagamento === 'dinheiro'
+      note.innerHTML = notaDesconto + (metodoPagamento === 'dinheiro'
         ? 'Pagas em dinheiro ao buscar o pedido.'
         : (itemCount() > 0
             ? `Pagamento por MB Way antes de vir buscar: envia <strong>${fmt(computeTotal())}</strong> para o <strong>${MBWAY_NUMERO}</strong> e manda aqui no WhatsApp o comprovativo.`
-            : 'Pagamento por MB Way antes de vir buscar.');
+            : 'Pagamento por MB Way antes de vir buscar.'));
     }
   }
 
@@ -2694,7 +2703,7 @@
           itens: {
             linhas: linhasDoPedido(), producao: listaProducao(), bebidas: bebidasDoPedido(),
             observacao: obsPedido() || undefined,
-            pagamento: { metodo_pagamento: promoAplicado ? 'promo' : metodoPagamento, troco_para_cent: trocoParaCent() },
+            pagamento: { metodo_pagamento: (promoAplicado && computeTotal() <= 0) ? 'promo' : metodoPagamento, troco_para_cent: trocoParaCent() },
             entrega: orderType === 'entrega'
               ? { cent: Math.round(deliveryFee() * 100),
                   cotado: !!entregaCotada,

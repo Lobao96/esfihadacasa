@@ -658,7 +658,7 @@
     try {
       const p = await Notification.requestPermission();
       if (p !== 'granted') {
-        mostrarAviso('Avisos recusados. Pode ativar nas definições do telemóvel, em Notificações.');
+        mostrarAviso('Avisos recusados. Ative nas definições deste aparelho: no Mac, Definições do Sistema → Notificações → Pedidos; no telemóvel, Notificações.');
         estadoAvisos();
         return;
       }
