@@ -40,10 +40,12 @@ CREATE TABLE IF NOT EXISTS codigos_promo (
 );
 
 CREATE TABLE IF NOT EXISTS fecho_caixa (
-  dia                       TEXT PRIMARY KEY,   -- AAAA-MM-DD
-  dinheiro_confirmado_cent  INTEGER NOT NULL DEFAULT 0,  -- dinheiro que o Miguel confirma ter recebido mesmo
-  mbway_confirmado_cent     INTEGER NOT NULL DEFAULT 0,  -- MB Way confirmado
-  andreza_confirmado_cent   INTEGER NOT NULL DEFAULT 0,  -- valor dado a ela de verdade (0 se nao trabalhou nesse dia)
-  notas                     TEXT,                        -- ex.: "ela nao veio", "faltam 13e a confirmar"
-  confirmado_em             TEXT    NOT NULL
+  dia                           TEXT PRIMARY KEY,   -- AAAA-MM-DD
+  dinheiro_confirmado_cent      INTEGER NOT NULL DEFAULT 0,  -- dinheiro que o Miguel confirma ter recebido mesmo
+  mbway_confirmado_cent         INTEGER NOT NULL DEFAULT 0,  -- MB Way confirmado
+  andreza_confirmado_cent       INTEGER NOT NULL DEFAULT 0,  -- valor dado a ela de verdade (0 se nao trabalhou nesse dia)
+  horas_trabalhadas_centesimos  INTEGER NOT NULL DEFAULT 0,  -- horas do Miguel nesse dia x100 (ex.: 4,5h = 450); custo = horas x 10e/h
+  custo_extra_cent              INTEGER NOT NULL DEFAULT 0,  -- eletricidade/outros custos fixos do dia
+  notas                         TEXT,                        -- ex.: "ela nao veio", "faltam 13e a confirmar"
+  confirmado_em                 TEXT    NOT NULL
 );

@@ -1479,19 +1479,25 @@ async function guardarFechoCaixa(request, env) {
   const dinheiroCent = Math.max(0, parseInt(b.dinheiro_cent, 10) || 0);
   const mbwayCent = Math.max(0, parseInt(b.mbway_cent, 10) || 0);
   const andrezaCent = Math.max(0, parseInt(b.andreza_cent, 10) || 0);
+  // Horas trabalhadas pelo Miguel (10e/h) e custos extra do dia (ex.: eletricidade),
+  // guardados para o calculo de lucro/prejuizo do dia na pagina de Caixa.
+  const horasCentesimos = Math.max(0, Math.round((parseFloat(b.horas_trabalhadas) || 0) * 100));
+  const custoExtraCent = Math.max(0, parseInt(b.custo_extra_cent, 10) || 0);
   const notas = limpar(b.notas, 500) || null;
   const agora = new Date().toISOString();
 
   await env.DB.prepare(
-    `INSERT INTO fecho_caixa (dia, dinheiro_confirmado_cent, mbway_confirmado_cent, andreza_confirmado_cent, notas, confirmado_em)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO fecho_caixa (dia, dinheiro_confirmado_cent, mbway_confirmado_cent, andreza_confirmado_cent, horas_trabalhadas_centesimos, custo_extra_cent, notas, confirmado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(dia) DO UPDATE SET
        dinheiro_confirmado_cent = excluded.dinheiro_confirmado_cent,
        mbway_confirmado_cent = excluded.mbway_confirmado_cent,
        andreza_confirmado_cent = excluded.andreza_confirmado_cent,
+       horas_trabalhadas_centesimos = excluded.horas_trabalhadas_centesimos,
+       custo_extra_cent = excluded.custo_extra_cent,
        notas = excluded.notas,
        confirmado_em = excluded.confirmado_em`
-  ).bind(dia, dinheiroCent, mbwayCent, andrezaCent, notas, agora).run();
+  ).bind(dia, dinheiroCent, mbwayCent, andrezaCent, horasCentesimos, custoExtraCent, notas, agora).run();
 
   const linha = await env.DB.prepare('SELECT * FROM fecho_caixa WHERE dia = ?').bind(dia).first();
   return j({ ok: true, fecho: linha });

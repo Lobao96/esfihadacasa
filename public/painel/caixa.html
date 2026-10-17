@@ -54,6 +54,15 @@
   .historico a.editar { color: var(--red); font-weight: 700; text-decoration: none; font-size: 0.78rem; white-space: nowrap; }
   .vazio { text-align: center; color: var(--ink-soft); padding: 24px 0; font-size: 0.9rem; }
 
+  .resultado-linha { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; font-size: 0.92rem; border-bottom: 1px solid var(--line); gap: 10px; }
+  .resultado-linha span { color: var(--ink-soft); }
+  .resultado-linha b { font-weight: 700; white-space: nowrap; }
+  .resultado-linha.total { border-bottom: none; padding-top: 10px; font-size: 1.05rem; }
+  .resultado-linha.total span, .resultado-linha.total b { color: var(--ink); font-weight: 800; }
+  .resultado-linha.total.positivo b { color: var(--verde); }
+  .resultado-linha.total.negativo b { color: var(--red); }
+  .nota-custo { color: var(--ink-soft); font-size: 0.78rem; margin-top: 8px; }
+
   .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); display: flex; z-index: 10; }
   .nav-i { flex: 1; text-align: center; padding: 9px 0 7px; color: var(--ink-soft); text-decoration: none; font-size: 0.72rem; font-weight: 700; border: none; background: none; font-family: inherit; }
   .nav-i span { display: block; font-size: 1.2rem; }
@@ -105,12 +114,31 @@
         <div class="esperado" id="espAndreza"></div>
       </div>
 
+      <div class="linha-2">
+        <div class="campo">
+          <label>🧑‍🍳 Horas trabalhadas (tu)</label>
+          <input type="number" id="inHoras" step="0.25" min="0" placeholder="ex.: 4,5" oninput="atualizarDiferencas()">
+          <div class="esperado" id="espHoras"></div>
+        </div>
+        <div class="campo">
+          <label>💡 Eletricidade / outros custos do dia</label>
+          <input type="number" id="inCustoExtra" step="0.01" min="0" oninput="atualizarDiferencas()">
+          <div class="esperado" id="espCustoExtra">custo fixo por dia aberto</div>
+        </div>
+      </div>
+
       <div class="campo">
         <label>Notas (opcional)</label>
         <textarea id="inNotas" placeholder="Ex.: ela não veio hoje, faltam 13€ a confirmar amanhã…"></textarea>
       </div>
 
       <button class="primario" onclick="confirmarFecho()" style="width:100%">Confirmar fecho do dia</button>
+    </div>
+
+    <div class="bloco">
+      <h2>📈 Resultado do dia</h2>
+      <div id="resultadoDia"></div>
+      <div class="nota-custo">Mão de obra: 10€/h. Ingredientes contam pelo que preencheste em ⚙️ Custos (análise) — nunca é contabilidade real, só uma referência rápida.</div>
     </div>
 
     <div class="bloco">
@@ -131,8 +159,10 @@
 
 <script>
   const API = '/api';
+  const VALOR_HORA = 10; // euros/h, mao de obra do Miguel
+  const ELETRICIDADE_PADRAO = 3.85; // sugestao de custo fixo por dia aberto, editavel
   let pass = '';
-  let esperadoAtual = { dinheiro: 0, mbway: 0, andreza: 0 };
+  let esperadoAtual = { dinheiro: 0, mbway: 0, andreza: 0, ingredientesCent: 0 };
 
   function eur(v) { return (v || 0).toFixed(2).replace('.', ',') + '€'; }
   function eurCent(c) { return eur((c || 0) / 100); }
@@ -219,10 +249,41 @@
     }
     document.getElementById('espAndreza').textContent = textoAndreza;
     document.getElementById('espAndreza').className = 'esperado' + (Math.abs(totalEsperadoA - a) >= 0.005 ? ' dif' : '');
+
+    atualizarResultado();
+  }
+
+  function atualizarResultado() {
+    const d = parseFloat(document.getElementById('inDinheiro').value) || 0;
+    const m = parseFloat(document.getElementById('inMbway').value) || 0;
+    const a = parseFloat(document.getElementById('inAndreza').value) || 0;
+    const horas = parseFloat(document.getElementById('inHoras').value) || 0;
+    const custoExtra = parseFloat(document.getElementById('inCustoExtra').value) || 0;
+    const maoObra = horas * VALOR_HORA;
+    const ingredientes = (esperadoAtual.ingredientesCent || 0) / 100;
+    const receita = d + m;
+    const lucro = receita - a - maoObra - custoExtra - ingredientes;
+
+    const horasTxt = horas ? horas.toFixed(2).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',') : '0';
+    document.getElementById('espHoras').textContent = maoObra >= 0.005 ? `mão de obra: ${eur(maoObra)} (${VALOR_HORA}€/h)` : '';
+
+    const div = document.getElementById('resultadoDia');
+    div.innerHTML = `
+      <div class="resultado-linha"><span>Receita (dinheiro + MB Way)</span><b>${eur(receita)}</b></div>
+      <div class="resultado-linha"><span>− Estafeta (dado à Andreza)</span><b>${eur(a)}</b></div>
+      <div class="resultado-linha"><span>− Mão de obra (${horasTxt}h × ${VALOR_HORA}€)</span><b>${eur(maoObra)}</b></div>
+      <div class="resultado-linha"><span>− Eletricidade / outros custos</span><b>${eur(custoExtra)}</b></div>
+      <div class="resultado-linha"><span>− Ingredientes (estimado, ⚙️ Custos)</span><b>${eur(ingredientes)}</b></div>
+      <div class="resultado-linha total ${lucro >= 0 ? 'positivo' : 'negativo'}">
+        <span>${lucro >= 0 ? '✅ Lucro do dia' : '⚠️ Prejuízo do dia'}</span><b>${eur(Math.abs(lucro))}</b>
+      </div>`;
   }
 
   async function calcularEsperado(dia) {
-    const r = await api('/painel/pedidos?dia=' + encodeURIComponent(dia));
+    const [r, an] = await Promise.all([
+      api('/painel/pedidos?dia=' + encodeURIComponent(dia)),
+      api('/painel/analise?de=' + encodeURIComponent(dia) + '&ate=' + encodeURIComponent(dia)),
+    ]);
     const entregasReaisDia = (r.pedidos || []).filter(p => !p.ensaio && p.estado !== 'cancelado' && p.modo === 'entrega');
     const pagos = (r.pedidos || []).filter(p => !p.ensaio && p.pago && p.estado !== 'cancelado');
     const totalDinheiro = pagos.filter(p => metodoDe(p) === 'dinheiro').reduce((a, p) => a + (p.total_cent || 0), 0);
@@ -234,12 +295,16 @@
     const taxasCent = entregas * 350;
     const complementoCent = entregas ? Math.max(0, 2000 - taxasCent) : 0;
     const andrezaCent = entregas ? Math.max(2000, taxasCent) : 0;
+    // Custo dos ingredientes desse dia, pelos precos definidos em Analise -> Custos.
+    // So conta o que o Miguel ja preencheu la; sabores/extras sem custo definido contam 0.
+    const ingredientesCent = (an && an.resumo && an.resumo.custoProdutos) || 0;
     return {
       dinheiro: totalDinheiro / 100,
       mbway: totalMbway / 100,
       andreza: andrezaCent / 100,
       andrezaTaxas: taxasCent / 100,
       andrezaComplemento: complementoCent / 100,
+      ingredientesCent,
       entregas,
     };
   }
@@ -258,6 +323,8 @@
     document.getElementById('inDinheiro').value = (fecho ? fecho.dinheiro_confirmado_cent / 100 : esperado.dinheiro).toFixed(2);
     document.getElementById('inMbway').value = (fecho ? fecho.mbway_confirmado_cent / 100 : esperado.mbway).toFixed(2);
     document.getElementById('inAndreza').value = (fecho ? fecho.andreza_confirmado_cent / 100 : esperado.andreza).toFixed(2);
+    document.getElementById('inHoras').value = fecho ? (fecho.horas_trabalhadas_centesimos / 100).toFixed(2) : '';
+    document.getElementById('inCustoExtra').value = (fecho ? fecho.custo_extra_cent / 100 : ELETRICIDADE_PADRAO).toFixed(2);
     document.getElementById('inNotas').value = fecho ? (fecho.notas || '') : '';
 
     const badge = document.getElementById('badgeConfirmado');
@@ -275,10 +342,12 @@
     const dinheiro_cent = Math.round((parseFloat(document.getElementById('inDinheiro').value) || 0) * 100);
     const mbway_cent = Math.round((parseFloat(document.getElementById('inMbway').value) || 0) * 100);
     const andreza_cent = Math.round((parseFloat(document.getElementById('inAndreza').value) || 0) * 100);
+    const horas_trabalhadas = parseFloat(document.getElementById('inHoras').value) || 0;
+    const custo_extra_cent = Math.round((parseFloat(document.getElementById('inCustoExtra').value) || 0) * 100);
     const notas = document.getElementById('inNotas').value || '';
     await api('/painel/fecho-caixa', {
       method: 'POST',
-      body: JSON.stringify({ dia, dinheiro_cent, mbway_cent, andreza_cent, notas }),
+      body: JSON.stringify({ dia, dinheiro_cent, mbway_cent, andreza_cent, horas_trabalhadas, custo_extra_cent, notas }),
     });
     carregar();
   }
@@ -299,31 +368,45 @@
       div.innerHTML = '<div class="vazio">Ainda sem nenhum dia confirmado.</div>';
       return;
     }
+    const resultadoAntesIngredientes = f => {
+      const receita = (f.dinheiro_confirmado_cent || 0) + (f.mbway_confirmado_cent || 0);
+      const maoObraCent = Math.round(((f.horas_trabalhadas_centesimos || 0) / 100) * VALOR_HORA * 100);
+      return receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0);
+    };
     div.innerHTML = `
       <table class="historico">
-        <thead><tr><th>Dia</th><th class="num">💵</th><th class="num">💳</th><th class="num">🛵</th><th></th></tr></thead>
+        <thead><tr><th>Dia</th><th class="num">💵</th><th class="num">💳</th><th class="num">🛵</th><th class="num" title="Antes de ingredientes">Resultado*</th><th></th></tr></thead>
         <tbody>
-          ${historicoCache.map(f => `
+          ${historicoCache.map(f => { const res = resultadoAntesIngredientes(f); return `
             <tr${f.dia === hojeStr ? ' class="hoje"' : ''}>
               <td>${dataLonga(f.dia)}${f.notas ? `<div class="notas">${esc(f.notas)}</div>` : ''}</td>
               <td class="num">${eurCent(f.dinheiro_confirmado_cent)}</td>
               <td class="num">${eurCent(f.mbway_confirmado_cent)}</td>
               <td class="num">${eurCent(f.andreza_confirmado_cent)}</td>
+              <td class="num" style="color:${res >= 0 ? 'var(--verde)' : 'var(--red)'}">${res < 0 ? '-' : ''}${eurCent(Math.abs(res))}</td>
               <td><a class="editar" href="#" onclick="editarDia('${f.dia}');return false;">editar</a></td>
-            </tr>`).join('')}
+            </tr>`; }).join('')}
         </tbody>
-      </table>`;
+      </table>
+      <div class="nota-custo">*Resultado antes dos ingredientes (receita − estafeta − mão de obra − eletricidade/outros).</div>`;
   }
 
   function exportarCsv() {
     if (!historicoCache.length) return;
-    const linhas = [['Dia', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Andreza (EUR)', 'Notas']];
+    const linhas = [['Dia', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Andreza (EUR)', 'Horas', 'Eletricidade/outros (EUR)', 'Resultado antes de ingredientes (EUR)', 'Notas']];
     historicoCache.slice().reverse().forEach(f => {
+      const horas = (f.horas_trabalhadas_centesimos || 0) / 100;
+      const maoObraCent = Math.round(horas * VALOR_HORA * 100);
+      const receita = (f.dinheiro_confirmado_cent || 0) + (f.mbway_confirmado_cent || 0);
+      const resultadoCent = receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0);
       linhas.push([
         f.dia,
         (f.dinheiro_confirmado_cent / 100).toFixed(2).replace('.', ','),
         (f.mbway_confirmado_cent / 100).toFixed(2).replace('.', ','),
         (f.andreza_confirmado_cent / 100).toFixed(2).replace('.', ','),
+        horas.toFixed(2).replace('.', ','),
+        ((f.custo_extra_cent || 0) / 100).toFixed(2).replace('.', ','),
+        (resultadoCent / 100).toFixed(2).replace('.', ','),
         (f.notas || '').replace(/[\r\n;]+/g, ' '),
       ]);
     });
