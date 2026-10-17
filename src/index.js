@@ -1452,6 +1452,51 @@ function horaDe(iso) {
   } catch (e) { return null; }
 }
 
+// Fecho de caixa: o Miguel confirma manualmente, por dia, quanto recebeu
+// mesmo em dinheiro/MB Way e quanto deu a serio a Andreza -- os valores
+// "esperados" (calculados a partir dos pedidos) sao so uma sugestao
+// mostrada no browser (igual a logica ja usada em Recibos do dia); aqui
+// so se guarda o que o Miguel confirma, nunca se calcula nada sozinho.
+async function listarFechoCaixa(request, env) {
+  const url = new URL(request.url);
+  const dia = (url.searchParams.get('dia') || '').trim();
+  if (dia) {
+    const linha = await env.DB.prepare('SELECT * FROM fecho_caixa WHERE dia = ?').bind(dia).first();
+    return j({ ok: true, fecho: linha || null });
+  }
+  const dias = Math.min(366, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 30));
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM fecho_caixa ORDER BY dia DESC LIMIT ?'
+  ).bind(dias).all();
+  return j({ ok: true, historico: results || [] });
+}
+
+async function guardarFechoCaixa(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const dia = limpar(b.dia, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia || '')) return j({ ok: false, erro: 'dia invalido' }, 400);
+  const dinheiroCent = Math.max(0, parseInt(b.dinheiro_cent, 10) || 0);
+  const mbwayCent = Math.max(0, parseInt(b.mbway_cent, 10) || 0);
+  const andrezaCent = Math.max(0, parseInt(b.andreza_cent, 10) || 0);
+  const notas = limpar(b.notas, 500) || null;
+  const agora = new Date().toISOString();
+
+  await env.DB.prepare(
+    `INSERT INTO fecho_caixa (dia, dinheiro_confirmado_cent, mbway_confirmado_cent, andreza_confirmado_cent, notas, confirmado_em)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(dia) DO UPDATE SET
+       dinheiro_confirmado_cent = excluded.dinheiro_confirmado_cent,
+       mbway_confirmado_cent = excluded.mbway_confirmado_cent,
+       andreza_confirmado_cent = excluded.andreza_confirmado_cent,
+       notas = excluded.notas,
+       confirmado_em = excluded.confirmado_em`
+  ).bind(dia, dinheiroCent, mbwayCent, andrezaCent, notas, agora).run();
+
+  const linha = await env.DB.prepare('SELECT * FROM fecho_caixa WHERE dia = ?').bind(dia).first();
+  return j({ ok: true, fecho: linha });
+}
+
 async function analise(request, env) {
   const url = new URL(request.url);
   const { de, ate } = intervalo(url);
@@ -1689,6 +1734,8 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
+        if (p === '/api/painel/fecho-caixa' && request.method === 'GET') return await listarFechoCaixa(request, env);
+        if (p === '/api/painel/fecho-caixa' && request.method === 'POST') return await guardarFechoCaixa(request, env);
         if (p === '/api/painel/custos' && request.method === 'GET') return await listarCustos(env);
         if (p === '/api/painel/custos' && request.method === 'POST') return await guardarCustos(request, env);
         if (p === '/api/painel/bebidas' && request.method === 'GET') return await listarBebidas(request, env);

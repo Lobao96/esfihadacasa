@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caixa — Esfiha da Casa</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --red: #C8232B; --cream: #FFF3DC; --ink: #3A1F12; --ink-soft: #6B4A38;
+    --line: rgba(58,31,18,0.14); --card: #FFFFFF; --verde: #1E8E4A;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--cream); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.5; padding-bottom: 70px;
+  }
+  header { position: sticky; top: 0; z-index: 5; background: var(--cream); border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.15rem; margin: 0; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 14px 16px 30px; }
+  .login { max-width: 320px; margin: 80px auto; text-align: center; }
+  .login input { width: 100%; padding: 12px; border-radius: 10px; border: 1.5px solid var(--line); margin-bottom: 10px; font-size: 1rem; }
+  .login button, .filtros input, .filtros button { font-family: inherit; }
+  button.primario { background: var(--red); color: #fff; border: none; border-radius: 10px; padding: 11px 18px; font-weight: 700; cursor: pointer; }
+  button.secundario { background: transparent; color: var(--ink-soft); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .filtros { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .filtros input[type="date"] { padding: 9px 10px; border-radius: 8px; border: 1.5px solid var(--line); }
+  .filtros button { border: 1.5px solid var(--line); background: transparent; border-radius: 8px; padding: 9px 12px; cursor: pointer; font-weight: 700; color: var(--ink-soft); }
+  .filtros button.on, .filtros button:hover { background: var(--red); border-color: var(--red); color: #fff; }
+
+  .bloco { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 18px; }
+  .bloco h2 { font-size: 1rem; margin: 0 0 12px; }
+  .confirmado-badge { display: inline-block; background: rgba(30,142,74,0.12); color: var(--verde); font-weight: 800; font-size: 0.8rem; padding: 4px 10px; border-radius: 999px; margin-bottom: 12px; }
+
+  .campo { margin-bottom: 14px; }
+  .campo label { display: block; font-weight: 700; font-size: 0.88rem; margin-bottom: 4px; }
+  .campo .esperado { color: var(--ink-soft); font-size: 0.8rem; margin-top: 3px; }
+  .campo .esperado.dif { color: #C77700; font-weight: 700; }
+  .campo input[type="number"], .campo textarea {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--line);
+    font-size: 1rem; font-family: inherit; background: #fff; color: var(--ink);
+  }
+  .campo textarea { resize: vertical; min-height: 54px; }
+  .linha-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .historico { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .historico th, .historico td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  .historico th { color: var(--ink-soft); font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.02em; }
+  .historico td.num { text-align: right; white-space: nowrap; }
+  .historico .notas { color: var(--ink-soft); font-size: 0.78rem; }
+  .historico tr.hoje { background: rgba(200,35,43,0.06); }
+  .historico a.editar { color: var(--red); font-weight: 700; text-decoration: none; font-size: 0.78rem; white-space: nowrap; }
+  .vazio { text-align: center; color: var(--ink-soft); padding: 24px 0; font-size: 0.9rem; }
+
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); display: flex; z-index: 10; }
+  .nav-i { flex: 1; text-align: center; padding: 9px 0 7px; color: var(--ink-soft); text-decoration: none; font-size: 0.72rem; font-weight: 700; border: none; background: none; font-family: inherit; }
+  .nav-i span { display: block; font-size: 1.2rem; }
+  .nav-i.on { color: var(--red); }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <h1>💰 Caixa</h1>
+  <p style="color:var(--ink-soft);font-size:0.9rem;">Mesma palavra-passe do painel.</p>
+  <input type="password" id="pass" placeholder="Palavra-passe">
+  <button class="primario" onclick="entrar()" style="width:100%">Entrar</button>
+  <p id="erro" style="color:var(--red);font-size:0.85rem;"></p>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>💰 Fecho de caixa</h1>
+    <span class="hora" id="hora" style="font-size:0.85rem;color:var(--ink-soft)"></span>
+  </header>
+  <div class="wrap">
+    <div class="filtros">
+      <input type="date" id="diaSel" onchange="carregar()">
+      <button onclick="hoje()">Hoje</button>
+      <button onclick="ontem()">Ontem</button>
+    </div>
+
+    <div class="bloco">
+      <h2 id="tituloFecho">Fecho do dia</h2>
+      <div id="badgeConfirmado"></div>
+
+      <div class="linha-2">
+        <div class="campo">
+          <label>💵 Dinheiro recebido</label>
+          <input type="number" id="inDinheiro" step="0.01" min="0" oninput="atualizarDiferencas()">
+          <div class="esperado" id="espDinheiro"></div>
+        </div>
+        <div class="campo">
+          <label>💳 MB Way recebido</label>
+          <input type="number" id="inMbway" step="0.01" min="0" oninput="atualizarDiferencas()">
+          <div class="esperado" id="espMbway"></div>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>🛵 Dado à Andreza</label>
+        <input type="number" id="inAndreza" step="0.01" min="0" oninput="atualizarDiferencas()">
+        <div class="esperado" id="espAndreza"></div>
+      </div>
+
+      <div class="campo">
+        <label>Notas (opcional)</label>
+        <textarea id="inNotas" placeholder="Ex.: ela não veio hoje, faltam 13€ a confirmar amanhã…"></textarea>
+      </div>
+
+      <button class="primario" onclick="confirmarFecho()" style="width:100%">Confirmar fecho do dia</button>
+    </div>
+
+    <div class="bloco">
+      <h2>Histórico</h2>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <button class="secundario" onclick="exportarCsv()">⬇️ Exportar CSV</button>
+      </div>
+      <div id="historico"></div>
+    </div>
+  </div>
+  <nav class="nav">
+    <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
+    <a class="nav-i" href="/admin/"><span>📊</span>Análise</a>
+    <a class="nav-i" href="/painel/recibos.html"><span>🧾</span>Recibos</a>
+    <a class="nav-i on" href="/painel/caixa.html"><span>💰</span>Caixa</a>
+  </nav>
+</div>
+
+<script>
+  const API = '/api';
+  let pass = '';
+  let esperadoAtual = { dinheiro: 0, mbway: 0, andreza: 0 };
+
+  function eur(v) { return (v || 0).toFixed(2).replace('.', ',') + '€'; }
+  function eurCent(c) { return eur((c || 0) / 100); }
+  function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function diaLisboaHoje(offsetDias = 0) {
+    const d = new Date(Date.now() + offsetDias * 86400000);
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon' }).format(d); // AAAA-MM-DD
+  }
+  function dataLonga(d) {
+    try { return new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }); } catch (e) { return d; }
+  }
+  function dadosDe(p) {
+    let d = null;
+    try { d = JSON.parse(p.itens || 'null'); } catch (e) {}
+    if (Array.isArray(d)) return { linhas: d, producao: null, bebidas: null, entrega: null };
+    return d || { linhas: [], producao: null, bebidas: null, entrega: null };
+  }
+  function metodoDe(p) {
+    const info = dadosDe(p).pagamento || dadosDe(p).entrega || {};
+    return info.metodo_pagamento === 'mbway' ? 'mbway' : (info.metodo_pagamento === 'dinheiro' ? 'dinheiro' : 'indefinido');
+  }
+
+  async function api(caminho, opcoes) {
+    const r = await fetch(API + caminho, Object.assign({
+      headers: Object.assign({ 'x-painel-pass': pass }, (opcoes && opcoes.body) ? { 'Content-Type': 'application/json' } : {}),
+    }, opcoes || {}));
+    if (r.status === 401) throw new Error('401');
+    return r.json();
+  }
+
+  async function entrar() {
+    pass = document.getElementById('pass').value;
+    try {
+      await api('/painel/pedidos');
+      try { localStorage.setItem('painelPass', pass); } catch (e) {}
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      document.getElementById('diaSel').value = diaLisboaHoje();
+      relogio(); setInterval(relogio, 1000);
+      carregar();
+    } catch (e) {
+      document.getElementById('erro').textContent = 'Palavra-passe errada.';
+    }
+  }
+
+  function relogio() {
+    document.getElementById('hora').textContent = new Date().toLocaleTimeString('pt-PT');
+  }
+
+  function hoje() { document.getElementById('diaSel').value = diaLisboaHoje(); carregar(); }
+  function ontem() { document.getElementById('diaSel').value = diaLisboaHoje(-1); carregar(); }
+
+  function atualizarDiferencas() {
+    const d = parseFloat(document.getElementById('inDinheiro').value) || 0;
+    const m = parseFloat(document.getElementById('inMbway').value) || 0;
+    const a = parseFloat(document.getElementById('inAndreza').value) || 0;
+    const linha = (campo, esperado, valor) => {
+      if (Math.abs(esperado - valor) < 0.005) return `esperado: ${eur(esperado)}`;
+      return `esperado: ${eur(esperado)} · diferença: ${valor > esperado ? '+' : ''}${eur(valor - esperado)}`;
+    };
+    document.getElementById('espDinheiro').textContent = linha('dinheiro', esperadoAtual.dinheiro, d);
+    document.getElementById('espDinheiro').className = 'esperado' + (Math.abs(esperadoAtual.dinheiro - d) >= 0.005 ? ' dif' : '');
+    document.getElementById('espMbway').textContent = linha('mbway', esperadoAtual.mbway, m);
+    document.getElementById('espMbway').className = 'esperado' + (Math.abs(esperadoAtual.mbway - m) >= 0.005 ? ' dif' : '');
+    document.getElementById('espAndreza').textContent = linha('andreza', esperadoAtual.andreza, a);
+    document.getElementById('espAndreza').className = 'esperado' + (Math.abs(esperadoAtual.andreza - a) >= 0.005 ? ' dif' : '');
+  }
+
+  async function calcularEsperado(dia) {
+    const r = await api('/painel/pedidos?dia=' + encodeURIComponent(dia));
+    const entregasReaisDia = (r.pedidos || []).filter(p => !p.ensaio && p.estado !== 'cancelado' && p.modo === 'entrega');
+    const pagos = (r.pedidos || []).filter(p => !p.ensaio && p.pago && p.estado !== 'cancelado');
+    const totalDinheiro = pagos.filter(p => metodoDe(p) === 'dinheiro').reduce((a, p) => a + (p.total_cent || 0), 0);
+    const totalMbway = pagos.filter(p => metodoDe(p) === 'mbway').reduce((a, p) => a + (p.total_cent || 0), 0);
+    const entregas = entregasReaisDia.length;
+    let andrezaCent = 0;
+    if (entregas) {
+      const taxaCent = entregas * 350;
+      andrezaCent = Math.max(2000, taxaCent);
+    }
+    return {
+      dinheiro: totalDinheiro / 100,
+      mbway: totalMbway / 100,
+      andreza: andrezaCent / 100,
+      entregas,
+    };
+  }
+
+  async function carregar() {
+    const dia = document.getElementById('diaSel').value;
+    document.getElementById('tituloFecho').textContent = 'Fecho do dia — ' + dataLonga(dia);
+
+    const [esperado, r] = await Promise.all([
+      calcularEsperado(dia),
+      api('/painel/fecho-caixa?dia=' + encodeURIComponent(dia)),
+    ]);
+    esperadoAtual = esperado;
+    const fecho = r.fecho;
+
+    document.getElementById('inDinheiro').value = (fecho ? fecho.dinheiro_confirmado_cent / 100 : esperado.dinheiro).toFixed(2);
+    document.getElementById('inMbway').value = (fecho ? fecho.mbway_confirmado_cent / 100 : esperado.mbway).toFixed(2);
+    document.getElementById('inAndreza').value = (fecho ? fecho.andreza_confirmado_cent / 100 : esperado.andreza).toFixed(2);
+    document.getElementById('inNotas').value = fecho ? (fecho.notas || '') : '';
+
+    const badge = document.getElementById('badgeConfirmado');
+    badge.innerHTML = fecho
+      ? `<span class="confirmado-badge">✅ Confirmado</span>`
+      : (esperado.entregas || esperado.dinheiro || esperado.mbway
+          ? '' : `<span class="confirmado-badge" style="background:rgba(138,90,0,0.1);color:#8A5A00">Ainda por confirmar</span>`);
+
+    atualizarDiferencas();
+    carregarHistorico();
+  }
+
+  async function confirmarFecho() {
+    const dia = document.getElementById('diaSel').value;
+    const dinheiro_cent = Math.round((parseFloat(document.getElementById('inDinheiro').value) || 0) * 100);
+    const mbway_cent = Math.round((parseFloat(document.getElementById('inMbway').value) || 0) * 100);
+    const andreza_cent = Math.round((parseFloat(document.getElementById('inAndreza').value) || 0) * 100);
+    const notas = document.getElementById('inNotas').value || '';
+    await api('/painel/fecho-caixa', {
+      method: 'POST',
+      body: JSON.stringify({ dia, dinheiro_cent, mbway_cent, andreza_cent, notas }),
+    });
+    carregar();
+  }
+
+  function editarDia(dia) {
+    document.getElementById('diaSel').value = dia;
+    carregar();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  let historicoCache = [];
+  async function carregarHistorico() {
+    const r = await api('/painel/fecho-caixa?dias=90');
+    historicoCache = r.historico || [];
+    const hojeStr = diaLisboaHoje();
+    const div = document.getElementById('historico');
+    if (!historicoCache.length) {
+      div.innerHTML = '<div class="vazio">Ainda sem nenhum dia confirmado.</div>';
+      return;
+    }
+    div.innerHTML = `
+      <table class="historico">
+        <thead><tr><th>Dia</th><th class="num">💵</th><th class="num">💳</th><th class="num">🛵</th><th></th></tr></thead>
+        <tbody>
+          ${historicoCache.map(f => `
+            <tr${f.dia === hojeStr ? ' class="hoje"' : ''}>
+              <td>${dataLonga(f.dia)}${f.notas ? `<div class="notas">${esc(f.notas)}</div>` : ''}</td>
+              <td class="num">${eurCent(f.dinheiro_confirmado_cent)}</td>
+              <td class="num">${eurCent(f.mbway_confirmado_cent)}</td>
+              <td class="num">${eurCent(f.andreza_confirmado_cent)}</td>
+              <td><a class="editar" href="#" onclick="editarDia('${f.dia}');return false;">editar</a></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function exportarCsv() {
+    if (!historicoCache.length) return;
+    const linhas = [['Dia', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Andreza (EUR)', 'Notas']];
+    historicoCache.slice().reverse().forEach(f => {
+      linhas.push([
+        f.dia,
+        (f.dinheiro_confirmado_cent / 100).toFixed(2).replace('.', ','),
+        (f.mbway_confirmado_cent / 100).toFixed(2).replace('.', ','),
+        (f.andreza_confirmado_cent / 100).toFixed(2).replace('.', ','),
+        (f.notas || '').replace(/[\r\n;]+/g, ' '),
+      ]);
+    });
+    const csv = '﻿' + linhas.map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'caixa-esfiha-da-casa.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  (function () {
+    const g = localStorage.getItem('painelPass');
+    if (g) {
+      pass = g;
+      api('/painel/pedidos').then(() => {
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('app').style.display = '';
+        document.getElementById('diaSel').value = diaLisboaHoje();
+        relogio(); setInterval(relogio, 1000);
+        carregar();
+      }).catch(() => {});
+    }
+  })();
+</script>
+</body>
+</html>
