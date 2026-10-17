@@ -31,6 +31,12 @@
   .resumo { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.9rem; display: flex; gap: 18px; flex-wrap: wrap; }
   .resumo b { display: block; font-size: 1.15rem; }
   .vazio { text-align: center; color: var(--ink-soft); padding: 40px 0; }
+  .pendentes { background: #FFF7E8; border: 1.5px solid #F0C34D; border-radius: 12px; padding: 12px 14px; margin-bottom: 20px; }
+  .pendentes h2 { font-size: 0.98rem; margin: 0 0 8px; color: #8A5A00; }
+  .pendentes .linha { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed rgba(138,90,0,0.25); font-size: 0.88rem; }
+  .pendentes .linha:last-child { border-bottom: none; }
+  .pendentes .linha b { display: block; }
+  .pendentes button { background: #8A5A00; color: #fff; border: none; border-radius: 8px; padding: 7px 10px; font-weight: 700; font-size: 0.82rem; cursor: pointer; white-space: nowrap; }
 
   /* --- Recibo (estilo talão, uma folha por encomenda) --- */
   .recibo { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 26px 20px; margin-bottom: 20px; }
@@ -89,6 +95,7 @@
     </div>
     <div class="resumo" id="resumo"></div>
     <div id="lista"></div>
+    <div id="porConfirmar" class="no-print"></div>
   </div>
   <nav class="nav no-print">
     <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
@@ -143,10 +150,17 @@
     return d || { linhas: [], producao: null, bebidas: null, entrega: null };
   }
 
-  async function api(caminho) {
-    const r = await fetch(API + caminho, { headers: { 'x-painel-pass': pass } });
+  async function api(caminho, opcoes) {
+    const r = await fetch(API + caminho, Object.assign({
+      headers: Object.assign({ 'x-painel-pass': pass }, (opcoes && opcoes.body) ? { 'Content-Type': 'application/json' } : {}),
+    }, opcoes || {}));
     if (r.status === 401) throw new Error('401');
     return r.json();
+  }
+
+  async function marcarPagoAqui(id) {
+    await api('/painel/pedido', { method: 'POST', body: JSON.stringify({ id, pago: 1 }) });
+    carregar();
   }
 
   async function entrar() {
@@ -216,6 +230,28 @@
     const pedidos = (r.pedidos || [])
       .filter(p => !p.ensaio && p.pago && p.estado !== 'cancelado')
       .sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || ''));
+    // Pedidos reais do dia que ainda NAO foram marcados como pagos --
+    // e exatamente por isto que um recibo "parece" estar em falta aqui:
+    // o pedido existe, mas falta alguem carregar em "Marcar pago".
+    const pendentes = (r.pedidos || [])
+      .filter(p => !p.ensaio && !p.pago && p.estado !== 'cancelado')
+      .sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || ''));
+
+    const divPendentes = document.getElementById('porConfirmar');
+    if (pendentes.length) {
+      const totalPendente = pendentes.reduce((a, p) => a + (p.total_cent || 0), 0);
+      divPendentes.innerHTML = `
+        <div class="pendentes">
+          <h2>⏳ Por confirmar o pagamento (${pendentes.length}, ${eurCent(totalPendente)})</h2>
+          ${pendentes.map(p => `
+            <div class="linha">
+              <span><b>Pedido #${p.numero}</b>${p.nome ? ' · ' + esc(p.nome) : ''} · ${horaDe(p.criado_em)} · ${metodoPagamentoLabel(p)} · ${eurCent(p.total_cent)}</span>
+              <button onclick="marcarPagoAqui(${p.id})">Marcar pago</button>
+            </div>`).join('')}
+        </div>`;
+    } else {
+      divPendentes.innerHTML = '';
+    }
 
     const lista = document.getElementById('lista');
     const resumo = document.getElementById('resumo');

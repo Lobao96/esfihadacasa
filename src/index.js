@@ -1457,7 +1457,7 @@ async function analise(request, env) {
   const { de, ate } = intervalo(url);
 
   const { results: linhas } = await env.DB.prepare(
-    `SELECT dia, criado_em, modo, localidade, origem, total_cent, n_esfihas, itens
+    `SELECT dia, criado_em, modo, localidade, origem, total_cent, n_esfihas, itens, pago
        FROM pedidos
       WHERE ensaio = 0 AND estado <> 'cancelado' AND dia >= ? AND dia <= ?
       ORDER BY criado_em LIMIT 5000`
@@ -1481,11 +1481,12 @@ async function analise(request, env) {
   const somar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n; };
   const dias = {}, horas = {}, zonas = {}, origens = {};
   const sabores = {}, extras = {}, bebidas = {}, bebidasVendidas = {}, bebidasOfertas = {};
-  let receita = 0, esfihas = 0, esfihasGratis = 0, entregas = 0, receitaEntregas = 0;
+  let receita = 0, receitaPaga = 0, receitaPorConfirmar = 0, pedidosPorConfirmar = 0, esfihas = 0, esfihasGratis = 0, entregas = 0, receitaEntregas = 0;
   let custoProdutos = 0, entregaCobrada = 0, entregaCustoUber = 0;
 
   for (const r of linhas || []) {
     receita += r.total_cent || 0;
+    if (r.pago) { receitaPaga += r.total_cent || 0; } else { receitaPorConfirmar += r.total_cent || 0; pedidosPorConfirmar++; }
     esfihas += r.n_esfihas || 0;
     if (r.modo === 'entrega') { entregas++; receitaEntregas += r.total_cent || 0; }
 
@@ -1555,7 +1556,7 @@ async function analise(request, env) {
 
   return j({
     ok: true, de, ate,
-    resumo: { pedidos, receita, esfihas, esfihasPagas: esfihas - esfihasGratis, esfihasGratis, entregas, receitaEntregas, retiradas: pedidos - entregas, medio: pedidos ? receita / pedidos : 0 },
+    resumo: { pedidos, receita, receitaPaga, receitaPorConfirmar, pedidosPorConfirmar, esfihas, esfihasPagas: esfihas - esfihasGratis, esfihasGratis, entregas, receitaEntregas, retiradas: pedidos - entregas, medio: pedidos ? receita / pedidos : 0 },
     porDia: serie,
     porHora: valores(horas).sort((a, b) => a.hora - b.hora),
     porZona: valores(zonas).sort((a, b) => b.pedidos - a.pedidos),
