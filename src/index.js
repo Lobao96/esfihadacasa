@@ -1008,7 +1008,8 @@ async function ajustarProducaoPedido(request, env) {
     it.producao.splice(idx, 1);
   } else {
     linha.n = novoN;
-    linha.gratis = Math.min(novoN, Math.max(0, parseInt(linha.gratis, 10) || 0));
+    const gratisAntigo = Math.max(0, parseInt(linha.gratis, 10) || 0);
+    linha.gratis = delta > 0 ? Math.min(novoN, gratisAntigo + delta) : Math.min(novoN, gratisAntigo);
   }
   it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
   it.linhas.push(novoN === 0
@@ -1061,7 +1062,7 @@ async function adicionarProducaoPedido(request, env) {
   if (!Array.isArray(it.producao)) it.producao = [];
   if (!Array.isArray(it.linhas)) it.linhas = [];
 
-  it.producao.push({ sabor: sabor.nome, ing: '', extras: [], n, gratis: 0, doce: sabor.doce ? 1 : 0 });
+  it.producao.push({ sabor: sabor.nome, ing: '', extras: [], n, gratis: n, doce: sabor.doce ? 1 : 0 });
   it.linhas.push(`Correção no painel: + ${n}x ${sabor.nome} (sem alterar o preço)`);
 
   const novoNEsfihas = (p.n_esfihas || 0) + n;
