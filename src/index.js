@@ -614,6 +614,9 @@ async function novoPedido(request, env, ctx) {
     const descontoTxt = (descontoPromoCent / 100).toFixed(2).replace('.', ',') + '€';
     itensObj.linhas.push(`🎁 Código promocional aplicado: ${promoAplicado.codigo} — desconto de ${descontoTxt}`);
   }
+  if (itensObj && !Array.isArray(itensObj)) {
+    itensObj.pagas_original = nEsfihasPagasReal;
+  }
   const itens = JSON.stringify(itensObj);
   const token = novoToken();
 
@@ -1004,12 +1007,28 @@ async function ajustarProducaoPedido(request, env) {
   const doce = !!linha.doce;
   const sabor = linha.sabor;
 
+  // Quantas esfihas estao pagas AGORA (antes desta correcao) e quantas
+  // foram mesmo pagas quando o pedido foi criado (baseline, nunca muda
+  // com correcoes do painel -- so muda se o cliente pagar mais a serio).
+  const pagoAntesTotal = (it.producao || []).reduce((s, x) => s + Math.max(0, (parseInt(x.n, 10) || 0) - (parseInt(x.gratis, 10) || 0)), 0);
+  const pagasOriginal = Number.isFinite(it.pagas_original) ? it.pagas_original : pagoAntesTotal;
+
   if (novoN === 0) {
     it.producao.splice(idx, 1);
   } else {
     linha.n = novoN;
     const gratisAntigo = Math.max(0, parseInt(linha.gratis, 10) || 0);
-    linha.gratis = delta > 0 ? Math.min(novoN, gratisAntigo + delta) : Math.min(novoN, gratisAntigo);
+    if (delta > 0) {
+      // Por defeito assume-se que o acrescimo e so uma troca (ex.: tirar
+      // 1 tradicional e pôr 1 suculenta) -- continua pago. So se isto
+      // empurrar o total pago do pedido PARA ALEM do que foi mesmo pago
+      // na altura e que a diferenca conta como oferta/correcao.
+      const pagoDepoisSemForcar = pagoAntesTotal + delta;
+      const excesso = Math.max(0, pagoDepoisSemForcar - pagasOriginal);
+      linha.gratis = Math.min(novoN, gratisAntigo + excesso);
+    } else {
+      linha.gratis = Math.min(novoN, gratisAntigo);
+    }
   }
   it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
   it.linhas.push(novoN === 0
@@ -1062,7 +1081,12 @@ async function adicionarProducaoPedido(request, env) {
   if (!Array.isArray(it.producao)) it.producao = [];
   if (!Array.isArray(it.linhas)) it.linhas = [];
 
-  it.producao.push({ sabor: sabor.nome, ing: '', extras: [], n, gratis: n, doce: sabor.doce ? 1 : 0 });
+  const pagoAntesTotalAdic = (it.producao || []).reduce((s, x) => s + Math.max(0, (parseInt(x.n, 10) || 0) - (parseInt(x.gratis, 10) || 0)), 0);
+  const pagasOriginalAdic = Number.isFinite(it.pagas_original) ? it.pagas_original : pagoAntesTotalAdic;
+  const pagoDepoisSemForcarAdic = pagoAntesTotalAdic + n;
+  const excessoAdic = Math.max(0, pagoDepoisSemForcarAdic - pagasOriginalAdic);
+  const gratisNovaLinha = Math.min(n, excessoAdic);
+  it.producao.push({ sabor: sabor.nome, ing: '', extras: [], n, gratis: gratisNovaLinha, doce: sabor.doce ? 1 : 0 });
   it.linhas.push(`Correção no painel: + ${n}x ${sabor.nome} (sem alterar o preço)`);
 
   const novoNEsfihas = (p.n_esfihas || 0) + n;
