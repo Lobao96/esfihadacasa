@@ -197,8 +197,28 @@
     document.getElementById('espDinheiro').className = 'esperado' + (Math.abs(esperadoAtual.dinheiro - d) >= 0.005 ? ' dif' : '');
     document.getElementById('espMbway').textContent = linha('mbway', esperadoAtual.mbway, m);
     document.getElementById('espMbway').className = 'esperado' + (Math.abs(esperadoAtual.mbway - m) >= 0.005 ? ' dif' : '');
-    document.getElementById('espAndreza').textContent = linha('andreza', esperadoAtual.andreza, a);
-    document.getElementById('espAndreza').className = 'esperado' + (Math.abs(esperadoAtual.andreza - a) >= 0.005 ? ' dif' : '');
+
+    // Andreza: o "esperado" nao e o minimo de 20e, e as taxas de entrega recebidas (3,50e/entrega).
+    // Se nao chegarem a 20e num dia trabalhado, mostra-se o complemento que falta dar.
+    // Se ela nao trabalhou nesse dia (0 entregas), esperado e complemento ficam a 0e.
+    const entregasA = esperadoAtual.entregas || 0;
+    const taxasA = esperadoAtual.andrezaTaxas || 0;
+    const complementoA = esperadoAtual.andrezaComplemento || 0;
+    const totalEsperadoA = taxasA + complementoA;
+    let textoAndreza;
+    if (!entregasA) {
+      textoAndreza = 'não trabalhou hoje (0 entregas) · esperado: 0,00€';
+    } else {
+      textoAndreza = `taxas de entrega recebidas: ${eur(taxasA)}`;
+      textoAndreza += complementoA >= 0.005
+        ? ` · complemento a teu cargo: ${eur(complementoA)}`
+        : ' · sem complemento (taxas ≥ 20€)';
+    }
+    if (Math.abs(totalEsperadoA - a) >= 0.005) {
+      textoAndreza += ` · diferença: ${a > totalEsperadoA ? '+' : ''}${eur(a - totalEsperadoA)}`;
+    }
+    document.getElementById('espAndreza').textContent = textoAndreza;
+    document.getElementById('espAndreza').className = 'esperado' + (Math.abs(totalEsperadoA - a) >= 0.005 ? ' dif' : '');
   }
 
   async function calcularEsperado(dia) {
@@ -208,15 +228,18 @@
     const totalDinheiro = pagos.filter(p => metodoDe(p) === 'dinheiro').reduce((a, p) => a + (p.total_cent || 0), 0);
     const totalMbway = pagos.filter(p => metodoDe(p) === 'mbway').reduce((a, p) => a + (p.total_cent || 0), 0);
     const entregas = entregasReaisDia.length;
-    let andrezaCent = 0;
-    if (entregas) {
-      const taxaCent = entregas * 350;
-      andrezaCent = Math.max(2000, taxaCent);
-    }
+    // Combinado: ela recebe sempre o valor das taxas de entrega (3,50€/entrega).
+    // Se as taxas nao chegarem a 20€ num dia que ela trabalhou, o Miguel completa a diferenca ("complemento").
+    // Se ela nao trabalhou (0 entregas no dia), nao ha taxas nem complemento: tudo fica a 0€.
+    const taxasCent = entregas * 350;
+    const complementoCent = entregas ? Math.max(0, 2000 - taxasCent) : 0;
+    const andrezaCent = entregas ? Math.max(2000, taxasCent) : 0;
     return {
       dinheiro: totalDinheiro / 100,
       mbway: totalMbway / 100,
       andreza: andrezaCent / 100,
+      andrezaTaxas: taxasCent / 100,
+      andrezaComplemento: complementoCent / 100,
       entregas,
     };
   }
