@@ -479,6 +479,8 @@
     font-size: 0.86rem; font-weight: 600; line-height: 1.5;
   }
   .tel-nota { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
+  .tel-erro { font-size: 0.8rem; color: var(--red-dark); margin-top: 6px; line-height: 1.4; font-weight: 700; }
+  #telInput.campo-erro { border-color: var(--red-dark); }
   .link-pedido {
     background: rgba(30,142,74,0.10); border: 1.5px solid #1E8E4A; color: #146634;
     border-radius: 12px; padding: 14px; margin-top: 12px; display: none;
@@ -795,8 +797,9 @@
 
       <p class="extras-title">Seu WhatsApp</p>
       <input type="tel" id="telInput" inputmode="tel" placeholder="Ex.: 912 345 678"
-             autocomplete="tel" aria-label="Seu número de WhatsApp">
+             autocomplete="tel" aria-label="Seu número de WhatsApp" oninput="validarTelAoVivo()" onblur="validarTelAoVivo()">
       <p class="tel-nota">Para avisarmos quando o pedido estiver a caminho, e para o estafeta poder ligar se não encontrar a morada.</p>
+      <p class="tel-erro" id="telErro" style="display:none;">Esse número não parece certo — confirme os 9 dígitos (ex.: 912 345 678). Sem isto não conseguimos contactar se houver algum problema.</p>
 
       <p class="extras-title">Pagamento</p>
       <div class="pay-row" id="payRow"></div>
@@ -2311,6 +2314,28 @@
     mostrarFaltas([]);
   }
 
+  // Numero de telemovel/fixo portugues: 9 digitos, a comecar por 2 (fixo),
+  // 3 (linhas VoIP) ou 9 (movel); aceita +351/00351 na frente, e rejeita
+  // sequencias obviamente erradas (todos os digitos iguais).
+  function telValido(tel) {
+    let d = (tel || '').replace(/\D/g, '');
+    if (d.startsWith('00351')) d = d.slice(5);
+    else if (d.startsWith('351') && d.length > 9) d = d.slice(3);
+    if (!/^[239]\d{8}$/.test(d)) return false;
+    if (/^(\d)\1{8}$/.test(d)) return false;
+    return true;
+  }
+
+  function validarTelAoVivo() {
+    const el = document.getElementById('telInput');
+    const erro = document.getElementById('telErro');
+    if (!el || !erro) return;
+    const v = el.value || '';
+    const mostrar = v.replace(/\D/g, '').length >= 9 && !telValido(v);
+    erro.style.display = mostrar ? 'block' : 'none';
+    el.classList.toggle('campo-erro', mostrar);
+  }
+
   function cpValido(cp) {
     return /^\d{4}-\d{3}$/.test((cp || '').trim());
   }
@@ -2613,8 +2638,8 @@
     if (qtdGratisEsfihas() > 0 && gratisEsfihas.some(s => !s)) faltas.push('Esfihas grátis: falta escolher o sabor de todas.');
     const nomeV = ((document.getElementById('nomeInput') || {}).value || '').trim();
     if (nomeV.length < 2) faltas.push('Falta escrever o seu nome.');
-    const telV = ((document.getElementById('telInput') || {}).value || '').replace(/\D/g, '');
-    if (telV.length < 9) faltas.push('Falta o número de WhatsApp (precisamos para a entrega).');
+    const telRaw = (document.getElementById('telInput') || {}).value || '';
+    if (!telValido(telRaw)) faltas.push('O número de WhatsApp está incompleto ou errado — confirme os 9 dígitos (ex.: 912 345 678). É por aí que entramos em contacto se houver algum problema.');
     if (pagaDinheiro()) {
       const chk = document.getElementById('trocoCheck');
       if (chk && chk.checked) {
