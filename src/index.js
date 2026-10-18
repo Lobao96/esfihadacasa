@@ -1541,6 +1541,14 @@ async function analise(request, env) {
     esfihas += r.n_esfihas || 0;
     if (r.modo === 'entrega') { entregas++; receitaEntregas += r.total_cent || 0; }
 
+    // Caixas de pizza usadas neste pedido: 1 caixa ate 10 esfihas, 2 caixas
+    // acima disso. So entra na conta se o custo da caixa estiver preenchido
+    // em Analise -> Custos (produto "Caixa de pizza").
+    if (r.n_esfihas > 0) {
+      const caixasPedido = r.n_esfihas > 10 ? 2 : 1;
+      custoProdutos += caixasPedido * (custos['Caixa de pizza'] || 0);
+    }
+
     const d = dias[r.dia] || (dias[r.dia] = { dia: r.dia, pedidos: 0, receita: 0, esfihas: 0 });
     d.pedidos++; d.receita += r.total_cent || 0; d.esfihas += r.n_esfihas || 0;
 
@@ -1604,6 +1612,10 @@ async function analise(request, env) {
   const ofertasFixas = (stockBebidas || [])
     .filter(x => x.por_pedido > 0)
     .map(x => ({ nome: x.nome, n: x.por_pedido * pedidos }));
+  // Ketchup e outras ofertas fixas por pedido (saem sempre, nao vem no
+  // "itens" de nenhum pedido) -- custo entra aqui se tiver preco definido
+  // em Custos com o mesmo nome do stock (ex.: "Ketchup (saquetas)").
+  for (const o of ofertasFixas) custoProdutos += (custos[o.nome] || 0) * o.n;
 
   return j({
     ok: true, de, ate,

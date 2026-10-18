@@ -203,6 +203,11 @@
     { grupo: 'Extras doces', itens: ['Coco', 'Amendoim'] },
     { grupo: 'Bebidas', itens: ['Coca-Cola 1L', 'Fanta Laranja 1L', 'Guaraná', 'Coca-Cola',
                                  'Coca-Cola Zero', 'Fanta Laranja', 'Iced Tea Pêssego', 'Água'] },
+    // "Caixa de pizza": custo de 1 caixa -- o sistema assume sozinho 1 caixa
+    // por pedido ate 10 esfihas, 2 caixas acima disso. "Ketchup (saquetas)":
+    // tem de ter EXATAMENTE o mesmo nome do item no Stock de bebidas/ofertas
+    // (a oferta fixa por pedido), senao o custo nao e encontrado e fica a 0.
+    { grupo: 'Embalagens e fixos', itens: ['Caixa de pizza', 'Ketchup (saquetas)'] },
   ];
 
   function idCusto(nome) { return 'c_' + nome.replace(/[^a-zA-Z0-9]/g, ''); }
