@@ -1694,9 +1694,16 @@
 
   function itemCount() { return units.length; }
 
-  function computeTotal() {
+  // Total ANTES de qualquer desconto de codigo promocional -- e este valor
+  // (nunca o ja descontado) que vai para o servidor como total_cent, para
+  // nunca aplicar o desconto duas vezes (uma aqui, outra no servidor).
+  function computeTotalBruto() {
     let total = units.reduce((a, u) => a + unitPrice(u), 0);
     if (orderType === 'entrega' && units.length > 0) total += deliveryFee();
+    return total;
+  }
+  function computeTotal() {
+    let total = computeTotalBruto();
     if (promoAplicado) total = Math.max(0, total - (promoDescontoCent / 100));
     return total;
   }
@@ -1820,7 +1827,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           codigo,
-          total_cent: Math.round(computeTotal() * 100),
+          total_cent: Math.round(computeTotalBruto() * 100),
           n_esfihas: contaEsfihasTotal(),
         }),
       });
@@ -2119,6 +2126,58 @@
     document.getElementById('totalAmount').textContent = fmt(computeTotal());
     renderPayment();
     refreshLink();
+    agendarRevalidarPromo();
+  }
+
+  // Sempre que o carrinho muda (quantidade, combos, etc.) com um codigo
+  // promocional ja aplicado, volta a validar o codigo contra o pedido
+  // atual -- o desconto pode mudar (ex.: codigo com preco fixo a X
+  // esfihas) ou deixar de ser valido (ex.: baixou do minimo de esfihas).
+  // Com debounce para nao pedir ao servidor a cada clique.
+  let promoRevalidarTimer = null;
+  function agendarRevalidarPromo() {
+    if (!promoAplicado) return;
+    clearTimeout(promoRevalidarTimer);
+    promoRevalidarTimer = setTimeout(revalidarPromoAplicado, 350);
+  }
+
+  async function revalidarPromoAplicado() {
+    if (!promoAplicado) return;
+    const codigo = promoAplicado;
+    const status = document.getElementById('promoStatus');
+    try {
+      const r = await fetch(API + '/validar-promo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          codigo,
+          total_cent: Math.round(computeTotalBruto() * 100),
+          n_esfihas: contaEsfihasTotal(),
+        }),
+      });
+      const d = await r.json();
+      if (!promoAplicado || promoAplicado !== codigo) return; // mudou entretanto
+      if (d && d.ok) {
+        promoDescontoCent = parseInt(d.desconto_cent, 10) || 0;
+        if (status) { status.textContent = '✅ Código aplicado — desconto de ' + fmt(promoDescontoCent / 100) + '!'; status.className = 'promo-code-status ok'; }
+      } else {
+        promoAplicado = null;
+        promoDescontoCent = 0;
+        if (status) {
+          if (d && d.erro === 'minimo_esfihas') {
+            status.textContent = `Este código precisa de pelo menos ${d.min_esfihas || 0} esfihas no pedido.`;
+          } else if (d && d.erro === 'usado') {
+            status.textContent = 'Este código já foi usado.';
+          } else {
+            status.textContent = 'Este código deixou de ser válido para este pedido.';
+          }
+          status.className = 'promo-code-status erro';
+        }
+      }
+      document.getElementById('totalAmount').textContent = fmt(computeTotal());
+      renderPayment();
+      refreshLink();
+    } catch (e) {}
   }
 
   function fmt(n) { return n.toFixed(2).replace('.', ',') + '€'; }
@@ -2734,7 +2793,7 @@
           telefone: (document.getElementById('telInput') || {}).value || '',
           origem: ORIGEM.origem,
           campanha: ORIGEM.campanha,
-          total_cent: Math.round(computeTotal() * 100),
+          total_cent: Math.round(computeTotalBruto() * 100),
           n_esfihas: contaEsfihasTotal(),
           codigoPromo: promoAplicado || undefined,
           itens: {
