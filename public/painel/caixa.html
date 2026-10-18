@@ -325,7 +325,7 @@
     const andrezaCent = entregas ? Math.max(2000, taxasCent) : 0;
     // Custo dos ingredientes desse dia, pelos precos definidos em Analise -> Custos.
     // So conta o que o Miguel ja preencheu la; sabores/extras sem custo definido contam 0.
-    const ingredientesCent = (an && an.resumo && an.resumo.custoProdutos) || 0;
+    const ingredientesCent = (an && an.custoProdutos) || 0;
     return {
       dinheiro: totalDinheiro / 100,
       mbway: totalMbway / 100,
