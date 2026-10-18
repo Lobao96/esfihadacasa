@@ -1577,6 +1577,9 @@
     // Nao acumula com a promocao de inauguracao -- se esta ja esta ativa
     // (hoje, 3+ esfihas avulsas), a oferta da bebida fica desligada.
     if (tierEsfihasGratis(contaEsfihasAvulsas())) return false;
+    // Nem com um codigo promocional aplicado -- os codigos ja sao o seu
+    // proprio premio/desconto, nao acumulam com a bebida gratis automatica.
+    if (promoAplicado) return false;
     return contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas;
   }
   function setBrinde(bid) {

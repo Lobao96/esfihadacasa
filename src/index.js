@@ -589,6 +589,14 @@ async function novoPedido(request, env, ctx) {
     if ((linhaPromo.min_esfihas || 0) > 0 && nEsfihasReal < linhaPromo.min_esfihas) {
       return j({ ok: false, erro: 'promo_minimo_esfihas', min_esfihas: linhaPromo.min_esfihas }, 400);
     }
+    // Um codigo promocional nunca acumula com o brinde automatico (10+
+    // esfihas -> bebida gratis): se vier alguma bebida marcada "(gratis)"
+    // num pedido com codigo aplicado, rejeita -- o site ja nao deixa
+    // escolher as duas coisas ao mesmo tempo, isto e so a rede de segurança.
+    const bebidasRecebidas = (b.itens && typeof b.itens === 'object' && !Array.isArray(b.itens) && Array.isArray(b.itens.bebidas)) ? b.itens.bebidas : [];
+    if (bebidasRecebidas.some(x => ehGratis(x && x.nome))) {
+      return j({ ok: false, erro: 'promo_nao_acumula_brinde' }, 400);
+    }
     promoAplicado = linhaPromo;
   }
   // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
