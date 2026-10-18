@@ -396,16 +396,16 @@
       div.innerHTML = '<div class="vazio">Ainda sem nenhum dia confirmado.</div>';
       return;
     }
-    const resultadoAntesIngredientes = f => {
+    const resultadoDia = f => {
       const receita = (f.dinheiro_confirmado_cent || 0) + (f.mbway_confirmado_cent || 0);
       const maoObraCent = Math.round(((f.horas_trabalhadas_centesimos || 0) / 100) * VALOR_HORA * 100);
-      return receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0);
+      return receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0) - (f.ingredientes_cent || 0);
     };
     div.innerHTML = `
       <table class="historico">
-        <thead><tr><th>Dia</th><th class="num">💵</th><th class="num">💳</th><th class="num">🛵</th><th class="num" title="Antes de ingredientes">Resultado*</th><th></th></tr></thead>
+        <thead><tr><th>Dia</th><th class="num">💵</th><th class="num">💳</th><th class="num">🛵</th><th class="num" title="Receita - estafeta - mão de obra - eletricidade/outros - ingredientes">Resultado*</th><th></th></tr></thead>
         <tbody>
-          ${historicoCache.map(f => { const res = resultadoAntesIngredientes(f); return `
+          ${historicoCache.map(f => { const res = resultadoDia(f); return `
             <tr${f.dia === hojeStr ? ' class="hoje"' : ''}>
               <td>${dataLonga(f.dia)}${f.notas ? `<div class="notas">${esc(f.notas)}</div>` : ''}</td>
               <td class="num">${eurCent(f.dinheiro_confirmado_cent)}</td>
@@ -416,17 +416,18 @@
             </tr>`; }).join('')}
         </tbody>
       </table>
-      <div class="nota-custo">*Resultado antes dos ingredientes (receita − estafeta − mão de obra − eletricidade/outros).</div>`;
+      <div class="nota-custo">*Lucro/prejuízo do dia (receita − estafeta − mão de obra − eletricidade/outros − ingredientes estimados em ⚙️ Custos).</div>`;
   }
 
   function exportarCsv() {
     if (!historicoCache.length) return;
-    const linhas = [['Dia', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Andreza (EUR)', 'Horas', 'Eletricidade/outros (EUR)', 'Resultado antes de ingredientes (EUR)', 'Notas']];
+    const linhas = [['Dia', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Andreza (EUR)', 'Horas', 'Eletricidade/outros (EUR)', 'Ingredientes estimados (EUR)', 'Resultado (EUR)', 'Notas']];
     historicoCache.slice().reverse().forEach(f => {
       const horas = (f.horas_trabalhadas_centesimos || 0) / 100;
       const maoObraCent = Math.round(horas * VALOR_HORA * 100);
       const receita = (f.dinheiro_confirmado_cent || 0) + (f.mbway_confirmado_cent || 0);
-      const resultadoCent = receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0);
+      const ingredientesCent = f.ingredientes_cent || 0;
+      const resultadoCent = receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0) - ingredientesCent;
       linhas.push([
         f.dia,
         (f.dinheiro_confirmado_cent / 100).toFixed(2).replace('.', ','),
@@ -434,6 +435,7 @@
         (f.andreza_confirmado_cent / 100).toFixed(2).replace('.', ','),
         horas.toFixed(2).replace('.', ','),
         ((f.custo_extra_cent || 0) / 100).toFixed(2).replace('.', ','),
+        (ingredientesCent / 100).toFixed(2).replace('.', ','),
         (resultadoCent / 100).toFixed(2).replace('.', ','),
         (f.notas || '').replace(/[\r\n;]+/g, ' '),
       ]);

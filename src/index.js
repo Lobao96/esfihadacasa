@@ -1464,11 +1464,66 @@ async function listarFechoCaixa(request, env) {
     const linha = await env.DB.prepare('SELECT * FROM fecho_caixa WHERE dia = ?').bind(dia).first();
     return j({ ok: true, fecho: linha || null });
   }
-  const dias = Math.min(366, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 30));
+  const diasN = Math.min(366, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 30));
   const { results } = await env.DB.prepare(
     'SELECT * FROM fecho_caixa ORDER BY dia DESC LIMIT ?'
-  ).bind(dias).all();
-  return j({ ok: true, historico: results || [] });
+  ).bind(diasN).all();
+  const historico = results || [];
+
+  // Custo de ingredientes por dia (mesma logica da Analise: sabores, extras,
+  // bebidas, caixas de pizza, lima e ofertas fixas como o ketchup), so para
+  // os dias que aparecem no historico -- assim a coluna "Resultado" ja vem
+  // com o lucro real, sem o utilizador ter de ir calcular a parte.
+  if (historico.length) {
+    const diasOrdenados = historico.map(f => f.dia).sort();
+    const diaMin = diasOrdenados[0];
+    const diaMax = diasOrdenados[diasOrdenados.length - 1];
+
+    const { results: custosRows } = await env.DB.prepare('SELECT produto, custo_cent FROM custos').all();
+    const custos = {};
+    for (const c of custosRows || []) custos[c.produto] = c.custo_cent || 0;
+
+    const { results: stockBebidas } = await env.DB.prepare(
+      'SELECT nome, por_pedido FROM stock_bebidas WHERE por_pedido > 0'
+    ).all();
+
+    const { results: linhas } = await env.DB.prepare(
+      `SELECT dia, n_esfihas, itens FROM pedidos
+        WHERE ensaio = 0 AND estado <> 'cancelado' AND dia >= ? AND dia <= ?`
+    ).bind(diaMin, diaMax).all();
+
+    const porDia = {};
+    for (const r of linhas || []) {
+      const d = porDia[r.dia] || (porDia[r.dia] = { custoProdutos: 0, pedidos: 0 });
+      d.pedidos++;
+      if (r.n_esfihas > 0) {
+        const caixasPedido = Math.ceil(r.n_esfihas / 10);
+        d.custoProdutos += caixasPedido * (custos['Caixa de pizza'] || 0);
+        const fracaoLima = r.n_esfihas > 10 ? 0.5 : 0.25;
+        d.custoProdutos += fracaoLima * (custos['Lima'] || 0);
+      }
+      let it = null;
+      try { it = JSON.parse(r.itens || 'null'); } catch (e) {}
+      if (it && !Array.isArray(it)) {
+        for (const x of it.producao || []) {
+          d.custoProdutos += (custos[x.sabor] || 0) * (x.n || 0);
+          for (const e of x.extras || []) d.custoProdutos += (custos[e] || 0) * (x.n || 0);
+        }
+        for (const b of it.bebidas || []) d.custoProdutos += (custos[b.nome] || 0) * (b.n || 0);
+      }
+    }
+    for (const dKey of Object.keys(porDia)) {
+      for (const o of stockBebidas || []) {
+        porDia[dKey].custoProdutos += (custos[o.nome] || 0) * o.por_pedido * porDia[dKey].pedidos;
+      }
+    }
+
+    for (const f of historico) {
+      f.ingredientes_cent = Math.round((porDia[f.dia] && porDia[f.dia].custoProdutos) || 0);
+    }
+  }
+
+  return j({ ok: true, historico });
 }
 
 async function guardarFechoCaixa(request, env) {
