@@ -1541,11 +1541,12 @@ async function analise(request, env) {
     esfihas += r.n_esfihas || 0;
     if (r.modo === 'entrega') { entregas++; receitaEntregas += r.total_cent || 0; }
 
-    // Caixas de pizza usadas neste pedido: 1 caixa ate 10 esfihas, 2 caixas
-    // acima disso. So entra na conta se o custo da caixa estiver preenchido
-    // em Analise -> Custos (produto "Caixa de pizza").
+    // Caixas de pizza usadas neste pedido: cada caixa leva ate 10 esfihas
+    // (1 caixa ate 10, 2 caixas de 11 a 20, 3 caixas de 21 a 30, etc.). So
+    // entra na conta se o custo da caixa estiver preenchido em Analise ->
+    // Custos (produto "Caixa de pizza").
     if (r.n_esfihas > 0) {
-      const caixasPedido = r.n_esfihas > 10 ? 2 : 1;
+      const caixasPedido = Math.ceil(r.n_esfihas / 10);
       custoProdutos += caixasPedido * (custos['Caixa de pizza'] || 0);
     }
 
