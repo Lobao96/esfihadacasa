@@ -1550,6 +1550,15 @@ async function analise(request, env) {
       custoProdutos += caixasPedido * (custos['Caixa de pizza'] || 0);
     }
 
+    // Lima: vai sempre meia lima em pedidos com mais de 10 esfihas, um
+    // quarto de lima em pedidos com 10 ou menos. O custo em "Lima" (em
+    // Analise -> Custos) deve ser o preco de UMA lima inteira (ex.: saco de
+    // 3,99 EUR com 12 limas -> custo da lima = 3,99 / 12).
+    if (r.n_esfihas > 0) {
+      const fracaoLima = r.n_esfihas > 10 ? 0.5 : 0.25;
+      custoProdutos += fracaoLima * (custos['Lima'] || 0);
+    }
+
     const d = dias[r.dia] || (dias[r.dia] = { dia: r.dia, pedidos: 0, receita: 0, esfihas: 0 });
     d.pedidos++; d.receita += r.total_cent || 0; d.esfihas += r.n_esfihas || 0;
 

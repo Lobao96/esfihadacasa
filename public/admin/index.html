@@ -207,7 +207,11 @@
     // por pedido ate 10 esfihas, 2 caixas acima disso. "Ketchup (saquetas)":
     // tem de ter EXATAMENTE o mesmo nome do item no Stock de bebidas/ofertas
     // (a oferta fixa por pedido), senao o custo nao e encontrado e fica a 0.
-    { grupo: 'Embalagens e fixos', itens: ['Caixa de pizza', 'Ketchup (saquetas)'] },
+    // "Lima": preco de UMA lima inteira (nao do saco todo) -- ex.: saco de
+    // 3,99 EUR com 12 limas = 0,3325 EUR por lima. O sistema assume sozinho
+    // meia lima em pedidos com mais de 10 esfihas, um quarto de lima nos
+    // restantes.
+    { grupo: 'Embalagens e fixos', itens: ['Caixa de pizza', 'Ketchup (saquetas)', 'Lima'] },
   ];
 
   function idCusto(nome) { return 'c_' + nome.replace(/[^a-zA-Z0-9]/g, ''); }
