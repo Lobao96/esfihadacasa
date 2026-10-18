@@ -585,7 +585,7 @@ async function novoPedido(request, env, ctx) {
     const codigoPromo = codigoPromoBruto.trim().toUpperCase();
     const linhaPromo = await env.DB.prepare('SELECT * FROM codigos_promo WHERE codigo = ?').bind(codigoPromo).first();
     if (!linhaPromo) return j({ ok: false, erro: 'promo_invalido' }, 400);
-    if (linhaPromo.usado) return j({ ok: false, erro: 'promo_usado' }, 400);
+    if ((linhaPromo.usos_contagem || 0) >= (linhaPromo.usos_max || 1)) return j({ ok: false, erro: 'promo_usado' }, 400);
     promoAplicado = linhaPromo;
   }
   // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
@@ -648,9 +648,17 @@ async function novoPedido(request, env, ctx) {
   // se sobrou algo a pagar (extras, mais itens), segue o fluxo normal de
   // pagamento (MB Way/dinheiro) para esse valor.
   if (promoAplicado) {
+    // Incrementa a contagem de usos; so marca "usado" (esgotado) quando a
+    // contagem atinge o limite (usos_max). O "WHERE usos_contagem <
+    // usos_max" evita passar do limite em pedidos simultaneos.
     const loteOpsPromo = [
-      env.DB.prepare('UPDATE codigos_promo SET usado = 1, usado_pedido_id = ?, usado_em = ? WHERE codigo = ? AND usado = 0')
-        .bind(res.id, agora, promoAplicado.codigo),
+      env.DB.prepare(
+        `UPDATE codigos_promo
+            SET usos_contagem = usos_contagem + 1,
+                usado = CASE WHEN usos_contagem + 1 >= usos_max THEN 1 ELSE 0 END,
+                usado_pedido_id = ?, usado_em = ?
+          WHERE codigo = ? AND usos_contagem < usos_max`
+      ).bind(res.id, agora, promoAplicado.codigo),
     ];
     if (totalEnviadoCent === 0) {
       loteOpsPromo.push(env.DB.prepare('UPDATE pedidos SET pago = 1 WHERE id = ?').bind(res.id));
@@ -1274,9 +1282,9 @@ async function validarPromo(request, env) {
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const codigo = String(b.codigo || '').trim().toUpperCase();
   if (!codigo) return j({ ok: false, erro: 'codigo em falta' }, 400);
-  const linha = await env.DB.prepare('SELECT codigo, usado, desconto_cent FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
+  const linha = await env.DB.prepare('SELECT codigo, usos_max, usos_contagem, desconto_cent FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
   if (!linha) return j({ ok: false, erro: 'invalido' }, 404);
-  if (linha.usado) return j({ ok: false, erro: 'usado' }, 409);
+  if ((linha.usos_contagem || 0) >= (linha.usos_max || 1)) return j({ ok: false, erro: 'usado' }, 409);
   return j({ ok: true, desconto_cent: linha.desconto_cent || 0 });
 }
 

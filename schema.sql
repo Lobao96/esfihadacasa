@@ -33,9 +33,11 @@ CREATE TABLE IF NOT EXISTS codigos_promo (
   codigo          TEXT PRIMARY KEY,   -- sempre em maiusculas
   descricao       TEXT,
   desconto_cent   INTEGER NOT NULL DEFAULT 0,  -- desconto fixo, nunca o pedido todo gratis
-  usado           INTEGER NOT NULL DEFAULT 0,
-  usado_pedido_id INTEGER,
-  usado_em        TEXT,
+  usos_max        INTEGER NOT NULL DEFAULT 1,  -- quantas vezes pode ser usado no total (1 = uso unico, como antes)
+  usos_contagem   INTEGER NOT NULL DEFAULT 0,  -- quantas vezes ja foi usado
+  usado           INTEGER NOT NULL DEFAULT 0,  -- fica 1 so quando usos_contagem atinge usos_max (esgotado)
+  usado_pedido_id INTEGER,                     -- id do ultimo pedido que o usou
+  usado_em        TEXT,                        -- quando foi usado a ultima vez
   criado_em       TEXT    NOT NULL
 );
 
