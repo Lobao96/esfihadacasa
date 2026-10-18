@@ -118,7 +118,7 @@
         <div class="campo">
           <label>🧑‍🍳 Horas trabalhadas (tu)</label>
           <input type="number" id="inHoras" step="0.25" min="0" placeholder="ex.: 4,5" oninput="atualizarDiferencas()">
-          <div class="esperado" id="espHoras"></div>
+          <div class="esperado" id="espHoras">sugestão: horário da loja — ajusta se foi diferente</div>
         </div>
         <div class="campo">
           <label>💡 Eletricidade / outros custos do dia</label>
@@ -163,6 +163,34 @@
   const ELETRICIDADE_PADRAO = 3.85; // sugestao de custo fixo por dia aberto, editavel
   let pass = '';
   let esperadoAtual = { dinheiro: 0, mbway: 0, andreza: 0, ingredientesCent: 0 };
+
+  // Horario automatico da loja -- tem de ficar sempre igual a HORARIO_AUTOMATICO
+  // em src/index.js (se mudares o horario, muda aqui tambem). So serve para
+  // sugerir as horas trabalhadas no fecho de caixa; o campo fica sempre
+  // editavel por cima, para os dias em que o horario real foi diferente.
+  // day: 0=domingo .. 6=sabado (mesma convencao do Date.getDay()).
+  const HORARIO_LOJA = [
+    { day: 0, shifts: [{ open: '12:00', close: '15:30' }, { open: '18:30', close: '22:00' }] }, // Domingo
+    { day: 1, shifts: [] }, // Segunda - fechado
+    { day: 2, shifts: [] }, // Terca - fechado
+    { day: 3, shifts: [] }, // Quarta - fechado
+    { day: 4, shifts: [] }, // Quinta - fechado
+    { day: 5, shifts: [{ open: '19:30', close: '24:00' }] }, // Sexta (ate 00h)
+    { day: 6, shifts: [{ open: '12:00', close: '15:30' }, { open: '18:30', close: '24:00' }] }, // Sabado (ate 00h)
+  ];
+
+  function horasPadraoDoDia(diaStr) {
+    const diaSemana = new Date(diaStr + 'T00:00:00Z').getUTCDay();
+    const horario = HORARIO_LOJA.find(h => h.day === diaSemana);
+    const shifts = (horario && horario.shifts) || [];
+    let minutos = 0;
+    shifts.forEach(s => {
+      const [oh, om] = s.open.split(':').map(Number);
+      const [ch, cm] = s.close.split(':').map(Number);
+      minutos += (ch * 60 + cm) - (oh * 60 + om);
+    });
+    return minutos / 60;
+  }
 
   function eur(v) { return (v || 0).toFixed(2).replace('.', ',') + '€'; }
   function eurCent(c) { return eur((c || 0) / 100); }
@@ -323,7 +351,7 @@
     document.getElementById('inDinheiro').value = (fecho ? fecho.dinheiro_confirmado_cent / 100 : esperado.dinheiro).toFixed(2);
     document.getElementById('inMbway').value = (fecho ? fecho.mbway_confirmado_cent / 100 : esperado.mbway).toFixed(2);
     document.getElementById('inAndreza').value = (fecho ? fecho.andreza_confirmado_cent / 100 : esperado.andreza).toFixed(2);
-    document.getElementById('inHoras').value = fecho ? (fecho.horas_trabalhadas_centesimos / 100).toFixed(2) : '';
+    document.getElementById('inHoras').value = (fecho ? fecho.horas_trabalhadas_centesimos / 100 : horasPadraoDoDia(dia)).toFixed(2);
     document.getElementById('inCustoExtra').value = (fecho ? fecho.custo_extra_cent / 100 : ELETRICIDADE_PADRAO).toFixed(2);
     document.getElementById('inNotas').value = fecho ? (fecho.notas || '') : '';
 
