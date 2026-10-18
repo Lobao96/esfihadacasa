@@ -586,6 +586,9 @@ async function novoPedido(request, env, ctx) {
     const linhaPromo = await env.DB.prepare('SELECT * FROM codigos_promo WHERE codigo = ?').bind(codigoPromo).first();
     if (!linhaPromo) return j({ ok: false, erro: 'promo_invalido' }, 400);
     if ((linhaPromo.usos_contagem || 0) >= (linhaPromo.usos_max || 1)) return j({ ok: false, erro: 'promo_usado' }, 400);
+    if ((linhaPromo.min_esfihas || 0) > 0 && nEsfihasReal < linhaPromo.min_esfihas) {
+      return j({ ok: false, erro: 'promo_minimo_esfihas', min_esfihas: linhaPromo.min_esfihas }, 400);
+    }
     promoAplicado = linhaPromo;
   }
   // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
@@ -607,7 +610,7 @@ async function novoPedido(request, env, ctx) {
   if (!ensaio && pisoCent > 0 && totalOriginalCent < pisoCent) {
     return j({ ok: false, erro: 'total_invalido' }, 400);
   }
-  const descontoPromoCent = promoAplicado ? Math.max(0, Math.min(parseInt(promoAplicado.desconto_cent, 10) || 0, totalOriginalCent)) : 0;
+  const descontoPromoCent = promoAplicado ? (calcularDescontoPromo(promoAplicado, totalOriginalCent, nEsfihasReal) || 0) : 0;
   const totalEnviadoCent = totalOriginalCent - descontoPromoCent;
   if (promoAplicado && itensObj && !Array.isArray(itensObj)) {
     if (!Array.isArray(itensObj.linhas)) itensObj.linhas = [];
@@ -1274,6 +1277,31 @@ async function mudarStock(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, dia) });
 }
 
+// Calcula o desconto (em centimos) de um codigo promocional para um pedido
+// concreto. Devolve null quando o pedido nao qualifica (menos esfihas que o
+// minimo exigido pelo codigo) -- nesse caso o codigo nao se aplica.
+//
+// Dois modos, conforme os campos preenchidos na linha do codigo:
+// - Sem preco_fixo_cent: desconto fixo de desconto_cent, sempre o mesmo
+//   valor (o comportamento original, ex.: premio de sorteio).
+// - Com preco_fixo_cent: so quando o pedido tiver EXATAMENTE min_esfihas
+//   esfihas, o desconto ajusta-se sozinho para o total dar esse preco fixo
+//   (ex.: 17 EUR, seja qual for a mistura de salgadas/doces), limitado a
+//   desconto_cent para nunca dar mais desconto que o previsto. Acima de
+//   min_esfihas, deixa de ajustar ao preco fixo e passa a aplicar so o
+//   desconto_cent normal (para nao dar descontos cada vez maiores em
+//   pedidos cada vez maiores).
+function calcularDescontoPromo(linha, totalOriginalCent, nEsfihas) {
+  const minEsfihas = linha.min_esfihas || 0;
+  if (minEsfihas > 0 && nEsfihas < minEsfihas) return null;
+  const descontoMaxCent = Math.max(0, parseInt(linha.desconto_cent, 10) || 0);
+  if (linha.preco_fixo_cent != null && nEsfihas === minEsfihas) {
+    const bruto = totalOriginalCent - linha.preco_fixo_cent;
+    return Math.max(0, Math.min(bruto, descontoMaxCent, totalOriginalCent));
+  }
+  return Math.max(0, Math.min(descontoMaxCent, totalOriginalCent));
+}
+
 // Validacao "so de leitura" de um codigo promocional -- usada no site para
 // dar feedback imediato ao cliente (nao consome o codigo; o consumo real so
 // acontece quando o pedido e de facto criado, em novoPedido()).
@@ -1282,10 +1310,18 @@ async function validarPromo(request, env) {
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const codigo = String(b.codigo || '').trim().toUpperCase();
   if (!codigo) return j({ ok: false, erro: 'codigo em falta' }, 400);
-  const linha = await env.DB.prepare('SELECT codigo, usos_max, usos_contagem, desconto_cent FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
+  const linha = await env.DB.prepare(
+    'SELECT codigo, usos_max, usos_contagem, desconto_cent, preco_fixo_cent, min_esfihas FROM codigos_promo WHERE codigo = ?'
+  ).bind(codigo).first();
   if (!linha) return j({ ok: false, erro: 'invalido' }, 404);
   if ((linha.usos_contagem || 0) >= (linha.usos_max || 1)) return j({ ok: false, erro: 'usado' }, 409);
-  return j({ ok: true, desconto_cent: linha.desconto_cent || 0 });
+  const totalCent = Math.max(0, parseInt(b.total_cent, 10) || 0);
+  const nEsfihas = Math.max(0, parseInt(b.n_esfihas, 10) || 0);
+  const desconto = calcularDescontoPromo(linha, totalCent, nEsfihas);
+  if (desconto === null) {
+    return j({ ok: false, erro: 'minimo_esfihas', min_esfihas: linha.min_esfihas || 0 }, 400);
+  }
+  return j({ ok: true, desconto_cent: desconto });
 }
 
 async function stockPublicoBebidas(request, env) {

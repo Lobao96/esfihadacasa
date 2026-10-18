@@ -1815,7 +1815,11 @@
       const r = await fetch(API + '/validar-promo', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ codigo }),
+        body: JSON.stringify({
+          codigo,
+          total_cent: Math.round(computeTotal() * 100),
+          n_esfihas: contaEsfihasTotal(),
+        }),
       });
       const d = await r.json();
       if (d && d.ok) {
@@ -1826,7 +1830,13 @@
         promoAplicado = null;
         promoDescontoCent = 0;
         if (status) {
-          status.textContent = (d && d.erro === 'usado') ? 'Este código já foi usado.' : 'Código inválido.';
+          if (d && d.erro === 'usado') {
+            status.textContent = 'Este código já foi usado.';
+          } else if (d && d.erro === 'minimo_esfihas') {
+            status.textContent = `Este código precisa de pelo menos ${d.min_esfihas || 0} esfihas no pedido.`;
+          } else {
+            status.textContent = 'Código inválido.';
+          }
           status.className = 'promo-code-status erro';
         }
       }

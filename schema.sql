@@ -32,7 +32,12 @@ CREATE TABLE IF NOT EXISTS stock (
 CREATE TABLE IF NOT EXISTS codigos_promo (
   codigo          TEXT PRIMARY KEY,   -- sempre em maiusculas
   descricao       TEXT,
-  desconto_cent   INTEGER NOT NULL DEFAULT 0,  -- desconto fixo, nunca o pedido todo gratis
+  desconto_cent   INTEGER NOT NULL DEFAULT 0,  -- desconto fixo (pedidos acima de min_esfihas); tambem serve de
+                                                -- limite maximo de desconto quando preco_fixo_cent esta definido
+  preco_fixo_cent INTEGER,                     -- se definido: quando o pedido tiver EXATAMENTE min_esfihas
+                                                -- esfihas, o desconto ajusta-se sozinho para o total dar
+                                                -- este valor (ate ao limite de desconto_cent)
+  min_esfihas     INTEGER NOT NULL DEFAULT 0,  -- minimo de esfihas no pedido para o codigo ser valido (0 = sem minimo)
   usos_max        INTEGER NOT NULL DEFAULT 1,  -- quantas vezes pode ser usado no total (1 = uso unico, como antes)
   usos_contagem   INTEGER NOT NULL DEFAULT 0,  -- quantas vezes ja foi usado
   usado           INTEGER NOT NULL DEFAULT 0,  -- fica 1 so quando usos_contagem atinge usos_max (esgotado)
