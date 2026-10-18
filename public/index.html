@@ -1570,6 +1570,16 @@
   // ---- brinde automatico: 10 esfihas avulsas dao 1 bebida de 1L gratis ----
   let brindeBebida = null;
 
+  // Um codigo promocional nunca e valido com combos (ja tem preco fixo e
+  // bebidas incluidas) nem com a promocao automatica de bebida gratis (10+
+  // esfihas avulsas) -- sao beneficios que nao acumulam entre si.
+  function carrinhoTemCombo() { return units.some(u => isCombo(u.itemId)); }
+  function promoBloqueadaPorOutraPromo() {
+    if (carrinhoTemCombo()) return 'Este código não é válido com combos.';
+    if (contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas) return 'Este código não acumula com a promoção de bebida grátis (10+ esfihas).';
+    return null;
+  }
+
   function contaEsfihasAvulsas() {
     return units.filter(u => isSalgada(u.itemId) || isDoce(u.itemId)).length;
   }
@@ -1820,6 +1830,14 @@
     const status = document.getElementById('promoStatus');
     const codigo = ((input && input.value) || '').trim().toUpperCase();
     if (!codigo) return;
+    const bloqueio = promoBloqueadaPorOutraPromo();
+    if (bloqueio) {
+      promoAplicado = null;
+      promoDescontoCent = 0;
+      if (status) { status.textContent = bloqueio; status.className = 'promo-code-status erro'; }
+      updateTotal();
+      return;
+    }
     if (status) { status.textContent = 'A verificar…'; status.className = 'promo-code-status'; }
     try {
       const r = await fetch(API + '/validar-promo', {
@@ -1920,7 +1938,9 @@
       const cp = (document.getElementById('cpInput') || {}).value.trim();
       lines.push("Morada: " + (addr || "(mando em seguida)") + (loc ? ", " + loc : "") + (cp ? ", " + cp : ""));
       if (moradaConfirmada) lines.push("Morada confirmada pelo cliente ✔");
-      lines.push("Taxa de entrega: " + (promoAplicado ? "grátis (incluída no prémio)" : fmt(deliveryFee())));
+      // A entrega nunca e gratis -- nem com codigo promocional aplicado,
+      // a taxa continua sempre a ser cobrada normalmente dentro do total.
+      lines.push("Taxa de entrega: " + fmt(deliveryFee()));
     }
     lines.push("");
     lines.push("Total estimado: " + fmt(computeTotal()));
@@ -2145,6 +2165,16 @@
     if (!promoAplicado) return;
     const codigo = promoAplicado;
     const status = document.getElementById('promoStatus');
+    const bloqueio = promoBloqueadaPorOutraPromo();
+    if (bloqueio) {
+      promoAplicado = null;
+      promoDescontoCent = 0;
+      if (status) { status.textContent = bloqueio; status.className = 'promo-code-status erro'; }
+      document.getElementById('totalAmount').textContent = fmt(computeTotal());
+      renderPayment();
+      refreshLink();
+      return;
+    }
     try {
       const r = await fetch(API + '/validar-promo', {
         method: 'POST',
@@ -2845,7 +2875,7 @@
         mostrarFaltas(['O valor do pedido não ficou certo. Recarregue a página, monte o pedido de novo e tente enviar outra vez. Se continuar, fale com a gente pelo WhatsApp.']);
         return false;
       }
-      else if (d && (d.erro === 'promo_invalido' || d.erro === 'promo_usado')) {
+      else if (d && (d.erro === 'promo_invalido' || d.erro === 'promo_usado' || d.erro === 'promo_nao_acumula_brinde' || d.erro === 'promo_nao_acumula_combo')) {
         // O codigo passou na verificacao ao vivo mas, entre isso e o envio,
         // deixou de ser valido (ex.: usado por outro pedido entretanto).
         btn.textContent = textoOriginal;

@@ -597,6 +597,14 @@ async function novoPedido(request, env, ctx) {
     if (bebidasRecebidas.some(x => ehGratis(x && x.nome))) {
       return j({ ok: false, erro: 'promo_nao_acumula_brinde' }, 400);
     }
+    // Um codigo promocional tambem nunca acumula com combos -- ja tem preco
+    // fixo e bebidas incluidas. O site ja nao deixa aplicar o codigo com um
+    // combo no carrinho, isto e so a rede de segurança: toda linha de combo
+    // comeca sempre por "Combo " (nome do catalogo em COMBOS).
+    const linhasRecebidas = (b.itens && typeof b.itens === 'object' && !Array.isArray(b.itens) && Array.isArray(b.itens.linhas)) ? b.itens.linhas : [];
+    if (linhasRecebidas.some(l => /^Combo\s/i.test(String(l || '')))) {
+      return j({ ok: false, erro: 'promo_nao_acumula_combo' }, 400);
+    }
     promoAplicado = linhaPromo;
   }
   // Piso de preco (minimo plausivel, nao o preco exato): o total enviado
