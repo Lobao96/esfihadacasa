@@ -937,13 +937,15 @@ const ESTADOS = ['novo', 'preparacao', 'pronto', 'caminho', 'entregue', 'cancela
 // feito (ver adicionarItemPedido) -- espelha o MENU do site (public/index.html).
 // Atualizar aqui tambem se os precos ou sabores mudarem la.
 const SABORES = {
-  trad:  { nome: 'A Tradicional',        preco_cent: 250, doce: false },
-  suc:   { nome: 'A Suculenta',          preco_cent: 250, doce: false },
-  caip:  { nome: 'A Caipira',            preco_cent: 250, doce: false },
-  quer:  { nome: 'A Queridinha',         preco_cent: 250, doce: false },
-  todo:  { nome: 'A Que Todo Mundo Ama', preco_cent: 260, doce: true },
-  irres: { nome: 'A Irresistível',       preco_cent: 260, doce: true },
-  dif:   { nome: 'A Diferentona',        preco_cent: 260, doce: true },
+  trad:     { nome: 'A Tradicional',        preco_cent: 250, doce: false },
+  suc:      { nome: 'A Suculenta',          preco_cent: 250, doce: false },
+  caip:     { nome: 'A Caipira',            preco_cent: 250, doce: false },
+  quer:     { nome: 'A Queridinha',         preco_cent: 250, doce: false },
+  classica: { nome: 'A Clássica',           preco_cent: 250, doce: false },
+  italiana: { nome: 'A Italiana',           preco_cent: 250, doce: false },
+  todo:     { nome: 'A Que Todo Mundo Ama', preco_cent: 260, doce: true },
+  irres:    { nome: 'A Irresistível',       preco_cent: 260, doce: true },
+  dif:      { nome: 'A Diferentona',        preco_cent: 260, doce: true },
 };
 
 // Acrescenta esfihas a um pedido ja enviado -- para quando o cliente pede
@@ -1395,6 +1397,7 @@ async function listarSalgadas(request, env) {
 // a criar linhas de sabores doces aqui, como ja aconteceu uma vez.
 const SABORES_SALGADOS_VALIDOS = new Set([
   'A Tradicional', 'A Suculenta', 'A Caipira', 'A Queridinha',
+  'A Clássica', 'A Italiana',
 ]);
 
 async function mudarSalgadaStock(request, env) {
