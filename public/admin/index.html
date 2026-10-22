@@ -199,15 +199,13 @@
   const PRODUTOS_CUSTO = [
     { grupo: 'Salgadas', itens: ['A Tradicional', 'A Suculenta', 'A Caipira', 'A Queridinha'] },
     { grupo: 'Doces', itens: ['A Que Todo Mundo Ama', 'A Irresistível', 'A Diferentona'] },
-    { grupo: 'Extras salgadas', itens: ['Bacon', 'Milho', 'Queijo', 'Catupiry', 'Azeitona', 'Chouriço em cubos', 'Fiambre'] },
-    { grupo: 'Extras doces', itens: ['Coco', 'Amendoim'] },
-    // Ingrediente principal de cada sabor, disponivel como extra em
-    // qualquer esfiha (ver EXTRAS_SABORES em public/index.html) -- o nome
-    // aqui tem de bater certo, letra a letra, com o "name" la do extra.
-    { grupo: 'Extras de sabor (ingrediente principal)', itens: [
-        'Carne (da Tradicional)', 'Mussarela (da Suculenta)', 'Frango (da Caipira)',
-        'Calabresa (da Queridinha)', 'Nutella (da Que Todo Mundo Ama)',
-        'Goiabada (da Irresistível)', 'Banana e Canela (da Diferentona)',
+    // Mesma lista para qualquer esfiha, salgada ou doce (ver EXTRAS_TODOS
+    // em public/index.html) -- o nome aqui tem de bater certo, letra a
+    // letra, com o "name" la do extra.
+    { grupo: 'Extras (qualquer esfiha)', itens: [
+        'Bacon', 'Milho', 'Queijo', 'Catupiry', 'Azeitona', 'Chouriço em cubos', 'Fiambre',
+        'Coco', 'Amendoim',
+        'Carne', 'Mussarela', 'Frango', 'Calabresa', 'Nutella', 'Goiabada', 'Banana e Canela',
       ] },
     { grupo: 'Bebidas', itens: ['Coca-Cola 1L', 'Fanta Laranja 1L', 'Guaraná', 'Coca-Cola',
                                  'Coca-Cola Zero', 'Fanta Laranja', 'Iced Tea Pêssego', 'Água'] },

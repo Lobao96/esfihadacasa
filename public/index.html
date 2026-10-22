@@ -991,9 +991,10 @@
   };
 
   // Todos os extras ao mesmo preço -- 0,60€, para ser simples de explicar
-  // ao cliente (um preço único, nunca "depende de qual").
+  // ao cliente -- e disponiveis em QUALQUER esfiha, salgada ou doce, sem
+  // distincao: uma lista unica, em vez de uma para cada tipo.
   const PRECO_EXTRA = 0.60;
-  const EXTRAS_SALGADAS = [
+  const EXTRAS_TODOS = [
     { id: "bacon", name: "Bacon", price: PRECO_EXTRA },
     { id: "milho", name: "Milho", price: PRECO_EXTRA },
     { id: "queijo", name: "Queijo", price: PRECO_EXTRA },
@@ -1001,24 +1002,19 @@
     { id: "azeitona", name: "Azeitona", price: PRECO_EXTRA },
     { id: "chourico", name: "Chouriço em cubos", price: PRECO_EXTRA },
     { id: "fiambre", name: "Fiambre", price: PRECO_EXTRA },
-  ];
-  const EXTRAS_DOCES = [
     { id: "coco", name: "Coco", price: PRECO_EXTRA },
     // Amendoim temporariamente fora -- esgotado, ainda nao foi possivel
     // comprar mais (10/10). Volta a por esta linha quando tiver stock:
     // { id: "amendoim", name: "Amendoim", price: PRECO_EXTRA },
-  ];
-  // Ingrediente principal de cada sabor (salgada ou doce), disponivel como
-  // extra em QUALQUER esfiha -- ex.: dá para por carne na Suculenta, ou
-  // nutella numa salgada.
-  const EXTRAS_SABORES = [
-    { id: "carne", name: "Carne (da Tradicional)", price: PRECO_EXTRA },
-    { id: "queijo-suculenta", name: "Mussarela (da Suculenta)", price: PRECO_EXTRA },
-    { id: "frango", name: "Frango (da Caipira)", price: PRECO_EXTRA },
-    { id: "calabresa", name: "Calabresa (da Queridinha)", price: PRECO_EXTRA },
-    { id: "nutella", name: "Nutella (da Que Todo Mundo Ama)", price: PRECO_EXTRA },
-    { id: "goiabada", name: "Goiabada (da Irresistível)", price: PRECO_EXTRA },
-    { id: "banana-canela", name: "Banana e Canela (da Diferentona)", price: PRECO_EXTRA },
+    // Ingrediente principal de cada sabor -- dá para por carne na
+    // Suculenta, ou nutella numa salgada, por exemplo.
+    { id: "carne", name: "Carne", price: PRECO_EXTRA },
+    { id: "queijo-suculenta", name: "Mussarela", price: PRECO_EXTRA },
+    { id: "frango", name: "Frango", price: PRECO_EXTRA },
+    { id: "calabresa", name: "Calabresa", price: PRECO_EXTRA },
+    { id: "nutella", name: "Nutella", price: PRECO_EXTRA },
+    { id: "goiabada", name: "Goiabada", price: PRECO_EXTRA },
+    { id: "banana-canela", name: "Banana e Canela", price: PRECO_EXTRA },
   ];
 
   // ---- COMBOS E PROMOÇÕES ----
@@ -1297,7 +1293,7 @@
   function isBebida(id) { return MENU.bebidas.some(i => i.id === id); }
   function extrasFor(id) {
     if (isBebida(id)) return [];
-    return (isSalgada(id) ? EXTRAS_SALGADAS : EXTRAS_DOCES).concat(EXTRAS_SABORES);
+    return EXTRAS_TODOS;
   }
   function bebidasLata() { return MENU.bebidas.filter(b => b.desc.indexOf('Lata') === 0); }
   function bebidas1L() { return MENU.bebidas.filter(b => b.desc.indexOf('Garrafa 1 litro') === 0); }
@@ -1379,7 +1375,7 @@
 
   // extras escolhidos dentro de um combo, por esfiha
   function picksDe(u, tipo) { return tipo === 'doce' ? u.picksDoces : u.picks; }
-  function extrasDoPick(tipo) { return (tipo === 'doce' ? EXTRAS_DOCES : EXTRAS_SALGADAS).concat(EXTRAS_SABORES); }
+  function extrasDoPick(tipo) { return EXTRAS_TODOS; }
 
   function unitPrice(u) {
     const c = comboById(u.itemId);
