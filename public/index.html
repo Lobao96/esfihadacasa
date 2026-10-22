@@ -990,33 +990,35 @@
     ]
   };
 
+  // Todos os extras ao mesmo preço -- 0,60€, para ser simples de explicar
+  // ao cliente (um preço único, nunca "depende de qual").
+  const PRECO_EXTRA = 0.60;
   const EXTRAS_SALGADAS = [
-    { id: "bacon", name: "Bacon", price: 0.50 },
-    { id: "milho", name: "Milho", price: 0.50 },
-    { id: "queijo", name: "Queijo", price: 0.50 },
-    { id: "catupiry", name: "Catupiry", price: 0.50 },
-    { id: "azeitona", name: "Azeitona", price: 0.50 },
-    { id: "chourico", name: "Chouriço em cubos", price: 0.50 },
-    { id: "fiambre", name: "Fiambre", price: 0.50 },
+    { id: "bacon", name: "Bacon", price: PRECO_EXTRA },
+    { id: "milho", name: "Milho", price: PRECO_EXTRA },
+    { id: "queijo", name: "Queijo", price: PRECO_EXTRA },
+    { id: "catupiry", name: "Catupiry", price: PRECO_EXTRA },
+    { id: "azeitona", name: "Azeitona", price: PRECO_EXTRA },
+    { id: "chourico", name: "Chouriço em cubos", price: PRECO_EXTRA },
+    { id: "fiambre", name: "Fiambre", price: PRECO_EXTRA },
   ];
   const EXTRAS_DOCES = [
-    { id: "coco", name: "Coco", price: 0.60 },
+    { id: "coco", name: "Coco", price: PRECO_EXTRA },
     // Amendoim temporariamente fora -- esgotado, ainda nao foi possivel
     // comprar mais (10/10). Volta a por esta linha quando tiver stock:
-    // { id: "amendoim", name: "Amendoim", price: 0.60 },
+    // { id: "amendoim", name: "Amendoim", price: PRECO_EXTRA },
   ];
   // Ingrediente principal de cada sabor (salgada ou doce), disponivel como
   // extra em QUALQUER esfiha -- ex.: dá para por carne na Suculenta, ou
-  // nutella numa salgada. Preço segue o mesmo nível dos outros extras:
-  // 0,50€ para quem vem de uma salgada, 0,60€ para quem vem de uma doce.
+  // nutella numa salgada.
   const EXTRAS_SABORES = [
-    { id: "carne", name: "Carne (da Tradicional)", price: 0.50 },
-    { id: "queijo-suculenta", name: "Mussarela (da Suculenta)", price: 0.50 },
-    { id: "frango", name: "Frango (da Caipira)", price: 0.50 },
-    { id: "calabresa", name: "Calabresa (da Queridinha)", price: 0.50 },
-    { id: "nutella", name: "Nutella (da Que Todo Mundo Ama)", price: 0.60 },
-    { id: "goiabada", name: "Goiabada (da Irresistível)", price: 0.60 },
-    { id: "banana-canela", name: "Banana e Canela (da Diferentona)", price: 0.60 },
+    { id: "carne", name: "Carne (da Tradicional)", price: PRECO_EXTRA },
+    { id: "queijo-suculenta", name: "Mussarela (da Suculenta)", price: PRECO_EXTRA },
+    { id: "frango", name: "Frango (da Caipira)", price: PRECO_EXTRA },
+    { id: "calabresa", name: "Calabresa (da Queridinha)", price: PRECO_EXTRA },
+    { id: "nutella", name: "Nutella (da Que Todo Mundo Ama)", price: PRECO_EXTRA },
+    { id: "goiabada", name: "Goiabada (da Irresistível)", price: PRECO_EXTRA },
+    { id: "banana-canela", name: "Banana e Canela (da Diferentona)", price: PRECO_EXTRA },
   ];
 
   // ---- COMBOS E PROMOÇÕES ----
