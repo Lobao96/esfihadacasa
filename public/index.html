@@ -460,6 +460,14 @@
     padding: 3px 10px; border-radius: 999px;
     text-transform: uppercase; letter-spacing: 0.04em;
   }
+  .novo-card { position: relative; }
+  .novo-flag {
+    position: absolute; top: -10px; right: 14px;
+    background: var(--red); color: #fff;
+    font-size: 0.68rem; font-weight: 800;
+    padding: 3px 10px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
   .antes { color: var(--ink-soft); font-size: 0.82rem; font-weight: 600; margin-left: 4px; }
   .unit-combo { border-color: var(--gold); background: rgba(244,185,66,0.07); }
   .combo-step { font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); margin: 10px 0 4px; }
@@ -966,11 +974,11 @@
       { id: "classica", name: "A Clássica", desc: "Fiambre e queijo", price: 2.50,
         ing: "Fiambre, queijo mussarela.",
         alerg: ["Glúten", "Leite"],
-        img: "/img/esfiha-classica.jpg" },
+        img: "/img/esfiha-classica.jpg", novo: true },
       { id: "italiana", name: "A Italiana", desc: "Queijo, tomate e manjericão", price: 2.50,
         ing: "Mussarela, tomate, manjericão fresco, orégãos.",
         alerg: ["Glúten", "Leite"],
-        img: "/img/esfiha-italiana.jpg" },
+        img: "/img/esfiha-italiana.jpg", novo: true },
     ],
     doces: [
       { id: "todo", name: "A Que Todo Mundo Ama", desc: "Recheio cremoso de Nutella Original", price: 2.60,
@@ -1053,7 +1061,7 @@
       desc: "6 esfihas salgadas + 2 doces à escolha",
       price: 17.00, antes: 20.20,
       nSalgadas: 6, nDoces: 2, nBebidas: 0,
-      img: "/img/combo-noite-a-dois.jpg",
+      img: "/img/combo-noite-a-dois.jpg", novo: true,
     },
   ];
 
@@ -1147,6 +1155,7 @@
   function comboHtml() {
     const cards = COMBOS.map(c => `<div class="card combo-card">
       <span class="combo-flag">Combo</span>
+      ${c.novo ? '<span class="novo-flag">Novidade</span>' : ''}
       ${c.img ? `<img class="card-img" src="${c.img}" alt="${c.name}" loading="lazy">` : ''}
       <h3>${c.name}</h3>
       <p class="desc">${c.desc}</p>
@@ -1267,7 +1276,8 @@
       ? `<img class="card-img" src="${i.img}" alt="${i.name}">`
       : `<div class="card-img placeholder">🫓</div>`;
     const alerg = i.alerg.map(a => `<span class="alerg-tag">${a}</span>`).join('');
-    return `<div class="card" data-item="${i.id}">
+    return `<div class="card${i.novo ? ' novo-card' : ''}" data-item="${i.id}">
+      ${i.novo ? '<span class="novo-flag">Novidade</span>' : ''}
       ${img}
       <h3>${i.name}</h3>
       <p class="desc">${i.desc}</p>
