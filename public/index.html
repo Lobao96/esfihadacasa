@@ -1005,6 +1005,19 @@
     // comprar mais (10/10). Volta a por esta linha quando tiver stock:
     // { id: "amendoim", name: "Amendoim", price: 0.60 },
   ];
+  // Ingrediente principal de cada sabor (salgada ou doce), disponivel como
+  // extra em QUALQUER esfiha -- ex.: dá para por carne na Suculenta, ou
+  // nutella numa salgada. Preço segue o mesmo nível dos outros extras:
+  // 0,50€ para quem vem de uma salgada, 0,60€ para quem vem de uma doce.
+  const EXTRAS_SABORES = [
+    { id: "carne", name: "Carne (da Tradicional)", price: 0.50 },
+    { id: "queijo-suculenta", name: "Mussarela (da Suculenta)", price: 0.50 },
+    { id: "frango", name: "Frango (da Caipira)", price: 0.50 },
+    { id: "calabresa", name: "Calabresa (da Queridinha)", price: 0.50 },
+    { id: "nutella", name: "Nutella (da Que Todo Mundo Ama)", price: 0.60 },
+    { id: "goiabada", name: "Goiabada (da Irresistível)", price: 0.60 },
+    { id: "banana-canela", name: "Banana e Canela (da Diferentona)", price: 0.60 },
+  ];
 
   // ---- COMBOS E PROMOÇÕES ----
   const COMBOS = [
@@ -1023,6 +1036,14 @@
       price: 48.00, antes: 57.50,
       nSalgadas: 15, nDoces: 5, nBebidas: 2, tipoBebida: "garrafa1l", bebidaFixa: true,
       img: "/img/combo-junta-a-malta.jpg",
+    },
+    {
+      id: "combo3",
+      name: "Combo Casal",
+      desc: "6 esfihas salgadas + 2 doces à escolha",
+      price: 17.00, antes: 20.20,
+      nSalgadas: 6, nDoces: 2, nBebidas: 0,
+      img: "/img/combo-casal.jpg",
     },
   ];
 
@@ -1274,7 +1295,7 @@
   function isBebida(id) { return MENU.bebidas.some(i => i.id === id); }
   function extrasFor(id) {
     if (isBebida(id)) return [];
-    return isSalgada(id) ? EXTRAS_SALGADAS : EXTRAS_DOCES;
+    return (isSalgada(id) ? EXTRAS_SALGADAS : EXTRAS_DOCES).concat(EXTRAS_SABORES);
   }
   function bebidasLata() { return MENU.bebidas.filter(b => b.desc.indexOf('Lata') === 0); }
   function bebidas1L() { return MENU.bebidas.filter(b => b.desc.indexOf('Garrafa 1 litro') === 0); }
@@ -1356,7 +1377,7 @@
 
   // extras escolhidos dentro de um combo, por esfiha
   function picksDe(u, tipo) { return tipo === 'doce' ? u.picksDoces : u.picks; }
-  function extrasDoPick(tipo) { return tipo === 'doce' ? EXTRAS_DOCES : EXTRAS_SALGADAS; }
+  function extrasDoPick(tipo) { return (tipo === 'doce' ? EXTRAS_DOCES : EXTRAS_SALGADAS).concat(EXTRAS_SABORES); }
 
   function unitPrice(u) {
     const c = comboById(u.itemId);
@@ -1545,6 +1566,11 @@
 
   function comboBlock(u) {
     const c = comboById(u.itemId);
+    if (c.nBebidas === 0) {
+      return `
+        ${comboSecao(u, 'salgada', MENU.salgadas, c.nSalgadas)}
+        ${comboSecao(u, 'doce', MENU.doces, c.nDoces)}`;
+    }
     if (c.bebidaFixa) {
       const rotuloFixo = c.nBebidas === 1 ? '1 bebida' : c.nBebidas + ' bebidas';
       const tipoTexto = c.tipoBebida === 'lata' ? 'em lata' : 'de 1L';
