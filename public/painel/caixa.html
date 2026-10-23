@@ -109,7 +109,7 @@
       </div>
 
       <div class="campo">
-        <label>🛵 Dado à Andreza</label>
+        <label>🛵 Dado ao estafeta</label>
         <input type="number" id="inAndreza" step="0.01" min="0" oninput="atualizarDiferencas()">
         <div class="esperado" id="espAndreza"></div>
       </div>
@@ -283,27 +283,22 @@
     document.getElementById('espMbway').textContent = linha('mbway', esperadoAtual.mbway, m);
     document.getElementById('espMbway').className = 'esperado' + (Math.abs(esperadoAtual.mbway - m) >= 0.005 ? ' dif' : '');
 
-    // Andreza: o "esperado" nao e o minimo de 20e, e as taxas de entrega recebidas (3,50e/entrega).
-    // Se nao chegarem a 20e num dia trabalhado, mostra-se o complemento que falta dar.
-    // Se ela nao trabalhou nesse dia (0 entregas), esperado e complemento ficam a 0e.
+    // Estafeta (a partir de 23/10, o proprio Miguel): o "esperado" e sempre
+    // as taxas de entrega recebidas (3,50€/entrega), sem minimo garantido.
+    // Se nao houve entregas nesse dia, esperado fica a 0€.
     const entregasA = esperadoAtual.entregas || 0;
     const taxasA = esperadoAtual.andrezaTaxas || 0;
-    const complementoA = esperadoAtual.andrezaComplemento || 0;
-    const totalEsperadoA = taxasA + complementoA;
     let textoAndreza;
     if (!entregasA) {
-      textoAndreza = 'não trabalhou hoje (0 entregas) · esperado: 0,00€';
+      textoAndreza = 'sem entregas hoje · esperado: 0,00€';
     } else {
       textoAndreza = `taxas de entrega recebidas: ${eur(taxasA)}`;
-      textoAndreza += complementoA >= 0.005
-        ? ` · complemento a teu cargo: ${eur(complementoA)}`
-        : ' · sem complemento (taxas ≥ 20€)';
     }
-    if (Math.abs(totalEsperadoA - a) >= 0.005) {
-      textoAndreza += ` · diferença: ${a > totalEsperadoA ? '+' : ''}${eur(a - totalEsperadoA)}`;
+    if (Math.abs(taxasA - a) >= 0.005) {
+      textoAndreza += ` · diferença: ${a > taxasA ? '+' : ''}${eur(a - taxasA)}`;
     }
     document.getElementById('espAndreza').textContent = textoAndreza;
-    document.getElementById('espAndreza').className = 'esperado' + (Math.abs(totalEsperadoA - a) >= 0.005 ? ' dif' : '');
+    document.getElementById('espAndreza').className = 'esperado' + (Math.abs(taxasA - a) >= 0.005 ? ' dif' : '');
 
     atualizarResultado();
   }
@@ -327,7 +322,7 @@
     const div = document.getElementById('resultadoDia');
     div.innerHTML = `
       <div class="resultado-linha"><span>Receita (dinheiro + MB Way)</span><b>${eur(receita)}</b></div>
-      <div class="resultado-linha"><span>− Estafeta (dado à Andreza)</span><b>${eur(a)}</b></div>
+      <div class="resultado-linha"><span>− Estafeta (dado ao estafeta)</span><b>${eur(a)}</b></div>
       <div class="resultado-linha"><span>− Mão de obra (${horasTxt}h × ${VALOR_HORA}€)</span><b>${eur(maoObra)}</b></div>
       <div class="resultado-linha"><span>− Eletricidade / outros custos</span><b>${eur(custoExtra)}</b></div>
       <div class="resultado-linha"><span>− Ingredientes (estimado, ⚙️ Custos)</span><b>${eur(ingredientes)}</b></div>
@@ -377,12 +372,12 @@
     const totalDinheiro = pagos.filter(p => metodoDe(p) === 'dinheiro').reduce((a, p) => a + (p.total_cent || 0), 0);
     const totalMbway = pagos.filter(p => metodoDe(p) === 'mbway').reduce((a, p) => a + (p.total_cent || 0), 0);
     const entregas = entregasReaisDia.length;
-    // Combinado: ela recebe sempre o valor das taxas de entrega (3,50€/entrega).
-    // Se as taxas nao chegarem a 20€ num dia que ela trabalhou, o Miguel completa a diferenca ("complemento").
-    // Se ela nao trabalhou (0 entregas no dia), nao ha taxas nem complemento: tudo fica a 0€.
+    // A partir de 23/10 e o proprio Miguel que faz as entregas: recebe
+    // sempre o valor das taxas de entrega (3,50€/entrega), sem minimo
+    // garantido (essa regra dos 20€/dia so fazia sentido para pagar a
+    // Andreza). Sem entregas no dia, fica tudo a 0€.
     const taxasCent = entregas * 350;
-    const complementoCent = entregas ? Math.max(0, 2000 - taxasCent) : 0;
-    const andrezaCent = entregas ? Math.max(2000, taxasCent) : 0;
+    const andrezaCent = taxasCent;
     // Custo dos ingredientes desse dia, pelos precos definidos em Analise -> Custos.
     // So conta o que o Miguel ja preencheu la; sabores/extras sem custo definido contam 0.
     const ingredientesCent = (an && an.custoProdutos) || 0;
@@ -391,7 +386,6 @@
       mbway: totalMbway / 100,
       andreza: andrezaCent / 100,
       andrezaTaxas: taxasCent / 100,
-      andrezaComplemento: complementoCent / 100,
       ingredientesCent,
       entregas,
     };

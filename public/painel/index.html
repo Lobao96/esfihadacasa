@@ -215,8 +215,8 @@
     </div>
 
     <div class="saboresbox" id="estafetaBox" style="display:none">
-      <h3>Andreza (estafeta)</h3>
-      <p class="nota">Recebe o maior entre 20€ e 3,50€ por entrega, por dia aberto. A loja só paga a diferença (o complemento) nos dias com 5 entregas ou menos — a partir da 6.ª entrega ela já ultrapassa os 20€ sozinha.</p>
+      <h3>Entregas (estafeta)</h3>
+      <p class="nota">Taxa de entrega: 3,50€ por entrega, por dia aberto.</p>
       <div id="estafetaResumo"></div>
     </div>
 
@@ -407,7 +407,7 @@
   }
 
   // WhatsApp do estafeta (só dígitos, com 351).
-  const ESTAFETA_WA = '351920578744';
+  const ESTAFETA_WA = '351913825385';
 
   function mensagemEstafeta(p) {
     const link = location.origin + '/pedido/?t=' + p.token;
@@ -593,11 +593,10 @@
     if (!diaVisto) avisarNovos();
   }
 
-  // Regra combinada com a Andreza: por dia aberto, ela recebe o maior
-  // entre 20€ e 3,50€ x nº de entregas desse dia. Nos dias com 5 entregas
-  // ou menos (3,50 x 5 = 17,50€, abaixo dos 20€), a loja paga a diferenca;
-  // a partir de 6 entregas (3,50 x 6 = 21€) ela ja ultrapassa sozinha, e a
-  // loja nao paga complemento nenhum.
+  // A partir de 23/10 e o proprio Miguel que faz as entregas (antes era a
+  // Andreza): por dia aberto, recebe sempre o valor das taxas de entrega
+  // (3,50€ x nº de entregas), sem minimo garantido -- essa regra dos 20€
+  // so fazia sentido para pagar a Andreza.
   function pintarEstafeta() {
     const box = document.getElementById('estafetaBox');
     const el = document.getElementById('estafetaResumo');
@@ -606,14 +605,10 @@
     const n = entregasReais.length;
     if (!n) { box.style.display = 'none'; return; }
     const taxa = n * 3.5;
-    const recebe = Math.max(20, taxa);
-    const complemento = Math.max(0, recebe - taxa);
     box.style.display = '';
     el.innerHTML = `
       <div class="linha"><span>Entregas</span><span class="v">${n}</span></div>
       <div class="linha"><span>Taxa (3,50€ × entregas)</span><span class="v">${eur(Math.round(taxa * 100))}</span></div>
-      <div class="linha"><span>Andreza recebe</span><span class="v">${eur(Math.round(recebe * 100))}</span></div>
-      <div class="linha"><span>Complemento da loja</span><span class="v">${complemento > 0 ? eur(Math.round(complemento * 100)) : '—'}</span></div>
     `;
   }
 

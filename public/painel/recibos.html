@@ -290,9 +290,9 @@
     lista.innerHTML = html;
 
     // Quantos recibos vieram de entrega (estafeta) vs levantamento no local,
-    // e quanto se deve a Andreza nesse dia -- mesma regra do painel: recebe
-    // o maior entre 20€ e 3,50€ por entrega; a loja so paga a diferenca nos
-    // dias com 5 entregas ou menos.
+    // e as taxas de entrega desse dia -- mesma regra do painel: 3,50€ por
+    // entrega, sem minimo garantido (a partir de 23/10 e o proprio Miguel
+    // que faz as entregas).
     const totalDinheiro = pedidos.filter(p => metodoDe(p) === 'dinheiro').reduce((a, p) => a + (p.total_cent || 0), 0);
     const totalMbway = pedidos.filter(p => metodoDe(p) === 'mbway').reduce((a, p) => a + (p.total_cent || 0), 0);
     const totalIndefinido = total - totalDinheiro - totalMbway;
@@ -302,10 +302,8 @@
     let andrezaHtml = '';
     if (entregasAndreza) {
       const taxa = entregasAndreza * 3.5;
-      const recebe = Math.max(20, taxa);
-      const complemento = Math.max(0, recebe - taxa);
       andrezaHtml = `
-      <div><b>${eur(recebe)}</b>Andreza recebe${complemento > 0 ? ' (' + eur(complemento) + ' de complemento)' : ''}</div>`;
+      <div><b>${eur(taxa)}</b>taxas de entrega</div>`;
     }
     resumo.innerHTML = `
       <div><b>${pedidos.length}</b>recibos</div>

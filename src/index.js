@@ -384,12 +384,13 @@ async function tokenUber(env) {
 // falta calcular o impacto real disto juntando ao resto das despesas do
 // negocio (nao so o custo direto do Uber).
 //
-// (10/10) A entrega passou a ser feita pela Andreza (estafeta propria),
-// nao pelo estafeta da Uber -- ver mudarPedido()/painel. A chamada ao
-// Uber aqui em baixo (cotarEntrega) fica so como *estimativa de distancia*
-// para decidir se a morada fica dentro da area que a Andreza cobre, nunca
-// para despachar de verdade. A pedido do dono, deixou de haver faixas por
-// zona: entrega a 3,50€ fixos para toda a area Alvor a Lagoa.
+// (10/10) A entrega passou a ser feita por um estafeta proprio (primeiro
+// a Andreza; a partir de 23/10 o proprio Miguel), nao pelo estafeta da
+// Uber -- ver mudarPedido()/painel. A chamada ao Uber aqui em baixo
+// (cotarEntrega) fica so como *estimativa de distancia* para decidir se a
+// morada fica dentro da area cobrada, nunca para despachar de verdade. A
+// pedido do dono, deixou de haver faixas por zona: entrega a 3,50€ fixos
+// para toda a area aprovada (Alvor a Parchal, sem Lagoa Centro).
 //
 // (10/10, mais tarde) Tentou-se cortar a zona pelo TEMPO em vez do custo,
 // mas voltou a dar asneira em producao: testado ao vivo, ate o Parchal (a
@@ -397,7 +398,7 @@ async function tokenUber(env) {
 // 15min E em 20min -- confirma de vez a nota antiga mais abaixo: o campo
 // "duration" da Uber tem SEMPRE um piso de ~40min, mesmo a distancia zero,
 // e nunca reflete o tempo real. Nunca mais usar "duration" como corte de
-// zona. A Andreza faz agora TODAS as entregas a tempo inteiro -- o site ja
+// zona. O estafeta faz agora TODAS as entregas a tempo inteiro -- o site ja
 // nao pergunta a Uber coisa nenhuma (nem para decidir a zona nem para
 // pedir o estafeta). A decisao e 100% local, sem chamadas de rede, baseada
 // na morada que o cliente escreveu: codigo postal (concelho) + localidade
@@ -425,16 +426,17 @@ function codigoPostalSeguro(cp) {
 }
 
 // Localidades aceites para entrega, dos concelhos de Portimao e Lagoa, ate
-// ao limite que a Andreza confirmou como razoavel (max. Lagoa Centro/
-// Parchal -- nunca Porches nem Carvoeiro, que ficam "muito longe").
+// ao limite confirmado pelo dono (max. Parchal -- Lagoa Centro deixou de
+// ser aceite a partir de 23/10; nunca Porches nem Carvoeiro, que ficam
+// "muito longe").
 // Comparacao sem acentos/maiusculas para aceitar "Lagôa", "PARCHAL", etc.
 const LOCALIDADES_ACEITES = [
   'portimao', 'praia da rocha', 'alvor', 'mexilhoeira grande', // concelho de Portimao
-  'lagoa', 'parchal', 'ferragudo', 'estombar', // concelho de Lagoa, ate ao limite confirmado
+  'parchal', 'ferragudo', 'estombar', // concelho de Lagoa, ate ao limite confirmado (sem Lagoa Centro)
 ];
-// Fora de alcance mesmo tendo codigo postal 8400 (confirmado pelo dono:
-// "porches e muito longe muito longe, maximo ate lagoa centro").
-const LOCALIDADES_FORA = ['porches', 'carvoeiro'];
+// Fora de alcance mesmo tendo codigo postal 8400 (confirmado pelo dono, 23/10:
+// Lagoa Centro deixou de ser aceite -- Porches/Carvoeiro continuam "muito longe").
+const LOCALIDADES_FORA = ['porches', 'carvoeiro', 'lagoa'];
 
 function semAcentos(s) {
   return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
