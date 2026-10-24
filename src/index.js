@@ -751,6 +751,11 @@ async function acompanhar(request, env) {
 // porque a cotacao guardada no pedido pode ja ter expirado entre o
 // cliente fazer o pedido e o staff carregar em "Comecar a fazer".
 async function criarEntregaUberReal(request, env) {
+  // (24/10) Desativado a pedido do dono: para ja, nada no site deve
+  // ligar ao Uber -- as entregas sao feitas pelo proprio estafeta da
+  // loja. Para reativar, remover este bloco.
+  return j({ ok: false, erro: 'uber_desativado' }, 200);
+
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const id = parseInt(b.id, 10);
@@ -861,6 +866,10 @@ async function criarEntregaUberReal(request, env) {
 // (usado quando um pedido de entrega e cancelado depois de o estafeta ja
 // ter sido chamado).
 async function cancelarEntregaUber(request, env) {
+  // (24/10) Desativado a pedido do dono: para ja, nada no site deve
+  // ligar ao Uber. Para reativar, remover este bloco.
+  return j({ ok: false, erro: 'uber_desativado' }, 200);
+
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const id = parseInt(b.id, 10);
