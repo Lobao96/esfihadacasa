@@ -236,7 +236,7 @@
   <nav class="nav">
     <a class="nav-i on" href="/painel/"><span>🫓</span>Pedidos</a>
     <a class="nav-i" href="/admin/"><span>📊</span>Análise</a>
-    <a class="nav-i" href="whatsapp://send?phone=351938211480" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>
+    <a class="nav-i" href="https://web.whatsapp.com/send?phone=351938211480" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>
     <a class="nav-i" href="/painel/recibos.html"><span>🧾</span>Recibos</a>
     <a class="nav-i" href="/painel/caixa.html"><span>💰</span>Caixa</a>
     <button class="nav-i" id="navAvisos" onclick="pedirAvisos()"><span>🔔</span>Avisos</button>
@@ -371,7 +371,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, momento));
-    window.open(num ? `whatsapp://send?phone=${num}&text=${txt}` : `whatsapp://send?text=${txt}`, '_blank', 'noopener');
+    window.open(num ? `https://web.whatsapp.com/send?phone=${num}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`, '_blank', 'noopener');
   }
 
   // Ao marcar como pago, já manda logo o recibo pelo WhatsApp — sem precisar
@@ -387,7 +387,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, 'pago'));
-    const url = num ? `whatsapp://send?phone=${num}&text=${txt}` : `whatsapp://send?text=${txt}`;
+    const url = num ? `https://web.whatsapp.com/send?phone=${num}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`;
     if (janela) janela.location.href = url; else window.open(url, '_blank', 'noopener');
   }
 
@@ -430,7 +430,7 @@
     const p = pedidos.find(x => x.id === id);
     if (!p) return;
     const txt = encodeURIComponent(mensagemEstafeta(p));
-    window.open(ESTAFETA_WA ? `whatsapp://send?phone=${ESTAFETA_WA}&text=${txt}` : `whatsapp://send?text=${txt}`, '_blank', 'noopener');
+    window.open(ESTAFETA_WA ? `https://web.whatsapp.com/send?phone=${ESTAFETA_WA}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`, '_blank', 'noopener');
   }
 
   async function chamarUber(id) {
@@ -487,7 +487,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemCancelado(Object.assign({}, p, { motivo_cancelamento: motivo }), '#' + p.numero));
-    window.open(num ? `whatsapp://send?phone=${num}&text=${txt}` : `whatsapp://send?text=${txt}`, '_blank', 'noopener');
+    window.open(num ? `https://web.whatsapp.com/send?phone=${num}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`, '_blank', 'noopener');
 
     const d = dadosDe(p);
     const temUber = d.entrega && d.entrega.uber_delivery_id && !d.entrega.uber_cancelada_em;
