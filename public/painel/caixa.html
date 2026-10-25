@@ -67,6 +67,16 @@
   .nav-i { flex: 1; text-align: center; padding: 9px 0 7px; color: var(--ink-soft); text-decoration: none; font-size: 0.72rem; font-weight: 700; border: none; background: none; font-family: inherit; }
   .nav-i span { display: block; font-size: 1.2rem; }
   .nav-i.on { color: var(--red); }
+
+  #reciboCaixaImpressao { display: none; }
+  #reciboCaixaImpressao h1 { font-size: 1.15rem; margin: 0 0 2px; }
+  #reciboCaixaImpressao .data-impressao { color: #666; margin-bottom: 22px; font-size: 0.9rem; }
+  #reciboCaixaImpressao .notas-impressao { margin-top: 22px; font-size: 0.88rem; color: #444; white-space: pre-wrap; border-top: 1px solid #e5e5e5; padding-top: 12px; }
+  @media print {
+    body * { visibility: hidden; }
+    #reciboCaixaImpressao, #reciboCaixaImpressao * { visibility: visible; }
+    #reciboCaixaImpressao { display: block; position: absolute; top: 0; left: 0; width: 100%; padding: 24px; max-width: 420px; margin: 0 auto; }
+  }
 </style>
 </head>
 <body>
@@ -80,6 +90,7 @@
 </div>
 
 <div id="app" style="display:none">
+  <div id="reciboCaixaImpressao"></div>
   <header>
     <h1>💰 Fecho de caixa</h1>
     <span class="hora" id="hora" style="font-size:0.85rem;color:var(--ink-soft)"></span>
@@ -333,33 +344,25 @@
       </div>`;
   }
 
+  // (25/10) Deixou de abrir janela pop-up para imprimir -- no telemovel os
+  // browsers bloqueiam pop-ups com muita facilidade (o botao "nao
+  // funcionava") e, mesmo quando nao bloqueiam, o dialogo de impressao
+  // muitas vezes nao aparecia dentro da janela pequena. Agora preenche-se
+  // uma seccao escondida (#reciboCaixaImpressao) e imprime-se a propria
+  // pagina -- e o mesmo metodo ja usado em recibos.html, que funciona bem
+  // em telemovel.
   function imprimirResultado() {
     const dia = document.getElementById('diaSel').value;
     const titulo = document.getElementById('tituloFecho').textContent;
     const conteudo = document.getElementById('resultadoDia').innerHTML;
     const notas = document.getElementById('inNotas').value || '';
-    const win = window.open('', '_blank', 'width=420,height=640');
-    if (!win) { alert('O browser bloqueou a janela de impressão. Permite pop-ups para este site e tenta outra vez.'); return; }
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title>
-      <style>
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:28px;color:#1a1a1a;max-width:420px;margin:0 auto}
-        h1{font-size:1.15rem;margin:0 0 2px}
-        .data{color:#666;margin-bottom:22px;font-size:0.9rem}
-        .resultado-linha{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #e5e5e5;font-size:0.95rem}
-        .resultado-linha.total{border-bottom:none;border-top:2px solid #1a1a1a;margin-top:6px;padding-top:12px;font-size:1.05rem}
-        .resultado-linha.positivo b{color:#1a7a3c}
-        .resultado-linha.negativo b{color:#b3261e}
-        .notas{margin-top:22px;font-size:0.88rem;color:#444;white-space:pre-wrap;border-top:1px solid #e5e5e5;padding-top:12px}
-        @media print { body{padding:0} }
-      </style></head><body>
+    document.getElementById('reciboCaixaImpressao').innerHTML = `
       <h1>💰 ${esc(titulo)}</h1>
-      <div class="data">${dataLonga(dia)}</div>
+      <div class="data-impressao">${dataLonga(dia)}</div>
       ${conteudo}
-      ${notas ? `<div class="notas"><b>Notas:</b> ${esc(notas)}</div>` : ''}
-      </body></html>`);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
+      ${notas ? `<div class="notas-impressao"><b>Notas:</b> ${esc(notas)}</div>` : ''}
+    `;
+    window.print();
   }
 
   async function calcularEsperado(dia) {
