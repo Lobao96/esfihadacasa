@@ -1340,6 +1340,15 @@
     return null; // bebidas e combos nao tem limite por sabor aqui
   }
 
+  // (25/10) Doces esgotados por completo (ex.: acabou a massa doce) -- usado
+  // para, dentro de um combo que inclua doces, deixar substituir essas
+  // posicoes por salgadas em vez de simplesmente bloquear o combo inteiro.
+  // Perde-se uma venda de combo por um detalhe assim, e o cliente nem
+  // sempre faz questao da parte doce.
+  function docesEsgotados() {
+    return !!(estadoLoja && estadoLoja.doceRestante != null && estadoLoja.doceRestante <= 0);
+  }
+
   // Quantas unidades deste sabor ja estao no pedido -- conta tanto as
   // esfihas escolhidas diretamente como as escolhidas dentro de um combo,
   // porque consomem o mesmo stock fisico.
@@ -1573,13 +1582,23 @@
     if (!n) return '';
     const arr = picksDe(u, tipo);
     const faltam = n - arr.length;
-    const chips = lista.map(s => {
+    // Doces esgotados: troca a lista de sabores por salgadas (o sid
+    // escolhido entra no mesmo array picksDoces, mas listaProducao() ja
+    // classifica cada sabor pelo seu proprio id -- por isso uma salgada
+    // escolhida aqui conta e desconta do stock certo automaticamente).
+    const substituirPorSalgada = tipo === 'doce' && docesEsgotados();
+    const listaEfetiva = substituirPorSalgada ? MENU.salgadas : lista;
+    const chips = listaEfetiva.map(s => {
       const cheio = arr.length >= n ? ' disabled' : '';
       return `<button class="ex-chip${cheio}" onclick="comboAddSabor(${u.uid}, '${s.id}', '${tipo}')">${s.name}</button>`;
     }).join('');
-    const label = tipo === 'doce' ? 'doces' : 'salgadas';
+    const label = substituirPorSalgada ? 'salgadas (no lugar dos doces)' : (tipo === 'doce' ? 'doces' : 'salgadas');
+    const aviso = substituirPorSalgada
+      ? `<p class="brinde-aviso">⚠️ De momento não temos esfihas doces disponíveis (a massa esgotou por hoje). Pode escolher salgadas no lugar, sem perder o combo.</p>`
+      : '';
     return `
       <p class="combo-step">Escolha ${n} ${label} ${faltam > 0 ? '(faltam ' + faltam + ')' : '✓'}</p>
+      ${aviso}
       <div class="ex-chips">${chips}</div>
       ${comboPicksHtml(u, tipo)}`;
   }
