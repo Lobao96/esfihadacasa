@@ -723,17 +723,6 @@
   </div>
 </section>
 
-<section class="promo-topo" id="promoTopo">
-  <div class="promo-topo-inner">
-    <img class="promo-topo-img" src="/img/esfiha-tradicional.jpg" alt="Esfihas da Esfiha da Casa">
-    <div>
-      <span class="promo-topo-tag">🎉 Só hoje — dia de inauguração!</span>
-      <h2 class="promo-topo-title">Compra 3, leva 5!</h2>
-      <p class="promo-topo-desc">5 esfihas ao preço de 3, pra quem vem comemorar a inauguração com a gente. É automático, no seu pedido.</p>
-          <p class="promo-topo-aviso">Não acumula com combos nem com outras promoções — só esfihas avulsas contam, as que vêm dentro de um combo não.</p>
-    </div>
-  </div>
-</section>
 
 <div class="esgotado-banner" id="esgotadoBanner" style="display:none;"></div>
 
@@ -3051,22 +3040,14 @@
     if (!ESGOTADO) return;
     const b = document.getElementById('esgotadoBanner');
     if (b) { b.textContent = ESGOTADO_MSG; b.style.display = 'block'; }
-    const promo = document.getElementById('promoTopo');
-    if (promo) promo.style.display = 'none';
   }
 
   function applyPreLancamento() {
     if (!PRE_LANCAMENTO) return;
     const b = document.getElementById('preBanner');
     if (b) b.style.display = 'block';
-    const promo = document.getElementById('promoTopo');
-    if (promo) promo.style.display = 'none';
   }
 
-  function applyPromoTopo() {
-    const promo = document.getElementById('promoTopo');
-    if (promo && !ehDiaDaInauguracao(new Date())) promo.style.display = 'none';
-  }
 
   var sm = document.getElementById('seoMenu'); if (sm) sm.style.display = 'none';
   renderMenu();
@@ -3074,7 +3055,6 @@
   setOrderType('entrega');
   updateStatus();
   applyPreLancamento();
-  applyPromoTopo();
   applyEsgotado();
   updateTotal();
   verEstadoLoja();
