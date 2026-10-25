@@ -752,7 +752,7 @@
     <div class="grid" id="bebidasGrid"></div>
     <div class="alerg-note">
       <strong>Alérgenos</strong><br>
-      Todas as esfihas levam massa de trigo, então contêm glúten. Os extras amendoim (frutos de casca rija) e queijo (leite) também são alérgenos.<br>
+      Todas as esfihas levam massa de trigo, então contêm glúten. O extra queijo (leite) também é alérgeno.<br>
       Tudo é preparado na mesma cozinha, então pode ter traços de outros alérgenos. Se você tem alguma alergia, avisa a gente no WhatsApp antes de pedir.
     </div>
   </div>
@@ -801,7 +801,7 @@
               </div>
 
       <p class="extras-title">O seu nome</p>
-      <input type="text" id="nomeInput" placeholder="Nome e apelido" autocomplete="name" aria-label="O seu nome">
+      <input type="text" id="nomeInput" placeholder="Nome completo" autocomplete="name" aria-label="O seu nome">
       <p class="tel-nota">Para sabermos a quem entregar.</p>
 
       <p class="extras-title">Seu WhatsApp</p>
@@ -823,7 +823,7 @@
             <input type="number" id="trocoValorInput" inputmode="decimal" placeholder="Ex.: 50" min="0" max="200" step="1" aria-label="Nota com que vai pagar, em euros" oninput="limitarNotaInput(); atualizarTrocoCalculado()">
             <span class="troco-input-suffix">€</span>
           </div>
-          <p class="troco-nota">Diga o valor da nota com que vai pagar (ex.: 50€) — calculamos o troco na hora, já pronto seja na entrega ou quando vier buscar.</p>
+          <p class="troco-nota">Diga o valor da nota com que vai pagar (ex.: 50€) — a gente já calcula o troco na hora, pronto tanto para a entrega quanto para quando você vier buscar.</p>
           <p class="troco-calc" id="trocoCalculado"></p>
           <p class="troco-aviso" id="trocoAviso" style="display:none;"></p>
         </div>
@@ -897,6 +897,7 @@
         <h4>Privacidade</h4>
         <p><strong>Responsável pelo tratamento de dados:</strong> Letícia Gonçalves Machado (NIF 298630338), titular da Esfiha da Casa. Contato: 938 211 480 (WhatsApp) ou esfihadacasaptm@gmail.com.</p>
         <p>Ao enviar seu pedido, seu nome, telefone e morada (quando for entrega) ficam guardados no nosso sistema de pedidos, só para preparar, entregar e dar suporte ao seu pedido. A mensagem final também é enviada por você pelo WhatsApp, que é um serviço fornecido pela Meta — a conversa fica guardada lá também, sujeita à política de privacidade da própria Meta.</p>
+        <p>Mantemos esses dados guardados no nosso sistema de pedidos durante, no máximo, 13 meses — depois desse prazo são apagados automaticamente.</p>
         <p>Você tem direito a acessar, corrigir ou pedir a eliminação dos seus dados a qualquer momento, é só escrever no WhatsApp. Se não resolvermos, você pode reclamar à CNPD (Comissão Nacional de Proteção de Dados) — <a href="https://www.cnpd.pt" target="_blank" rel="noopener">cnpd.pt</a>.</p>
         <p>A gente usa uma ferramenta de estatísticas que conta visitas de forma anônima e agregada, sem cookies e sem identificar ninguém. O site não tem publicidade nem perfis de usuário.</p>
       </div>
@@ -917,7 +918,7 @@
 
       <div id="legal-resol" class="legal-panel">
         <h4>Resolução de problemas</h4>
-        <p>Se alguma coisa der errado com seu pedido — item trocado, faltando, ou que não chegou como devia — fale com a gente no WhatsApp até 30 minutos depois de receber o pedido.</p>
+        <p>Se alguma coisa der errado com seu pedido — item trocado, que faltou, ou que não chegou como devia — fale com a gente no WhatsApp até 30 minutos depois de receber o pedido.</p>
         <p>Analisamos cada caso conforme a situação e decidimos com você a melhor forma de resolver.</p>
         <p>Se não chegarmos a um acordo, você pode recorrer a uma entidade de Resolução Alternativa de Litígios de Consumo, como o <a href="https://www.consumidor.gov.pt/parceiros/entidades-ral.aspx" target="_blank" rel="noopener">Centro de Arbitragem de Conflitos de Consumo do Algarve</a>.</p>
         <p>Sua opinião ajuda a gente a melhorar. Se tiver uma sugestão ou uma crítica, fale direto com a gente — a gente prefere saber.</p>
@@ -954,6 +955,9 @@
   // Esta copia e so para o ensaio com amigos e familia. Nao esta ligada
   // a partir do site publico e os motores de busca nao a indexam.
   const MODO_TESTE = true;
+  // Miguel decidiu em 2026-10-24: o site de ensaio nao vai ser usado por agora,
+  // por isso fica desligado (nao aceita pedidos) mas continua oculto/noindex.
+  const ENSAIO_DESATIVADO = true;
   const ESGOTADO_MSG = "Acabou a massa de hoje! Foi tudo mais rápido do que a gente imaginava e ficamos sem palavras. Obrigado de coração a quem pediu. Amanhã tem fornada nova — a gente te espera.";
 
   const MENU = {
@@ -1012,9 +1016,6 @@
   ];
   const EXTRAS_DOCES = [
     { id: "coco", name: "Coco", price: 0.60 },
-    // Amendoim temporariamente fora -- esgotado, ainda nao foi possivel
-    // comprar mais (10/10). Volta a por esta linha quando tiver stock:
-    // { id: "amendoim", name: "Amendoim", price: 0.60 },
   ];
 
   // ---- COMBOS E PROMOÇÕES ----
@@ -2099,7 +2100,7 @@
     const excedeLimite = nota >= totalCent && (nota - totalCent) > LIMITE_TROCO_CENT;
     if (aviso) {
       if (excedeLimite) {
-        aviso.textContent = '⚠️ Não garantimos troco para notas tão altas. Prefere pagar por MB Way? Se não der, fala connosco no WhatsApp antes de enviar, para confirmarmos se temos troco disponível.';
+        aviso.textContent = '⚠️ Não garantimos troco para notas tão altas. Prefere pagar por MB Way? Se não der, fala com a gente no WhatsApp antes de enviar, para confirmarmos se temos troco disponível.';
         aviso.style.display = 'block';
       } else {
         aviso.style.display = 'none';
@@ -2127,6 +2128,12 @@
 
   function refreshLink() {
     const btn = document.getElementById('sendBtn');
+    if (MODO_TESTE && ENSAIO_DESATIVADO) {
+      btn.href = '#';
+      btn.classList.add('disabled');
+      btn.textContent = 'Ensaio desativado por agora';
+      return;
+    }
     if (ESGOTADO) {
       btn.href = '#';
       btn.classList.add('disabled');

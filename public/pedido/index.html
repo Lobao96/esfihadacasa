@@ -188,7 +188,7 @@
         <div class="rlinha"><span>Subtotal</span><span>${eur(subtotalCent)}</span></div>
         ${entregaCent ? `<div class="rlinha"><span>Taxa de entrega</span><span>${eur(entregaCent)}</span></div>` : ''}
         <div class="rtotal"><span>Total pago</span><span>${eur(p.total_cent)}</span></div>
-        <div class="rrodape">${dataHora}<br><span class="num">Recibo: #${p.numero}</span><br>Confirmação de pagamento — fatura-recibo</div>
+        <div class="rrodape">${dataHora}<br><span class="num">Recibo: #${p.numero}</span><br>Confirmação de pagamento — recibo</div>
       </div>`;
   }
 
@@ -238,7 +238,8 @@
       </div>
       ${reciboHtml(p)}
       ${p.pago ? `<button class="wa" style="background:var(--ink-soft);border:none;font:inherit;cursor:pointer;width:100%" onclick="window.print()">🖨️ Guardar / imprimir recibo</button>` : ''}
-      <p class="rodape">Esta página atualiza sozinha.<br>Pode deixá-la aberta e ir vendo.</p>`;
+      <p class="rodape">Esta página atualiza sozinha.<br>Pode deixá-la aberta e ir vendo.</p>
+      <p class="rodape" style="margin-top:8px"><a href="/" style="color:inherit;text-decoration:underline">Esfiha da Casa — site, política de privacidade e informação legal</a></p>`;
   }
 
   carregar();

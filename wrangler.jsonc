@@ -6,6 +6,11 @@
     "directory": "./public",
     "binding": "ASSETS"
   },
+  "triggers": {
+    // Uma vez por dia, de madrugada (hora UTC) -- apaga pedidos reais com
+    // mais de 13 meses (prazo de conservacao RGPD definido em 2026-10-24).
+    "crons": ["0 4 * * *"]
+  },
   "d1_databases": [
     {
       "binding": "DB",

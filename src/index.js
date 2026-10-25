@@ -494,6 +494,12 @@ async function novoPedido(request, env, ctx) {
 
   const dia = diaLisboa();
   const ensaio = b.ensaio ? 1 : 0;
+  // Miguel decidiu em 2026-10-24: o site de ensaio (/teste/) nao vai ser
+  // usado por agora, por isso o servidor deixa de aceitar pedidos de ensaio
+  // (mesmo que alguem ainda consiga abrir uma copia antiga da pagina).
+  if (ensaio) {
+    return j({ ok: false, erro: 'ensaio_desativado' }, 409);
+  }
   const st = await estadoDoDia(env.DB, dia);
   if (!ensaio && !st.aberto) {
     return j({ ok: false, erro: 'esgotado', estado: st }, 409);
@@ -514,6 +520,26 @@ async function novoPedido(request, env, ctx) {
     nEsfihasGratisReal += g;
   }
   const nEsfihasPedidas = nEsfihasReal;
+  // O unico desconto legitimo de esfihas "gratis" na producao e a
+  // promocao automatica do dia de inauguracao (3 avulsas compra +2
+  // gratis, 6+ compra +4 gratis), que so existe no proprio dia
+  // 2026-10-11 (o site so mostra essa opcao nesse dia). Fora desse dia,
+  // qualquer esfiha marcada "gratis" na producao e sinal de um pedido
+  // manipulado (campo nunca validado antes).
+  if (!ensaio && nEsfihasGratisReal > 0 && dia !== '2026-10-11') {
+    return j({ ok: false, erro: 'gratis_invalido' }, 400);
+  }
+  // Bebidas reais pagas (exclui brinde automatico "(gratis)" e as
+  // "Oferta Nx bebida..." de combos, ja cobertas pelo preco fixo do
+  // combo) -- usado mais abaixo no piso de preco, para fechar o buraco
+  // de um pedido so de bebidas poder ir com total_cent a 0.
+  const bebidasRecebidas = (b.itens && typeof b.itens === 'object' && !Array.isArray(b.itens) && Array.isArray(b.itens.bebidas)) ? b.itens.bebidas : [];
+  let nBebidasPagasReal = 0;
+  for (const beb of bebidasRecebidas) {
+    const nome = beb && beb.nome;
+    if (ehGratis(nome) || ehOfertaOpaca(nome)) continue;
+    nBebidasPagasReal += Math.max(0, parseInt(beb && beb.n, 10) || 0);
+  }
 
   // Mesmo com a loja aberta, um pedido individual pode pedir mais esfihas do
   // que o stock que resta (ex: restam 10 e o pedido tem um combo de 20).
@@ -595,7 +621,6 @@ async function novoPedido(request, env, ctx) {
     // esfihas -> bebida gratis): se vier alguma bebida marcada "(gratis)"
     // num pedido com codigo aplicado, rejeita -- o site ja nao deixa
     // escolher as duas coisas ao mesmo tempo, isto e so a rede de segurança.
-    const bebidasRecebidas = (b.itens && typeof b.itens === 'object' && !Array.isArray(b.itens) && Array.isArray(b.itens.bebidas)) ? b.itens.bebidas : [];
     if (bebidasRecebidas.some(x => ehGratis(x && x.nome))) {
       return j({ ok: false, erro: 'promo_nao_acumula_brinde' }, 400);
     }
@@ -621,10 +646,16 @@ async function novoPedido(request, env, ctx) {
   // codigo promocional) -- o desconto nunca serve para disfarçar um total
   // manipulado nos itens reais.
   const PRECO_MINIMO_PLAUSIVEL_CENT = 150;
+  // 1,50€ e tambem o preco real da bebida mais barata (Agua) -- mesmo
+  // raciocinio conservador do piso das esfihas, nunca rejeita um pedido
+  // legitimo so por causa das bebidas.
+  const PRECO_MINIMO_PLAUSIVEL_BEBIDA_CENT = 150;
   const totalOriginalCent = Math.max(0, parseInt(b.total_cent, 10) || 0);
   const nEsfihasPagasReal = Math.max(0, nEsfihasReal - nEsfihasGratisReal);
+  const temItemPagoReal = nEsfihasPagasReal > 0 || nBebidasPagasReal > 0;
   const pisoCent = nEsfihasPagasReal * PRECO_MINIMO_PLAUSIVEL_CENT
-    + (!ensaio && b.modo === 'entrega' && nEsfihasPagasReal > 0 ? ENTREGA_FIXA_CENT : 0);
+    + nBebidasPagasReal * PRECO_MINIMO_PLAUSIVEL_BEBIDA_CENT
+    + (!ensaio && b.modo === 'entrega' && temItemPagoReal ? ENTREGA_FIXA_CENT : 0);
   if (!ensaio && pisoCent > 0 && totalOriginalCent < pisoCent) {
     return j({ ok: false, erro: 'total_invalido' }, 400);
   }
@@ -1800,7 +1831,27 @@ export default {
     const resp = await handleRequest(request, env, ctx);
     return comHeadersSeguranca(resp);
   },
+  // Miguel decidiu em 2026-10-24: os dados dos pedidos ficam guardados
+  // no maximo 13 meses (prazo de conservacao RGPD, igual ao escrito na
+  // politica de privacidade do site). Corre uma vez por dia (ver
+  // "triggers.crons" em wrangler.jsonc) -- precisa de um deploy via
+  // wrangler para o cron ficar mesmo ativo na Cloudflare, um simples
+  // push ao GitHub pode nao bastar.
+  async scheduled(event, env, ctx) {
+    await apagarPedidosAntigos(env);
+  },
 };
+
+// Apaga pedidos reais (ensaio=0) com mais de 13 meses -- prazo de
+// conservacao de dados definido pelo Miguel em 2026-10-24. Os pedidos de
+// ensaio tem o seu proprio apagamento manual (limparEnsaio), nao entram
+// aqui.
+async function apagarPedidosAntigos(env) {
+  const corte = new Date();
+  corte.setMonth(corte.getMonth() - 13);
+  const corteIso = corte.toISOString();
+  await env.DB.prepare('DELETE FROM pedidos WHERE ensaio = 0 AND criado_em < ?').bind(corteIso).run();
+}
 
 // Cabecalhos de seguranca basicos, aplicados a toda a resposta (paginas e
 // API). CSP fica de fora de proposito -- o painel usa onclick inline em
