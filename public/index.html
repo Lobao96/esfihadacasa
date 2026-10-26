@@ -941,7 +941,6 @@
   // O site deixa de aceitar pedidos e mostra a mensagem abaixo.
   const ESGOTADO = false;
   const MODO_TESTE = false;
-  const ESGOTADO_MSG = "Acabou a massa de hoje! Foi tudo mais rápido do que a gente imaginava e ficamos sem palavras. Obrigado de coração a quem pediu. Amanhã tem fornada nova — a gente te espera.";
 
   const MENU = {
     salgadas: [
@@ -2770,9 +2769,9 @@
 
   function aplicarEsgotadoServidor() {
     const b = document.getElementById('esgotadoBanner');
-    if (b) { b.textContent = ESGOTADO_MSG; b.style.display = 'block'; }
+    if (b) { b.textContent = mensagemFechado(); b.style.display = 'block'; }
     const btn = document.getElementById('sendBtn');
-    if (btn) { btn.classList.add('disabled'); btn.textContent = 'Esgotado por hoje'; }
+    if (btn) { btn.classList.add('disabled'); btn.textContent = 'Fechado por agora'; }
   }
 
   // O cliente pode carregar em enviar com um combo a meio. Em vez de
@@ -3006,6 +3005,50 @@
     return HOURS[day];
   }
 
+  // Nomes dos dias da semana, na ordem do getDay() (0 = domingo).
+  function nomeDiaSemana(d) {
+    return ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'][d];
+  }
+
+  // Procura a proxima abertura a partir de agora, usando o horario (HOURS)
+  // ja configurado -- olha para hoje (se ainda houver turno por vir) e para
+  // os proximos dias, ate encontrar um dia com turnos.
+  function proximaAbertura(now) {
+    for (let off = 0; off <= 7; off++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + off);
+      const h = HOURS[d.getDay()];
+      if (!h || !h.shifts || !h.shifts.length) continue;
+      for (const s of h.shifts) {
+        const [oh, om] = s.open.split(':').map(Number);
+        if (off === 0) {
+          const nowMin = now.getHours() * 60 + now.getMinutes();
+          if ((oh * 60 + om) <= nowMin) continue; // turno de hoje ja comecou/passou
+        }
+        return { offset: off, day: d.getDay(), open: s.open, date: d };
+      }
+    }
+    return null;
+  }
+
+  function textoProximaAbertura(now) {
+    const prox = proximaAbertura(now);
+    if (!prox) return '';
+    if (prox.offset === 0) return `hoje às ${prox.open}`;
+    if (prox.offset === 1) return `amanhã às ${prox.open}`;
+    const dd = String(prox.date.getDate()).padStart(2, '0');
+    const mm = String(prox.date.getMonth() + 1).padStart(2, '0');
+    return `${nomeDiaSemana(prox.day)}, dia ${dd}/${mm}, às ${prox.open}`;
+  }
+
+  // Mensagem mostrada quando a loja esta fechada (seja pelo horario normal
+  // ou pelo interruptor manual do painel) -- nunca fala em "esgotado", so
+  // informa que estamos fechados e quando volta a abrir.
+  function mensagemFechado() {
+    const quando = textoProximaAbertura(new Date());
+    return quando ? `Agora estamos fechados. Voltamos a abrir ${quando}.` : 'Agora estamos fechados.';
+  }
+
   function updateStatus() {
     const now = new Date();
     const h = horarioDeHoje(now);
@@ -3039,7 +3082,7 @@
   function applyEsgotado() {
     if (!ESGOTADO) return;
     const b = document.getElementById('esgotadoBanner');
-    if (b) { b.textContent = ESGOTADO_MSG; b.style.display = 'block'; }
+    if (b) { b.textContent = mensagemFechado(); b.style.display = 'block'; }
   }
 
   function applyPreLancamento() {
