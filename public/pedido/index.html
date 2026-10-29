@@ -105,7 +105,7 @@
   const ESTADOS_RET = [
     { id: 'novo',       tit: 'Pedido recebido',   desc: 'Chegou certinho. Já vamos confirmar e começar.' },
     { id: 'preparacao', tit: 'A ser preparado',   desc: 'A massa já está nas mãos. Avisamos quando puder vir.' },
-    { id: 'entregue',   tit: 'Pronto / levantado', desc: 'Bom apetite! Obrigado por pedir com a gente.' },
+    { id: 'entregue',   tit: 'Pronto / retirado', desc: 'Bom apetite! Obrigado por pedir com a gente.' },
   ];
 
   function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + '€'; }
@@ -129,7 +129,7 @@
       const r = await fetch('/api/acompanhar?t=' + encodeURIComponent(t), { cache: 'no-store' });
       d = await r.json();
     } catch (e) { return; }               // falha de rede: mantém o que está
-    if (!d || !d.ok) return semPedido('Não encontrámos esse pedido. Confirme o link, ou fale com a gente no WhatsApp.');
+    if (!d || !d.ok) return semPedido('Não encontramos esse pedido. Confirme o link, ou fale com a gente no WhatsApp.');
     pintar(d.pedido);
   }
 

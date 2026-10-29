@@ -76,7 +76,7 @@
 <div id="login" class="login">
   <h1>🧾 Recibos</h1>
   <p style="color:var(--ink-soft);font-size:0.9rem;">Mesma palavra-passe do painel.</p>
-  <input type="password" id="pass" placeholder="Palavra-passe">
+  <input type="password" id="pass" placeholder="Senha">
   <button class="primario" onclick="entrar()" style="width:100%">Entrar</button>
   <p id="erro" style="color:var(--red);font-size:0.85rem;"></p>
 </div>
@@ -175,7 +175,7 @@
       relogio(); setInterval(relogio, 1000);
       carregar();
     } catch (e) {
-      document.getElementById('erro').textContent = 'Palavra-passe errada.';
+      document.getElementById('erro').textContent = 'Senha errada.';
     }
   }
 

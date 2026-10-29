@@ -712,11 +712,6 @@
     <p class="tagline">Tem sabor que a gente não esquece.</p>
     <p class="meta">Portimão · Delivery e retirada combinada · Pedidos pelo WhatsApp</p>
     <p class="meta" style="font-size:0.82rem;margin-top:4px;">Não temos loja física — fazemos esfihas caseiras só para entrega e retirada combinada por WhatsApp.</p>
-    <div id="preBanner" class="pre-banner" style="display:none;">
-      <strong>Não perca a super promoção de abertura! 🔥</strong><br>
-      A gente abre dia <strong>11 de outubro</strong> em Portimão, com uma promoção que só acontece uma vez.<br>
-      Dá uma olhada no cardápio e segue a gente no <a href="https://www.instagram.com/esfihadacasaptm" target="_blank" rel="noopener">Instagram</a> pra não perder nada.
-    </div>
     <button class="cta-primary" onclick="document.getElementById('montar').scrollIntoView({behavior:'smooth'})">
       🫓 Fazer o meu pedido
     </button>
@@ -788,15 +783,15 @@
         <div class="taxa-nota">Nota: O valor da entrega é definido pela empresa parceira e não constitui receita para a Esfiha da Casa.</div>
               </div>
 
-      <p class="extras-title">O seu nome</p>
-      <input type="text" id="nomeInput" placeholder="Nome completo" autocomplete="name" aria-label="O seu nome">
+      <p class="extras-title">Seu nome</p>
+      <input type="text" id="nomeInput" placeholder="Nome completo" autocomplete="name" aria-label="Seu nome">
       <p class="tel-nota">Para sabermos a quem entregar.</p>
 
       <p class="extras-title">Seu WhatsApp</p>
       <input type="tel" id="telInput" inputmode="tel" placeholder="Ex.: 912 345 678"
              autocomplete="tel" aria-label="Seu número de WhatsApp" oninput="validarTelAoVivo()" onblur="validarTelAoVivo()">
       <p class="tel-nota">Para avisarmos quando o pedido estiver a caminho, e para o estafeta poder ligar se não encontrar a morada.</p>
-      <p class="tel-erro" id="telErro" style="display:none;">Esse número não parece certo — confirme os 9 dígitos (ex.: 912 345 678). Sem isto não conseguimos contactar se houver algum problema.</p>
+      <p class="tel-erro" id="telErro" style="display:none;">Esse número não parece certo — confirme os 9 dígitos (ex.: 912 345 678). Sem isto não conseguimos entrar em contato se houver algum problema.</p>
 
       <p class="extras-title">Pagamento</p>
       <div class="pay-row" id="payRow"></div>
@@ -897,7 +892,7 @@
         <p><strong>Preços</strong><br>
         O preço final soma automaticamente os extras que você escolher — cada extra tem o seu preço próprio, indicado no cardápio. A taxa de entrega é fixa (3,50€) e também é somada ao total.</p>
         <p><strong>Entregas</strong><br>
-        Entregamos nas regiões indicadas no site, dentro do horário de funcionamento. As entregas são feitas por serviço externo de entregadores. O tempo de entrega varia com o volume de pedidos e a distância.</p>
+        Entregamos nas regiões indicadas no site, dentro do horário de funcionamento. As entregas são feitas por nós mesmos, da Esfiha da Casa. O tempo de entrega varia com o volume de pedidos e a distância.</p>
         <p><strong>Pagamento</strong><br>
         Na entrega pode escolher MB Way (antes do envio) ou dinheiro (paga ao estafeta na entrega). Na retirada aceitamos MB Way ou dinheiro.</p>
         <p><strong>Cancelamentos</strong><br>
@@ -934,7 +929,6 @@
   // Distâncias por estrada a partir da cozinha, em Portimão.
   // Antes da inauguração: mantém o site em modo "em breve" (sem aceitar pedidos).
   // Mudar para false no dia 11 de outubro para abrir os pedidos.
-  const PRE_LANCAMENTO = false;
 
   // ---- ESGOTADO DO DIA ----
   // Quando a producao do dia acabar, poe ESGOTADO = true e faz commit.
@@ -2271,12 +2265,6 @@
       btn.textContent = 'Esgotado por hoje';
       return;
     }
-    if (PRE_LANCAMENTO) {
-      btn.href = '#';
-      btn.classList.add('disabled');
-      btn.textContent = '🗓️ Pedidos abrem a 11 de outubro';
-      return;
-    }
     const text = encodeURIComponent(buildMessage());
     btn.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${text}`;
     const empty = itemCount() === 0;
@@ -2760,7 +2748,7 @@
       const d = await r.json();
       if (d && d.ok) {
         estadoLoja = d.estado;
-        if (!estadoLoja.aberto && !PRE_LANCAMENTO) aplicarEsgotadoServidor();
+        if (!estadoLoja.aberto) aplicarEsgotadoServidor();
         aplicarStockSabores();
         updateStatus();
       }
@@ -3055,11 +3043,6 @@
     const badge = document.getElementById('statusBadge');
     const text = document.getElementById('statusText');
     let isOpen = false;
-    if (PRE_LANCAMENTO) {
-      badge.className = 'status closed';
-      text.textContent = 'Abrimos a 11 de outubro';
-      return;
-    }
     if (h && h.shifts && h.shifts.length) {
       const nowMin = now.getHours() * 60 + now.getMinutes();
       isOpen = h.shifts.some(s => {
@@ -3085,11 +3068,6 @@
     if (b) { b.textContent = mensagemFechado(); b.style.display = 'block'; }
   }
 
-  function applyPreLancamento() {
-    if (!PRE_LANCAMENTO) return;
-    const b = document.getElementById('preBanner');
-    if (b) b.style.display = 'block';
-  }
 
 
   var sm = document.getElementById('seoMenu'); if (sm) sm.style.display = 'none';
@@ -3097,7 +3075,6 @@
   renderOrderList();
   setOrderType('entrega');
   updateStatus();
-  applyPreLancamento();
   applyEsgotado();
   updateTotal();
   verEstadoLoja();

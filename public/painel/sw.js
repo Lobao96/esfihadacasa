@@ -54,7 +54,7 @@ self.addEventListener('push', e => {
 
     const titulo = n > 1 ? `🫓 ${n} pedidos novos!` : '🫓 Novo pedido!';
     const corpo = n > 1
-      ? `Tens ${n} pedidos à espera. Toque para abrir o painel.`
+      ? `Você tem ${n} pedidos à espera. Toque para abrir o painel.`
       : 'Toque para abrir o painel.';
 
     await self.registration.showNotification(titulo, {
