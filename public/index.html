@@ -115,15 +115,38 @@
   html.halloween .combo-flag { background: #9B5DE5; color: #fff; }
   html.halloween .cta-primary { box-shadow: 0 8px 22px rgba(155,93,229,0.45); }
   html.halloween #sabores h2 { color: #C9A6F2; }
-  /* bichinhos e teias pequenos espalhados pelos quadrados dos sabores */
+  /* stickers de Halloween maiores e com animacao em cada quadrado de sabor
+     -- nao sao imagens porque nao temos ficheiros de stickers prontos, mas
+     ganham tamanho e um pequeno balanco para parecerem "vivos". */
+  @keyframes halloweenSway {
+    0%, 100% { transform: translateY(0) rotate(-6deg); }
+    50% { transform: translateY(-5px) rotate(8deg); }
+  }
   html.halloween .card { position: relative; overflow: visible; }
   html.halloween .card::after {
-    position: absolute; top: -8px; right: -6px; font-size: 1.15rem;
-    opacity: 0.85; pointer-events: none; line-height: 1;
+    position: absolute; top: -14px; right: -10px; font-size: 2.3rem;
+    opacity: 0.95; pointer-events: none; line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));
+    animation: halloweenSway 2.4s ease-in-out infinite;
+    animation-delay: calc(var(--sticker-delay, 0) * 0.3s);
   }
-  html.halloween .card:nth-of-type(3n+1)::after { content: "🕷️"; }
-  html.halloween .card:nth-of-type(3n+2)::after { content: "🕸️"; }
-  html.halloween .card:nth-of-type(3n)::after { content: "🐜"; }
+  html.halloween .card:nth-of-type(5n+1)::after { content: "🕷️"; --sticker-delay: 0; }
+  html.halloween .card:nth-of-type(5n+2)::after { content: "👻"; --sticker-delay: 1; }
+  html.halloween .card:nth-of-type(5n+3)::after { content: "🕸️"; --sticker-delay: 2; }
+  html.halloween .card:nth-of-type(5n+4)::after { content: "🦇"; --sticker-delay: 3; }
+  html.halloween .card:nth-of-type(5n)::after { content: "🐜"; --sticker-delay: 4; }
+
+  /* fileiras grandes de stickers animados como "divisores" entre seccoes */
+  .halloween-divider {
+    display: none; justify-content: center; gap: 18px;
+    font-size: 2.6rem; padding: 10px 0; user-select: none;
+  }
+  html.halloween .halloween-divider { display: flex; }
+  .halloween-divider span { display: inline-block; animation: halloweenSway 2.2s ease-in-out infinite; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5)); }
+  .halloween-divider span:nth-child(2) { animation-delay: 0.3s; }
+  .halloween-divider span:nth-child(3) { animation-delay: 0.6s; }
+  .halloween-divider span:nth-child(4) { animation-delay: 0.9s; }
+  .halloween-divider span:nth-child(5) { animation-delay: 1.2s; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -812,6 +835,8 @@
 
 <div class="esgotado-banner" id="esgotadoBanner" style="display:none;"></div>
 
+<div class="halloween-divider" aria-hidden="true"><span>🎃</span><span>👻</span><span>🦇</span><span>🕷️</span><span>💀</span></div>
+
 <section id="sabores">
   <div class="wrap">
     <h2>Nossos sabores</h2>
@@ -931,6 +956,8 @@
     </div>
   </div>
 </section>
+
+<div class="halloween-divider" aria-hidden="true"><span>🎃</span><span>👻</span><span>🦇</span><span>🕷️</span><span>💀</span></div>
 
 <footer>
   <div class="wrap">
