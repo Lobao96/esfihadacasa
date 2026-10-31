@@ -46,6 +46,26 @@
     --bg: var(--cream);
     --text: var(--ink);
   }
+
+  /* Tema de Halloween -- ativado so no dia 2026-10-31 via classe no <html>
+     (ver ehPromoEntregaGratisHoje() no JS). Reverte sozinho no dia seguinte,
+     porque a classe deixa de ser aplicada -- nao precisa de remover nada
+     manualmente depois de hoje. */
+  html.halloween {
+    --red: #FF7518;
+    --red-dark: #C2410C;
+    --gold: #FFB347;
+  }
+  html.halloween .hero {
+    background: radial-gradient(120% 100% at 50% 0%, rgba(43,15,58,0.16), transparent 60%);
+  }
+  html.halloween .status.closed { background: rgba(255,117,24,0.15); }
+  html.halloween .card-img.placeholder { background: rgba(255,117,24,0.10); }
+  html.halloween .esgotado-tag { background: rgba(255,117,24,0.16); }
+  html.halloween .pay-chip {
+    background: rgba(255,117,24,0.10);
+    border-color: rgba(255,117,24,0.3);
+  }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -940,6 +960,7 @@
     return hojeLisboa === '2026-10-31';
   }
   if (ehPromoEntregaGratisHoje()) {
+    document.documentElement.classList.add('halloween');
     const bannerPromo = document.getElementById('promoHalloweenBanner');
     if (bannerPromo) bannerPromo.style.display = 'flex';
   }
