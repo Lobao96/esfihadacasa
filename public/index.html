@@ -93,13 +93,30 @@
     border-color: rgba(255,117,24,0.3);
   }
   .promo-halloween {
-    flex-direction: column; gap: 4px;
     background: linear-gradient(135deg, #2b0f3a 0%, #140a1f 55%, #1a0f0a 100%);
     border-bottom: 2px solid #FF7518;
+    font-size: 0.88rem;
   }
-  .promo-halloween-icons { font-size: 1.35rem; letter-spacing: 6px; opacity: 0.95; line-height: 1; }
-  .promo-halloween-text { font-size: 1.02rem; line-height: 1.6; }
-  .promo-halloween-text strong { color: #FFB255; }
+  .promo-halloween strong { color: #FFB255; }
+
+  .promo-halloween-img {
+    max-width: 260px; width: 68%; margin: 12px auto 0; border-radius: 18px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.55); border: 2px solid #FF7518;
+  }
+  /* roxo como segunda cor de destaque do tema (combos, brilho do botao) */
+  html.halloween .combo-card { border-color: #9B5DE5; }
+  html.halloween .combo-flag { background: #9B5DE5; color: #fff; }
+  html.halloween .cta-primary { box-shadow: 0 8px 22px rgba(155,93,229,0.45); }
+  html.halloween #sabores h2 { color: #C9A6F2; }
+  /* bichinhos e teias pequenos espalhados pelos quadrados dos sabores */
+  html.halloween .card { position: relative; overflow: visible; }
+  html.halloween .card::after {
+    position: absolute; top: -8px; right: -6px; font-size: 1.15rem;
+    opacity: 0.85; pointer-events: none; line-height: 1;
+  }
+  html.halloween .card:nth-of-type(3n+1)::after { content: "🕷️"; }
+  html.halloween .card:nth-of-type(3n+2)::after { content: "🕸️"; }
+  html.halloween .card:nth-of-type(3n)::after { content: "🐜"; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -616,7 +633,6 @@
     display: flex; align-items: center; justify-content: center; gap: 10px;
     flex-wrap: wrap;
   }
-  .promo-halloween svg { width: 34px; height: 34px; flex: none; }
 
   .pay-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .pay-chip {
@@ -757,18 +773,13 @@
 <body>
 
 <div class="promo-halloween" id="promoHalloweenBanner" style="display:none;">
-  <div class="promo-halloween-icons" aria-hidden="true">🎃 👻 🦇 🕷️ 🧙 💀 🧟 🕸️</div>
-  <div class="promo-halloween-text">
-    <strong>🎃 Promoção de Halloween — só hoje!</strong><br>
-    🛵 Entrega grátis &nbsp;·&nbsp; 🍬 Brinde para as crianças
-  </div>
-  <div class="promo-halloween-icons" aria-hidden="true">🕸️ 🧟 💀 🧙 🕷️ 🦇 👻 🎃</div>
+  <span>🎃👻🦇 <strong>Promoção de Halloween — só hoje!</strong> 🛵 Entrega grátis &nbsp;·&nbsp; 🍬 Brinde para as crianças 🕷️🕸️💀</span>
 </div>
 
 <header class="top">
   <div class="top-inner">
     <div class="brand">
-      <img src="/img/logo-esfiha-da-casa.jpg" alt="Esfiha da Casa">
+      <img src="/img/logo-esfiha-da-casa.jpg" alt="Esfiha da Casa" id="brandLogo">
       <span>Esfiha da Casa</span>
     </div>
     <div class="status" id="statusBadge">
@@ -779,7 +790,8 @@
 
 <section class="hero">
   <div class="wrap">
-    <img class="mascote" src="/img/mascote-esfiha-da-casa.png" alt="Mascote Esfiha da Casa">
+    <img class="mascote" src="/img/mascote-esfiha-da-casa.png" alt="Mascote Esfiha da Casa" id="mascoteImg">
+    <img class="promo-halloween-img" id="promoHalloweenImg" src="/img/promo-halloween.jpg" alt="Promoção de Halloween: entrega grátis e brinde para as crianças" style="display:none;">
     <h1>Esfiha da Casa</h1>
     <p class="tagline">Tem sabor que a gente não esquece.</p>
     <p class="meta">Portimão · Delivery e retirada combinada · Pedidos pelo WhatsApp</p>
@@ -1001,6 +1013,12 @@
     document.documentElement.classList.add('halloween');
     const bannerPromo = document.getElementById('promoHalloweenBanner');
     if (bannerPromo) bannerPromo.style.display = 'flex';
+    const brandLogo = document.getElementById('brandLogo');
+    if (brandLogo) brandLogo.src = '/img/logo-halloween.jpg';
+    const mascoteImg = document.getElementById('mascoteImg');
+    if (mascoteImg) mascoteImg.src = '/img/hero-halloween.jpg';
+    const promoImg = document.getElementById('promoHalloweenImg');
+    if (promoImg) promoImg.style.display = 'block';
   }
 
   // Mantido só para decodificar códigos de pedidos antigos (feitos quando
