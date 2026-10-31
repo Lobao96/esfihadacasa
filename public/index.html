@@ -50,22 +50,56 @@
   /* Tema de Halloween -- ativado so no dia 2026-10-31 via classe no <html>
      (ver ehPromoEntregaGratisHoje() no JS). Reverte sozinho no dia seguinte,
      porque a classe deixa de ser aplicada -- nao precisa de remover nada
-     manualmente depois de hoje. */
+     manualmente depois de hoje. Fundo escuro, texto laranja, com decoracoes
+     (abobora, fantasma, morcego, aranha, bruxa, caveira, zumbi). */
   html.halloween {
     --red: #FF7518;
     --red-dark: #C2410C;
     --gold: #FFB347;
+    --cream: #140A1F;
+    --ink: #FFB255;
+    --ink-soft: #D99456;
+    --card-bg: #211029;
+    --white: #2B1638;
+    --line: rgba(255,178,85,0.22);
   }
+  html.halloween .addr-field input,
+  html.halloween #cpInput, html.halloween #locInput, html.halloween #telInput,
+  html.halloween #nomeInput, html.halloween #trocoValorInput,
+  html.halloween input.qty, html.halloween .combo-pick {
+    border-color: rgba(255,178,85,0.3);
+  }
+  html.halloween .addr-suggest li { border-bottom-color: rgba(255,178,85,0.15); }
+  html.halloween .addr-suggest li:active, html.halloween .addr-suggest li:hover { background: rgba(255,178,85,0.1); }
+  html.halloween .cotacao.espera { background: rgba(255,178,85,0.08); }
+  html.halloween .drink-art { background: rgba(255,178,85,0.08); }
   html.halloween .hero {
-    background: radial-gradient(120% 100% at 50% 0%, rgba(43,15,58,0.16), transparent 60%);
+    background: radial-gradient(120% 100% at 50% 0%, rgba(255,117,24,0.14), transparent 60%);
+    position: relative;
   }
-  html.halloween .status.closed { background: rgba(255,117,24,0.15); }
-  html.halloween .card-img.placeholder { background: rgba(255,117,24,0.10); }
-  html.halloween .esgotado-tag { background: rgba(255,117,24,0.16); }
+  html.halloween .hero::before {
+    content: "🕸️"; position: absolute; top: 2px; left: 8px;
+    font-size: 2.1rem; opacity: 0.55; transform: rotate(-8deg);
+  }
+  html.halloween .hero::after {
+    content: "🦇"; position: absolute; top: 10px; right: 10px;
+    font-size: 1.9rem; opacity: 0.6; transform: rotate(10deg);
+  }
+  html.halloween .status.closed { background: rgba(255,117,24,0.2); }
+  html.halloween .card-img.placeholder { background: rgba(255,117,24,0.12); }
+  html.halloween .esgotado-tag { background: rgba(255,117,24,0.22); }
   html.halloween .pay-chip {
-    background: rgba(255,117,24,0.10);
+    background: rgba(255,117,24,0.12);
     border-color: rgba(255,117,24,0.3);
   }
+  .promo-halloween {
+    flex-direction: column; gap: 4px;
+    background: linear-gradient(135deg, #2b0f3a 0%, #140a1f 55%, #1a0f0a 100%);
+    border-bottom: 2px solid #FF7518;
+  }
+  .promo-halloween-icons { font-size: 1.35rem; letter-spacing: 6px; opacity: 0.95; line-height: 1; }
+  .promo-halloween-text { font-size: 1.02rem; line-height: 1.6; }
+  .promo-halloween-text strong { color: #FFB255; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -723,8 +757,12 @@
 <body>
 
 <div class="promo-halloween" id="promoHalloweenBanner" style="display:none;">
-  <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M30 10c-1-3-3-5-5-6 2 0 4 1 5 3 1-2 3-3 5-3-2 1-4 3-5 6z" fill="#3a7d33"/><ellipse cx="32" cy="36" rx="26" ry="22" fill="#ff7518"/><path d="M14 22c4-6 10-9 18-9s14 3 18 9c-6-3-12-4-18-4s-12 1-18 4z" fill="#e85d04" opacity="0.5"/><path d="M18 36c0-1 2-18 14-18s14 17 14 18-2 18-14 18-14-17-14-18z" fill="none" stroke="#c2410c" stroke-width="2" opacity="0.6"/><path d="M22 32l5 5-5 5M42 32l-5 5 5 5M30 30l2 12M34 30l-2 12" stroke="#2b0f3a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-  <span>Promoção de Halloween — hoje a entrega é <strong>grátis</strong>! 🦇</span>
+  <div class="promo-halloween-icons" aria-hidden="true">🎃 👻 🦇 🕷️ 🧙 💀 🧟 🕸️</div>
+  <div class="promo-halloween-text">
+    <strong>🎃 Promoção de Halloween — só hoje!</strong><br>
+    🛵 Entrega grátis &nbsp;·&nbsp; 🍬 Brinde para as crianças
+  </div>
+  <div class="promo-halloween-icons" aria-hidden="true">🕸️ 🧟 💀 🧙 🕷️ 🦇 👻 🎃</div>
 </div>
 
 <header class="top">
