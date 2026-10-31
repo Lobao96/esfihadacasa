@@ -758,7 +758,7 @@
         <button id="btnLevantamento" onclick="setOrderType('levantamento')">🧺 Retirada</button>
       </div>
       <div class="addr-field" id="addrField" style="display:none;">
-        <div class="zone-info ok">Taxa de entrega: calculada pela sua morada</div>
+        <div class="zone-info ok" id="zoneInfoMsg">Taxa de entrega: calculada pela sua morada</div>
         <div class="addr-wrap">
           <input type="text" id="addrInput" placeholder="Rua e número"
                  autocomplete="off" oninput="onAddrInput()">
@@ -917,6 +917,14 @@
   // Taxa de entrega única e fixa (Portimão e arredores até 10 km),
   // feita pela estafeta própria (Andreza).
   const TAXA_ENTREGA = 3.50;
+
+  // Promocao pontual decidida pelo Miguel em 2026-10-31: entrega gratis
+  // so no dia de Halloween. Reverte por si so no dia seguinte (compara so
+  // a data de Lisboa de hoje -- mesma logica usada no servidor).
+  function ehPromoEntregaGratisHoje() {
+    const hojeLisboa = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon' }).format(new Date());
+    return hojeLisboa === '2026-10-31';
+  }
 
   // Mantido só para decodificar códigos de pedidos antigos (feitos quando
   // a taxa ainda variava por zona) no leitor do painel — não é mais usado
@@ -2182,6 +2190,14 @@
     document.getElementById('btnEntrega').classList.toggle('active', type === 'entrega');
     document.getElementById('btnLevantamento').classList.toggle('active', type === 'levantamento');
     document.getElementById('addrField').style.display = type === 'entrega' ? 'block' : 'none';
+    if (type === 'entrega') {
+      const zi = document.getElementById('zoneInfoMsg');
+      if (zi && !entregaCotada) {
+        zi.innerHTML = ehPromoEntregaGratisHoje()
+          ? '🎃 Hoje a entrega é <strong>grátis</strong> (promoção de Halloween)!'
+          : 'Taxa de entrega: calculada pela sua morada';
+      }
+    }
     renderConfirmacao();
     renderPayment();
     updateTotal();
@@ -2702,7 +2718,7 @@
       } else if (d && d.ok) {
         entregaOpcionalPendente = null;
         entregaCotada = { fee_cent: d.fee_cent, quote_id: d.quote_id, minutos: d.minutos || null, custo_cent: d.custo_cent || null };
-        caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>`);
+        caixaCotacao('ok', d.fee_cent === 0 ? 'Entrega para a sua morada: <strong>GRÁTIS 🎃</strong> (promoção de Halloween)' : `Entrega para a sua morada: <strong>${fmt(d.fee_cent / 100)}</strong>`);
       } else {
         // fora de alcance, ou o Uber falhou e o codigo postal nao e da
         // nossa zona: o backend ja decidiu, nao se aceita as cegas.
@@ -2730,7 +2746,7 @@
     if (!entregaOpcionalPendente) return;
     entregaCotada = entregaOpcionalPendente;
     entregaOpcionalPendente = null;
-    caixaCotacao('ok', `Entrega para a sua morada: <strong>${fmt(entregaCotada.fee_cent / 100)}</strong>`);
+    caixaCotacao('ok', entregaCotada.fee_cent === 0 ? 'Entrega para a sua morada: <strong>GRÁTIS 🎃</strong> (promoção de Halloween)' : `Entrega para a sua morada: <strong>${fmt(entregaCotada.fee_cent / 100)}</strong>`);
     updateTotal();
     mostrarFaltas([]);
   }

@@ -417,6 +417,17 @@ async function tokenUber(env) {
 // zona aprovada (sem Uber nem variacao por distancia).
 const ENTREGA_FIXA_CENT = 350;
 
+// Promocao pontual: entrega gratis so no dia de Halloween (31/10/2026),
+// decidido pelo Miguel em 2026-10-31. Reverte automaticamente no dia
+// seguinte (nao fica a funcionar para sempre) -- so compara a data de
+// Lisboa de hoje, sem flag manual para desligar depois.
+function ehPromoEntregaGratisHoje() {
+  return diaLisboa() === '2026-10-31';
+}
+function taxaEntregaAtual() {
+  return ehPromoEntregaGratisHoje() ? 0 : ENTREGA_FIXA_CENT;
+}
+
 const CONCELHOS_ENTREGA = new Set(['8400', '8500']); // Lagoa, Portimao
 
 function codigoPostalSeguro(cp) {
@@ -475,13 +486,13 @@ async function cotacao(request, env) {
     return j({ ok: false, erro: 'fora_de_alcance', motivo: 'fora_da_zona' }, 200);
   }
   if (okLocalidade === true) {
-    return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT });
+    return j({ ok: true, fee_cent: taxaEntregaAtual() });
   }
 
   // 3) Localidade vazia ou nao reconhecida: cai-se so no codigo postal
   //    (concelho certo) como rede de seguranca -- mesma logica de sempre.
   if (codigoPostalSeguro(cp)) {
-    return j({ ok: true, fee_cent: ENTREGA_FIXA_CENT });
+    return j({ ok: true, fee_cent: taxaEntregaAtual() });
   }
   return j({ ok: false, erro: 'fora_de_alcance', motivo: 'sem_zona_confirmada' }, 200);
 }
@@ -655,7 +666,7 @@ async function novoPedido(request, env, ctx) {
   const temItemPagoReal = nEsfihasPagasReal > 0 || nBebidasPagasReal > 0;
   const pisoCent = nEsfihasPagasReal * PRECO_MINIMO_PLAUSIVEL_CENT
     + nBebidasPagasReal * PRECO_MINIMO_PLAUSIVEL_BEBIDA_CENT
-    + (!ensaio && b.modo === 'entrega' && temItemPagoReal ? ENTREGA_FIXA_CENT : 0);
+    + (!ensaio && b.modo === 'entrega' && temItemPagoReal ? taxaEntregaAtual() : 0);
   if (!ensaio && pisoCent > 0 && totalOriginalCent < pisoCent) {
     return j({ ok: false, erro: 'total_invalido' }, 400);
   }
