@@ -100,9 +100,16 @@
   .promo-halloween strong { color: #FFB255; }
 
   .promo-halloween-img {
-    max-width: 260px; width: 68%; margin: 12px auto 0; border-radius: 18px;
+    max-width: 230px; width: 60%; margin: 14px auto 0; border-radius: 18px;
     box-shadow: 0 10px 28px rgba(0,0,0,0.55); border: 2px solid #FF7518;
   }
+  /* a imagem do hero ja traz o nome "Esfiha da Casa" escrito -- o titulo
+     fica so para leitores de ecra/SEO, nao duplicado visualmente hoje */
+  html.halloween #heroTitulo {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  html.halloween .hero img.mascote { margin-bottom: 2px; }
   /* roxo como segunda cor de destaque do tema (combos, brilho do botao) */
   html.halloween .combo-card { border-color: #9B5DE5; }
   html.halloween .combo-flag { background: #9B5DE5; color: #fff; }
@@ -791,11 +798,11 @@
 <section class="hero">
   <div class="wrap">
     <img class="mascote" src="/img/mascote-esfiha-da-casa.png" alt="Mascote Esfiha da Casa" id="mascoteImg">
-    <img class="promo-halloween-img" id="promoHalloweenImg" src="/img/promo-halloween.jpg" alt="Promoção de Halloween: entrega grátis e brinde para as crianças" style="display:none;">
-    <h1>Esfiha da Casa</h1>
+    <h1 id="heroTitulo">Esfiha da Casa</h1>
     <p class="tagline">Tem sabor que a gente não esquece.</p>
     <p class="meta">Portimão · Delivery e retirada combinada · Pedidos pelo WhatsApp</p>
     <p class="meta" style="font-size:0.82rem;margin-top:4px;">Não temos loja física — fazemos esfihas caseiras só para entrega e retirada combinada por WhatsApp.</p>
+    <img class="promo-halloween-img" id="promoHalloweenImg" src="/img/promo-halloween.jpg" alt="Promoção de Halloween: entrega grátis e brinde para as crianças" style="display:none;">
     <button class="cta-primary" onclick="document.getElementById('montar').scrollIntoView({behavior:'smooth'})">
       🫓 Fazer o meu pedido
     </button>
