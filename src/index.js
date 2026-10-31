@@ -233,16 +233,20 @@ function ehOfertaOpaca(nome) {
   return /^Oferta\s/i.test(String(nome || '').trim());
 }
 // Le "Oferta Nx bebida em lata (a escolha da casa)" / "...de 1L..." e devolve
-// { n, prefixo } onde prefixo e o inicio do nome real da bebida em stock
-// (stock_bebidas.nome comeca sempre por "Lata" ou "Garrafa 1 litro"), para
-// resolverOfertaBebida() saber quantas escolhas pedir e que garrafas aceitar.
+// { n, tipo } ('lata' ou 'litro'). resolverOfertaBebida() usa o tipo para
+// saber quantas escolhas pedir e que garrafas aceitar -- o nome real em
+// stock_bebidas NAO tem prefixo "Lata"/"Garrafa 1 litro" (ex.: "Coca-Cola",
+// "Coca-Cola 1L"), distingue-se so pelo sufixo "1L" no nome.
 function parseOfertaOpaca(nome) {
   const m = /^Oferta\s+(\d+)x\s+bebida\s+(em lata|de 1L)/i.exec(String(nome || '').trim());
   if (!m) return null;
   const n = parseInt(m[1], 10) || 0;
   if (!n) return null;
-  const prefixo = /lata/i.test(m[2]) ? 'Lata' : 'Garrafa 1 litro';
-  return { n, prefixo };
+  const tipo = /lata/i.test(m[2]) ? 'lata' : 'litro';
+  return { n, tipo };
+}
+function ehBebida1L(nome) {
+  return /1\s*l\b/i.test(String(nome || ''));
 }
 function producaoDoItens(itensJson) {
   let it = null;
@@ -1224,9 +1228,11 @@ async function resolverOfertaBebida(request, env) {
   }
 
   const validas = await env.DB.prepare(
-    'SELECT nome FROM stock_bebidas WHERE por_pedido = 0 AND nome LIKE ?'
-  ).bind(info.prefixo + '%').all();
-  const nomesValidos = new Set((validas.results || []).map(r => r.nome));
+    'SELECT nome FROM stock_bebidas WHERE por_pedido = 0'
+  ).all();
+  const nomesValidos = new Set((validas.results || [])
+    .map(r => r.nome)
+    .filter(nome => ehBebida1L(nome) === (info.tipo === 'litro')));
   for (const esc of escolhas) {
     if (!nomesValidos.has(esc)) return j({ ok: false, erro: `bebida invalida: ${esc}` }, 400);
   }

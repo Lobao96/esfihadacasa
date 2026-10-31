@@ -877,20 +877,26 @@
       bebidasStockCache = (d && d.bebidas) || [];
     } catch (e) {}
   }
+  // O nome real em stock_bebidas NAO tem prefixo "Lata"/"Garrafa 1 litro"
+  // (ex.: "Coca-Cola", "Coca-Cola 1L") -- distingue-se so pelo sufixo "1L".
+  // Era isso que estava a impedir qualquer bebida de aparecer para escolher.
   function parseOfertaOpacaCliente(nome) {
     const m = /^Oferta\s+(\d+)x\s+bebida\s+(em lata|de 1L)/i.exec(String(nome || '').trim());
     if (!m) return null;
     const n = parseInt(m[1], 10) || 0;
     if (!n) return null;
-    const prefixo = /lata/i.test(m[2]) ? 'Lata' : 'Garrafa 1 litro';
-    return { n, prefixo };
+    const tipo = /lata/i.test(m[2]) ? 'lata' : 'litro';
+    return { n, tipo };
+  }
+  function ehBebida1LPainel(nome) {
+    return /1\s*l\b/i.test(String(nome || ''));
   }
   function ofertaBebidaHtml(p, dados) {
     const bebs = dados.bebidas || [];
     const idx = bebs.findIndex(b => parseOfertaOpacaCliente(b.nome));
     if (idx < 0) return '';
     const info = parseOfertaOpacaCliente(bebs[idx].nome);
-    const opcoes = bebidasStockCache.filter(b => b.nome.indexOf(info.prefixo) === 0);
+    const opcoes = bebidasStockCache.filter(b => ehBebida1LPainel(b.nome) === (info.tipo === 'litro'));
     const selects = Array.from({ length: info.n }, (_, i) => `
       <select id="ofBeb${p.id}_${i}" class="of-beb-select">
         ${opcoes.map(o => `<option value="${esc(o.nome)}">${esc(o.nome)} (${o.quantidade})</option>`).join('')}
