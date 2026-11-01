@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Higiene & Produção — Esfiha da Casa</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --red: #C8232B; --cream: #FFF3DC; --ink: #3A1F12; --ink-soft: #6B4A38;
+    --line: rgba(58,31,18,0.14); --card: #FFFFFF; --verde: #1E8E4A;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--cream); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.5; padding-bottom: 70px;
+  }
+  header { position: sticky; top: 0; z-index: 5; background: var(--cream); border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.15rem; margin: 0; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 14px 16px 30px; }
+  .login { max-width: 320px; margin: 80px auto; text-align: center; }
+  .login input { width: 100%; padding: 12px; border-radius: 10px; border: 1.5px solid var(--line); margin-bottom: 10px; font-size: 1rem; }
+  button.primario { background: var(--red); color: #fff; border: none; border-radius: 10px; padding: 11px 18px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  button.secundario { background: transparent; color: var(--ink-soft); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+  .bloco { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 18px; }
+  .bloco h2 { font-size: 1rem; margin: 0 0 4px; }
+  .bloco .sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 14px; }
+
+  .campo { margin-bottom: 12px; }
+  .campo label { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 4px; }
+  .campo input, .campo textarea {
+    width: 100%; padding: 9px 11px; border-radius: 9px; border: 1.5px solid var(--line);
+    font-size: 0.95rem; font-family: inherit; background: #fff; color: var(--ink);
+  }
+  .campo textarea { resize: vertical; min-height: 44px; }
+  .linha-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .linha-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  table.hist { width: 100%; border-collapse: collapse; font-size: 0.83rem; margin-top: 10px; }
+  table.hist th, table.hist td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  table.hist th { color: var(--ink-soft); font-weight: 700; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.02em; }
+  table.hist td.num { text-align: right; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag.auto { background: rgba(107,74,56,0.1); color: var(--ink-soft); }
+  .tag.manual { background: rgba(30,142,74,0.12); color: var(--verde); }
+  .vazio { text-align: center; color: var(--ink-soft); padding: 18px 0; font-size: 0.88rem; }
+
+  .ferramentas { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .ferramentas button { border: 1.5px solid var(--line); background: #fff; border-radius: 9px; padding: 8px 12px; font-weight: 700; font-size: 0.85rem; cursor: pointer; color: var(--ink-soft); font-family: inherit; }
+
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff; border-top: 1px solid var(--line); z-index: 5; }
+  .nav-i { flex: 1; text-align: center; padding: 9px 0 7px; color: var(--ink-soft); text-decoration: none; font-size: 0.72rem; font-weight: 700; border: none; background: none; font-family: inherit; }
+  .nav-i span { display: block; font-size: 1.2rem; }
+  .nav-i.on { color: var(--red); }
+
+  @media print {
+    header, .nav, .ferramentas, .campo, form, .no-print { display: none !important; }
+    body { padding-bottom: 0; background: #fff; }
+    .bloco { border: none; padding: 0; margin-bottom: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login" id="login">
+  <h2>Higiene & Produção</h2>
+  <input type="password" id="pass" placeholder="Senha do painel" onkeydown="if(event.key==='Enter')entrar()">
+  <button class="primario" onclick="entrar()">Entrar</button>
+  <p id="erro" style="color:var(--red);font-size:0.85rem;"></p>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>Higiene & Produção</h1>
+  </header>
+  <div class="wrap">
+
+    <div class="ferramentas no-print">
+      <button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+      <button onclick="exportarCSV('temperaturas')">⬇️ Exportar temperaturas (CSV)</button>
+      <button onclick="exportarCSV('rastreabilidade')">⬇️ Exportar rastreabilidade (CSV)</button>
+    </div>
+
+    <div class="bloco">
+      <h2>Registo de temperaturas</h2>
+      <p class="sub">Preenchido sozinho todos os dias com os valores padrão (frigorífico <span id="padraoFrigo">4</span>°C · congelador <span id="padraoCong">-18</span>°C). Só precisas de corrigir um dia aqui se notares uma diferença real.</p>
+
+      <form class="no-print" onsubmit="guardarTemp(event)">
+        <div class="linha-2">
+          <div class="campo"><label>Dia</label><input type="date" id="tDia" required></div>
+          <div class="campo"><label>Confirmado por</label><input type="text" value="Miguel" disabled></div>
+        </div>
+        <div class="linha-2">
+          <div class="campo"><label>Frigorífico (°C)</label><input type="number" step="0.1" id="tFrigo" required></div>
+          <div class="campo"><label>Congelador (°C)</label><input type="number" step="0.1" id="tCong" required></div>
+        </div>
+        <div class="campo"><label>Notas (opcional)</label><textarea id="tNotas" placeholder="ex.: motor verificado, normalizou às 15h"></textarea></div>
+        <button class="primario" type="submit">Guardar correção deste dia</button>
+      </form>
+
+      <table class="hist" id="tabTemp">
+        <thead><tr><th>Dia</th><th class="num">Frigorífico</th><th class="num">Congelador</th><th>Estado</th><th>Notas</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="vazio" id="tempVazio" style="display:none">Ainda sem registos.</div>
+    </div>
+
+    <div class="bloco">
+      <h2>Rastreabilidade de fornecedores</h2>
+      <p class="sub">Matéria-prima comprada (carne, farinha, queijo, etc.), para provares a origem se for preciso.</p>
+
+      <form class="no-print" onsubmit="guardarRastreio(event)">
+        <div class="linha-2">
+          <div class="campo"><label>Data da compra</label><input type="date" id="rData" required></div>
+          <div class="campo"><label>Produto</label><input type="text" id="rProduto" required placeholder="ex.: Carne picada"></div>
+        </div>
+        <div class="linha-2">
+          <div class="campo"><label>Fornecedor</label><input type="text" id="rFornecedor"></div>
+          <div class="campo"><label>N.º da fatura/recibo</label><input type="text" id="rFatura"></div>
+        </div>
+        <div class="campo"><label>Validade do produto</label><input type="date" id="rValidade"></div>
+        <button class="primario" type="submit">Adicionar</button>
+      </form>
+
+      <table class="hist" id="tabRastreio">
+        <thead><tr><th>Compra</th><th>Produto</th><th>Fornecedor</th><th>Fatura</th><th>Validade</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="vazio" id="rastreioVazio" style="display:none">Ainda sem registos.</div>
+    </div>
+
+  </div>
+
+  <nav class="nav no-print">
+    <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
+    <a class="nav-i" href="/admin/"><span>📊</span>Análise</a>
+    <a class="nav-i" href="/painel/recibos.html"><span>🧾</span>Recibos</a>
+    <a class="nav-i" href="/painel/caixa.html"><span>💰</span>Caixa</a>
+    <a class="nav-i on" href="/painel/seguranca.html"><span>🧼</span>Higiene</a>
+  </nav>
+</div>
+
+<script>
+  const API = '/api';
+  let pass = '';
+  let ultimoTemp = [];
+  let ultimoRastreio = [];
+
+  function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function diaLisboaHoje() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon' }).format(new Date());
+  }
+  function dataLonga(d) {
+    try { return new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }); } catch (e) { return d; }
+  }
+
+  async function api(caminho, opcoes) {
+    const r = await fetch(API + caminho, Object.assign({
+      headers: Object.assign({ 'x-painel-pass': pass }, (opcoes && opcoes.body) ? { 'Content-Type': 'application/json' } : {}),
+    }, opcoes || {}));
+    if (r.status === 401) throw new Error('401');
+    return r.json();
+  }
+
+  async function entrar() {
+    pass = document.getElementById('pass').value;
+    try {
+      await api('/painel/seguranca-temperaturas');
+      try { localStorage.setItem('painelPass', pass); } catch (e) {}
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      document.getElementById('tDia').value = diaLisboaHoje();
+      document.getElementById('rData').value = diaLisboaHoje();
+      carregar();
+    } catch (e) {
+      document.getElementById('erro').textContent = 'Senha errada.';
+    }
+  }
+
+  async function carregar() {
+    const t = await api('/painel/seguranca-temperaturas?dias=60');
+    if (t.ok) {
+      ultimoTemp = t.historico || [];
+      document.getElementById('padraoFrigo').textContent = t.padrao.frigorifico_c;
+      document.getElementById('padraoCong').textContent = t.padrao.congelador_c;
+      renderTemp();
+    }
+    const r = await api('/painel/seguranca-rastreabilidade?dias=90');
+    if (r.ok) {
+      ultimoRastreio = r.lista || [];
+      renderRastreio();
+    }
+  }
+
+  function renderTemp() {
+    const corpo = document.querySelector('#tabTemp tbody');
+    corpo.innerHTML = ultimoTemp.map(x => `
+      <tr>
+        <td>${dataLonga(x.dia)}</td>
+        <td class="num">${x.frigorifico_c}°C</td>
+        <td class="num">${x.congelador_c}°C</td>
+        <td>${x.auto ? '<span class="tag auto">padrão</span>' : '<span class="tag manual">corrigido</span>'}</td>
+        <td>${esc(x.notas || '')}</td>
+      </tr>`).join('');
+    document.getElementById('tempVazio').style.display = ultimoTemp.length ? 'none' : '';
+  }
+
+  function renderRastreio() {
+    const corpo = document.querySelector('#tabRastreio tbody');
+    corpo.innerHTML = ultimoRastreio.map(x => `
+      <tr>
+        <td>${dataLonga(x.data_compra)}</td>
+        <td>${esc(x.produto)}</td>
+        <td>${esc(x.fornecedor || '')}</td>
+        <td>${esc(x.numero_fatura || '')}</td>
+        <td>${x.validade ? dataLonga(x.validade) : ''}</td>
+      </tr>`).join('');
+    document.getElementById('rastreioVazio').style.display = ultimoRastreio.length ? 'none' : '';
+  }
+
+  async function guardarTemp(ev) {
+    ev.preventDefault();
+    const corpo = {
+      dia: document.getElementById('tDia').value,
+      frigorifico_c: document.getElementById('tFrigo').value,
+      congelador_c: document.getElementById('tCong').value,
+      notas: document.getElementById('tNotas').value,
+    };
+    const res = await api('/painel/seguranca-temperaturas', { method: 'POST', body: JSON.stringify(corpo) });
+    if (res.ok) { document.getElementById('tNotas').value = ''; carregar(); }
+    else alert(res.erro || 'Erro ao guardar.');
+  }
+
+  async function guardarRastreio(ev) {
+    ev.preventDefault();
+    const corpo = {
+      data_compra: document.getElementById('rData').value,
+      produto: document.getElementById('rProduto').value,
+      fornecedor: document.getElementById('rFornecedor').value,
+      numero_fatura: document.getElementById('rFatura').value,
+      validade: document.getElementById('rValidade').value,
+    };
+    const res = await api('/painel/seguranca-rastreabilidade', { method: 'POST', body: JSON.stringify(corpo) });
+    if (res.ok) {
+      document.getElementById('rProduto').value = '';
+      document.getElementById('rFornecedor').value = '';
+      document.getElementById('rFatura').value = '';
+      document.getElementById('rValidade').value = '';
+      carregar();
+    } else alert(res.erro || 'Erro ao guardar.');
+  }
+
+  function paraCSV(linhas, colunas) {
+    const cab = colunas.map(c => c.titulo).join(';');
+    const corpo = linhas.map(l => colunas.map(c => String(l[c.chave] == null ? '' : l[c.chave]).replace(/;/g, ',')).join(';')).join('\n');
+    return cab + '\n' + corpo;
+  }
+
+  function exportarCSV(tipo) {
+    let csv, nome;
+    if (tipo === 'temperaturas') {
+      csv = paraCSV(ultimoTemp, [
+        { chave: 'dia', titulo: 'Dia' },
+        { chave: 'frigorifico_c', titulo: 'Frigorifico C' },
+        { chave: 'congelador_c', titulo: 'Congelador C' },
+        { chave: 'auto', titulo: 'Padrao (1) ou corrigido (0)' },
+        { chave: 'notas', titulo: 'Notas' },
+      ]);
+      nome = `temperaturas-${diaLisboaHoje()}.csv`;
+    } else {
+      csv = paraCSV(ultimoRastreio, [
+        { chave: 'data_compra', titulo: 'Data compra' },
+        { chave: 'produto', titulo: 'Produto' },
+        { chave: 'fornecedor', titulo: 'Fornecedor' },
+        { chave: 'numero_fatura', titulo: 'N fatura' },
+        { chave: 'validade', titulo: 'Validade' },
+      ]);
+      nome = `rastreabilidade-${diaLisboaHoje()}.csv`;
+    }
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  try {
+    const guardada = localStorage.getItem('painelPass');
+    if (guardada) { document.getElementById('pass').value = guardada; entrar(); }
+  } catch (e) {}
+</script>
+</body>
+</html>

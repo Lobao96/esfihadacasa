@@ -126,6 +126,13 @@ function expiraOverride(agora) {
   ));
 }
 
+// Valores padrao reais do frigorifico/congelador, usados pelo
+// preenchimento automatico diario do registo de temperaturas (pedido
+// pelo Miguel em 2026-11-01 -- ver preencherTemperaturaPadrao, chamado
+// no scheduled()). Se os valores reais mudarem, atualizar aqui.
+const TEMP_PADRAO_FRIGORIFICO_C = 4;
+const TEMP_PADRAO_CONGELADOR_C = -18;
+
 // Comparacao da palavra-passe sem revelar onde falhou.
 function autorizado(request, env) {
   const dada = request.headers.get('x-painel-pass') || '';
@@ -1680,6 +1687,94 @@ async function guardarFechoCaixa(request, env) {
   return j({ ok: true, fecho: linha });
 }
 
+// Registo de seguranca alimentar (temperaturas) -- o cron diario
+// (scheduled()) preenche sozinho cada dia novo com os valores padrao reais
+// (TEMP_PADRAO_*), sem o Miguel ter de escrever nada. So fica "auto=0"
+// (corrigido a mao) quando ele edita um dia porque notou uma diferenca
+// real -- o cron nunca sobrescreve um dia ja preenchido (ON CONFLICT DO
+// NOTHING), e a edicao manual atualiza esse mesmo dia marcando auto=0.
+async function preencherTemperaturaPadrao(env) {
+  const dia = diaLisboa();
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO registo_temperaturas (dia, frigorifico_c, congelador_c, confirmado_por, notas, auto, criado_em)
+     VALUES (?, ?, ?, NULL, NULL, 1, ?)
+     ON CONFLICT(dia) DO NOTHING`
+  ).bind(dia, TEMP_PADRAO_FRIGORIFICO_C, TEMP_PADRAO_CONGELADOR_C, agora).run();
+}
+
+async function listarTemperaturas(request, env) {
+  const url = new URL(request.url);
+  const diasN = Math.min(366, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 60));
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM registo_temperaturas ORDER BY dia DESC LIMIT ?'
+  ).bind(diasN).all();
+  return j({
+    ok: true,
+    historico: results || [],
+    padrao: { frigorifico_c: TEMP_PADRAO_FRIGORIFICO_C, congelador_c: TEMP_PADRAO_CONGELADOR_C },
+  });
+}
+
+async function guardarTemperatura(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const dia = limpar(b.dia, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia || '')) return j({ ok: false, erro: 'dia invalido' }, 400);
+  const frigorifico = parseFloat(b.frigorifico_c);
+  const congelador = parseFloat(b.congelador_c);
+  if (!Number.isFinite(frigorifico) || !Number.isFinite(congelador)) {
+    return j({ ok: false, erro: 'temperatura invalida' }, 400);
+  }
+  const notas = limpar(b.notas, 500) || null;
+  const agora = new Date().toISOString();
+
+  await env.DB.prepare(
+    `INSERT INTO registo_temperaturas (dia, frigorifico_c, congelador_c, confirmado_por, notas, auto, criado_em)
+     VALUES (?, ?, ?, 'Miguel', ?, 0, ?)
+     ON CONFLICT(dia) DO UPDATE SET
+       frigorifico_c = excluded.frigorifico_c,
+       congelador_c = excluded.congelador_c,
+       confirmado_por = excluded.confirmado_por,
+       notas = excluded.notas,
+       auto = 0,
+       criado_em = excluded.criado_em`
+  ).bind(dia, frigorifico, congelador, notas, agora).run();
+
+  const linha = await env.DB.prepare('SELECT * FROM registo_temperaturas WHERE dia = ?').bind(dia).first();
+  return j({ ok: true, registo: linha });
+}
+
+async function listarRastreabilidade(request, env) {
+  const url = new URL(request.url);
+  const diasN = Math.min(366, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 90));
+  const corte = diaLisboa(new Date(Date.now() - diasN * 86400000));
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM registo_rastreabilidade WHERE data_compra >= ? ORDER BY data_compra DESC, id DESC'
+  ).bind(corte).all();
+  return j({ ok: true, lista: results || [] });
+}
+
+async function guardarRastreabilidade(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const dataCompra = limpar(b.data_compra, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataCompra || '')) return j({ ok: false, erro: 'data invalida' }, 400);
+  const produto = limpar(b.produto, 120);
+  if (!produto) return j({ ok: false, erro: 'produto obrigatorio' }, 400);
+  const fornecedor = limpar(b.fornecedor, 120) || null;
+  const numeroFatura = limpar(b.numero_fatura, 60) || null;
+  const validade = limpar(b.validade, 10) || null;
+  const agora = new Date().toISOString();
+
+  await env.DB.prepare(
+    `INSERT INTO registo_rastreabilidade (data_compra, produto, fornecedor, numero_fatura, validade, criado_em)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).bind(dataCompra, produto, fornecedor, numeroFatura, validade, agora).run();
+
+  return await listarRastreabilidade(request, env);
+}
+
 async function analise(request, env) {
   const url = new URL(request.url);
   const { de, ate } = intervalo(url);
@@ -1856,6 +1951,7 @@ export default {
   // push ao GitHub pode nao bastar.
   async scheduled(event, env, ctx) {
     await apagarPedidosAntigos(env);
+    await preencherTemperaturaPadrao(env);
   },
 };
 
@@ -1974,6 +2070,10 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/uber-entrega' && request.method === 'POST') return await criarEntregaUberReal(request, env);
         if (p === '/api/painel/uber-cancelar' && request.method === 'POST') return await cancelarEntregaUber(request, env);
         if (p === '/api/painel/chave' && request.method === 'GET') return j({ ok: true, chave: VAPID_PUBLIC });
+        if (p === '/api/painel/seguranca-temperaturas' && request.method === 'GET') return await listarTemperaturas(request, env);
+        if (p === '/api/painel/seguranca-temperaturas' && request.method === 'POST') return await guardarTemperatura(request, env);
+        if (p === '/api/painel/seguranca-rastreabilidade' && request.method === 'GET') return await listarRastreabilidade(request, env);
+        if (p === '/api/painel/seguranca-rastreabilidade' && request.method === 'POST') return await guardarRastreabilidade(request, env);
       }
 
       return j({ ok: false, erro: 'nao existe' }, 404);
