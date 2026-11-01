@@ -290,6 +290,12 @@
         Correção de produção (não altera o valor já cobrado)
       </label>
       <button class="ac destaque" style="width:100%;margin-bottom:8px" onclick="confirmarAdicionarItem()">Adicionar</button>
+
+      <p class="nota" style="font-weight:800;margin-top:18px">Corrigir valor total do pedido</p>
+      <p class="nota" style="margin:0 0 8px">Para casos que não se resolvem por item (ex.: combo de preço fixo). Isto substitui diretamente o valor total cobrado, sem mexer na produção nem no stock.</p>
+      <input type="number" id="maTotalNovo" step="0.01" min="0" placeholder="ex.: 24,00" style="width:100%;margin-bottom:8px">
+      <button class="ac" style="width:100%;margin-bottom:14px" onclick="confirmarCorrigirTotal()">Guardar valor total</button>
+
       <button class="ac sec-fechar" onclick="fecharModalAdicionar()">Fechar</button>
     </div>
   </div>
@@ -1209,6 +1215,19 @@
     renderLinhasAtuais(id);
     const qtd = document.getElementById('maQtd');
     if (qtd) qtd.value = 1;
+  }
+
+  async function confirmarCorrigirTotal() {
+    const id = adicionarPedidoId;
+    if (!id) return;
+    const v = parseFloat(document.getElementById('maTotalNovo').value);
+    if (!Number.isFinite(v) || v < 0) { alert('Valor inválido.'); return; }
+    const total_cent = Math.round(v * 100);
+    if (!confirm(`Substituir o valor total deste pedido por ${eur(total_cent)}? Isto não mexe na produção nem no stock, só no valor cobrado.`)) return;
+    await api('/painel/pedido-total', { method: 'POST', body: JSON.stringify({ id, total_cent }) });
+    document.getElementById('maTotalNovo').value = '';
+    await carregar();
+    renderLinhasAtuais(id);
   }
 
   async function marcar(id, campos) {

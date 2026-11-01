@@ -1195,6 +1195,39 @@ async function marcarOfertaProducao(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
 }
 
+// Corrige diretamente o VALOR TOTAL de um pedido, sem mexer na producao
+// nem no stock -- para casos que o modelo de "acrescentar/remover por
+// item" nao cobre bem, como um combo de preco fixo (ex.: "Combo a Dois"),
+// em que a soma dos precos unitarios dos itens nao bate certo com o preco
+// real do combo. Pedido pelo Miguel em 2026-11-01. Fica sempre registado
+// em itens.linhas para ficar rastreavel quem/quando mudou o valor.
+async function corrigirTotalPedido(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  const totalCentNovo = parseInt(b.total_cent, 10);
+  if (!Number.isFinite(totalCentNovo) || totalCentNovo < 0) {
+    return j({ ok: false, erro: 'valor invalido' }, 400);
+  }
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (!it || Array.isArray(it)) it = { linhas: [], producao: [], bebidas: [] };
+  it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
+  const antigo = p.total_cent || 0;
+  it.linhas.push(`Correção no painel: valor total ajustado manualmente de ${(antigo / 100).toFixed(2).replace('.', ',')}€ para ${(totalCentNovo / 100).toFixed(2).replace('.', ',')}€`);
+
+  const agora = new Date().toISOString();
+  await env.DB.prepare('UPDATE pedidos SET itens = ?, total_cent = ?, atualizado_em = ? WHERE id = ?')
+    .bind(JSON.stringify(it), totalCentNovo, agora, id).run();
+
+  return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
+}
+
 // Corrige a PRODUCAO de um pedido ja enviado (o que vai para a cozinha e
 // para o talao), sem alterar o preco cobrado ao cliente -- para o caso de
 // um pedido especial dentro de um combo (ex.: cliente preferiu 17 salgadas
@@ -2183,6 +2216,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido-item' && request.method === 'POST') return await adicionarItemPedido(request, env);
         if (p === '/api/painel/pedido-item-acrescentado' && request.method === 'POST') return await ajustarItemAcrescentado(request, env);
         if (p === '/api/painel/pedido-producao-oferta' && request.method === 'POST') return await marcarOfertaProducao(request, env);
+        if (p === '/api/painel/pedido-total' && request.method === 'POST') return await corrigirTotalPedido(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-oferta-bebida' && request.method === 'POST') return await resolverOfertaBebida(request, env);
