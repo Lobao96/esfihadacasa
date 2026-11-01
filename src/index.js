@@ -1037,6 +1037,10 @@ async function adicionarItemPedido(request, env) {
 
   it.producao.push({
     sabor: sabor.nome, ing: '', extras: [], n, gratis: gratis ? n : 0, doce: sabor.doce ? 1 : 0,
+    // acrescentado pelo painel (nao faz parte do pedido original do
+    // cliente) -- permite desfazer a serio com ajustarItemAcrescentado,
+    // ao contrario de uma linha original (ver comentario em ajustarProducaoPedido).
+    acrescentado: true, preco_unit_cent: sabor.preco_cent,
   });
   it.linhas.push(`${n}x ${sabor.nome}${gratis ? ' (OFERTA -- acrescentado no painel)' : ' (acrescentado no painel)'}`);
 
@@ -1057,6 +1061,80 @@ async function adicionarItemPedido(request, env) {
     lote.push(env.DB.prepare(
       `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
     ).bind(n, agora, sabor.nome));
+  }
+  await env.DB.batch(lote);
+
+  return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
+}
+
+// Ajusta ou remove (novo_n = 0) uma linha de producao que foi acrescentada
+// pelo proprio painel (adicionarItemPedido, linha.acrescentado = true).
+// Ao contrario de ajustarProducaoPedido -- que corrige linhas do PEDIDO
+// ORIGINAL sem nunca tocar total_cent, de proposito -- aqui o total
+// cobrado segue a quantidade real desta linha, porque ela nunca fez parte
+// do que o cliente pagou originalmente: foi o Miguel quem a acrescentou
+// (por engano ou nao), por isso tem de dar para corrigir ou anular a
+// serio, incluindo o valor. Pedido pelo Miguel em 2026-11-01 depois de
+// reparar que remover um item acrescentado por engano nao devolvia o
+// valor que tinha sido somado ao total.
+async function ajustarItemAcrescentado(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  const idx = parseInt(b.idx, 10);
+  if (!Number.isInteger(idx) || idx < 0) return j({ ok: false, erro: 'linha invalida' }, 400);
+  const novoN = Math.max(0, Math.min(50, parseInt(b.novo_n, 10) || 0));
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (!it || Array.isArray(it) || !Array.isArray(it.producao) || !it.producao[idx]) {
+    return j({ ok: false, erro: 'linha nao encontrada' }, 404);
+  }
+  const linha = it.producao[idx];
+  if (!linha.acrescentado) {
+    return j({ ok: false, erro: 'esta linha faz parte do pedido original -- usa a correcao de producao normal, que nao mexe no valor cobrado' }, 400);
+  }
+
+  const antigoN = Math.max(0, parseInt(linha.n, 10) || 0);
+  const delta = novoN - antigoN;   // positivo = aumentar; negativo = reduzir/remover
+  const ehGratis = (parseInt(linha.gratis, 10) || 0) > 0;
+  const precoUnit = parseInt(linha.preco_unit_cent, 10) || 0;
+  const doce = !!linha.doce;
+  const sabor = linha.sabor;
+  const agora = new Date().toISOString();
+
+  const novoTotalCent = ehGratis ? (p.total_cent || 0) : Math.max(0, (p.total_cent || 0) + delta * precoUnit);
+  const novoNEsfihas = Math.max(0, (p.n_esfihas || 0) + delta);
+
+  it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
+  if (novoN === 0) {
+    it.producao.splice(idx, 1);
+    it.linhas.push(`Correção no painel: removido o item acrescentado ${antigoN}x ${sabor}${ehGratis ? '' : ` (devolvidos ${((antigoN * precoUnit) / 100).toFixed(2).replace('.', ',')}€)`}`);
+  } else {
+    linha.n = novoN;
+    if (ehGratis) linha.gratis = novoN;
+    it.linhas.push(`Correção no painel: item acrescentado ${sabor} passou de ${antigoN}x para ${novoN}x`);
+  }
+
+  const lote = [
+    env.DB.prepare('UPDATE pedidos SET itens = ?, n_esfihas = ?, total_cent = ?, atualizado_em = ? WHERE id = ?')
+      .bind(JSON.stringify(it), novoNEsfihas, novoTotalCent, agora, id),
+  ];
+  if (delta !== 0) {
+    lote.push(env.DB.prepare('UPDATE stock SET usado = MAX(0, usado + ?) WHERE dia = ?').bind(delta, p.dia));
+    if (doce) {
+      lote.push(env.DB.prepare(
+        `UPDATE stock_doces SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE id = 1`
+      ).bind(delta, agora));
+    } else if (sabor) {
+      lote.push(env.DB.prepare(
+        `UPDATE stock_salgadas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?`
+      ).bind(delta, agora, sabor));
+    }
   }
   await env.DB.batch(lote);
 
@@ -2049,6 +2127,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedidos' && request.method === 'GET') return await listar(request, env);
         if (p === '/api/painel/pedido' && request.method === 'POST') return await mudarPedido(request, env);
         if (p === '/api/painel/pedido-item' && request.method === 'POST') return await adicionarItemPedido(request, env);
+        if (p === '/api/painel/pedido-item-acrescentado' && request.method === 'POST') return await ajustarItemAcrescentado(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-oferta-bebida' && request.method === 'POST') return await resolverOfertaBebida(request, env);

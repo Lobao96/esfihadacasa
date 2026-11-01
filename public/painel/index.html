@@ -1115,13 +1115,21 @@
     const dados = p ? dadosDe(p) : null;
     const prod = (dados && dados.producao) || [];
     if (!prod.length) { cont.innerHTML = '<p class="nota"><em>Sem itens na produção.</em></p>'; return; }
-    cont.innerHTML = prod.map((x, idx) => `
+    // Linhas "acrescentado" foram postas pelo proprio painel (nao fazem
+    // parte do pedido original) -- por isso -/+/remover aqui tambem
+    // corrigem o valor cobrado a serio. Linhas do pedido original usam as
+    // funcoes antigas, que nunca tocam no valor (por desenho).
+    cont.innerHTML = prod.map((x, idx) => {
+      const fAjustar = x.acrescentado ? 'ajustarLinhaAcrescentada' : 'ajustarLinhaProducao';
+      const fRemover = x.acrescentado ? 'removerLinhaAcrescentada' : 'removerLinhaProducao';
+      return `
       <div class="ma-linha">
-        <span class="ma-linha-nome">${x.n}&times; ${esc(x.sabor)}${x.gratis ? ' <small>(oferta)</small>' : ''}</span>
-        <button class="ac" onclick="ajustarLinhaProducao(${id}, ${idx}, -1)" title="Tirar uma">−</button>
-        <button class="ac" onclick="ajustarLinhaProducao(${id}, ${idx}, 1)" title="Pôr mais uma">+</button>
-        <button class="ac" onclick="removerLinhaProducao(${id}, ${idx})" title="Remover esta linha">🗑</button>
-      </div>`).join('');
+        <span class="ma-linha-nome">${x.n}&times; ${esc(x.sabor)}${x.gratis ? ' <small>(oferta)</small>' : ''}${x.acrescentado ? ' <small>(acrescentado)</small>' : ''}</span>
+        <button class="ac" onclick="${fAjustar}(${id}, ${idx}, -1)" title="Tirar uma">−</button>
+        <button class="ac" onclick="${fAjustar}(${id}, ${idx}, 1)" title="Pôr mais uma">+</button>
+        <button class="ac" onclick="${fRemover}(${id}, ${idx})" title="Remover esta linha">🗑</button>
+      </div>`;
+    }).join('');
   }
 
   async function ajustarLinhaProducao(id, idx, delta) {
@@ -1138,6 +1146,27 @@
   async function removerLinhaProducao(id, idx) {
     if (!confirm('Remover esta linha da produção? Isto não altera o valor já cobrado ao cliente.')) return;
     await api('/painel/pedido-producao-ajustar', { method: 'POST', body: JSON.stringify({ id, idx, novo_n: 0 }) });
+    await carregar();
+    renderLinhasAtuais(id);
+  }
+
+  // Linhas acrescentadas pelo painel (botao "Adicionar item") -- aqui o
+  // valor cobrado E alterado, porque esta linha nunca fez parte do que o
+  // cliente pagou originalmente.
+  async function ajustarLinhaAcrescentada(id, idx, delta) {
+    const p = pedidos.find(x => x.id === id);
+    const dados = p ? dadosDe(p) : null;
+    const linha = dados && dados.producao && dados.producao[idx];
+    if (!linha) return;
+    const novo_n = Math.max(0, (linha.n || 0) + delta);
+    await api('/painel/pedido-item-acrescentado', { method: 'POST', body: JSON.stringify({ id, idx, novo_n }) });
+    await carregar();
+    renderLinhasAtuais(id);
+  }
+
+  async function removerLinhaAcrescentada(id, idx) {
+    if (!confirm('Remover este item acrescentado? Isto TAMBÉM retira o valor cobrado por ele (foi o Miguel quem acrescentou, nunca fez parte do pedido do cliente).')) return;
+    await api('/painel/pedido-item-acrescentado', { method: 'POST', body: JSON.stringify({ id, idx, novo_n: 0 }) });
     await carregar();
     renderLinhasAtuais(id);
   }
