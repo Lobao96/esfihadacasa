@@ -1122,14 +1122,36 @@
     cont.innerHTML = prod.map((x, idx) => {
       const fAjustar = x.acrescentado ? 'ajustarLinhaAcrescentada' : 'ajustarLinhaProducao';
       const fRemover = x.acrescentado ? 'removerLinhaAcrescentada' : 'removerLinhaProducao';
+      const ehOferta = (x.gratis || 0) > 0;
       return `
       <div class="ma-linha">
-        <span class="ma-linha-nome">${x.n}&times; ${esc(x.sabor)}${x.gratis ? ' <small>(oferta)</small>' : ''}${x.acrescentado ? ' <small>(acrescentado)</small>' : ''}</span>
+        <span class="ma-linha-nome">${x.n}&times; ${esc(x.sabor)}${ehOferta ? ' <small>(oferta)</small>' : ''}${x.acrescentado ? ' <small>(acrescentado)</small>' : ''}</span>
         <button class="ac" onclick="${fAjustar}(${id}, ${idx}, -1)" title="Tirar uma">−</button>
         <button class="ac" onclick="${fAjustar}(${id}, ${idx}, 1)" title="Pôr mais uma">+</button>
+        <button class="ac" onclick="alternarOfertaLinha(${id}, ${idx})" title="${ehOferta ? 'Deixar de ser oferta (volta a cobrar)' : 'Marcar como oferta (desconta do valor)'}">🎁</button>
         <button class="ac" onclick="${fRemover}(${id}, ${idx})" title="Remover esta linha">🗑</button>
       </div>`;
     }).join('');
+  }
+
+  // Corrige so o ESTADO de oferta de uma linha (quantidade continua a
+  // mesma), ajustando o valor cobrado pela diferenca real -- para quando
+  // uma linha ficou marcada oferta por engano, ou quando o cliente tem
+  // direito a uma oferta que ainda nao tinha sido descontada.
+  async function alternarOfertaLinha(id, idx) {
+    const p = pedidos.find(x => x.id === id);
+    const dados = p ? dadosDe(p) : null;
+    const linha = dados && dados.producao && dados.producao[idx];
+    if (!linha) return;
+    const ehOferta = (linha.gratis || 0) > 0;
+    const gratis_novo = ehOferta ? 0 : (linha.n || 0);
+    const msg = ehOferta
+      ? `Deixar "${linha.sabor}" de ser oferta? Isto volta a somar o valor ao total cobrado.`
+      : `Marcar "${linha.sabor}" como oferta? Isto desconta o valor do total cobrado.`;
+    if (!confirm(msg)) return;
+    await api('/painel/pedido-producao-oferta', { method: 'POST', body: JSON.stringify({ id, idx, gratis_novo }) });
+    await carregar();
+    renderLinhasAtuais(id);
   }
 
   async function ajustarLinhaProducao(id, idx, delta) {

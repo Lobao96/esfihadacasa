@@ -1141,6 +1141,60 @@ async function ajustarItemAcrescentado(request, env) {
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
 }
 
+// Marca ou desmarca uma linha de producao (original OU acrescentada) como
+// oferta, ajustando total_cent pela diferenca real -- ao contrario de
+// ajustarProducaoPedido (que corrige QUANTIDADE sem nunca tocar no valor),
+// isto serve especificamente para quando a contagem ja esta certa mas o
+// estado "oferta" e que ficou errado (ex.: marcado oferta por engano, ou
+// o cliente tem direito a uma oferta que ainda nao foi refletida no
+// valor). gratis_novo e a quantidade dessa linha que deve ficar como
+// oferta (0 = nada e oferta / paga tudo; ate linha.n = linha toda e
+// oferta). Pedido pelo Miguel em 2026-11-01.
+async function marcarOfertaProducao(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  const idx = parseInt(b.idx, 10);
+  if (!Number.isInteger(idx) || idx < 0) return j({ ok: false, erro: 'linha invalida' }, 400);
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (!it || Array.isArray(it) || !Array.isArray(it.producao) || !it.producao[idx]) {
+    return j({ ok: false, erro: 'linha nao encontrada' }, 404);
+  }
+  const linha = it.producao[idx];
+  const n = Math.max(0, parseInt(linha.n, 10) || 0);
+  const antigoGratis = Math.max(0, Math.min(n, parseInt(linha.gratis, 10) || 0));
+  const novoGratis = Math.max(0, Math.min(n, parseInt(b.gratis_novo, 10) || 0));
+
+  // Preco unitario: linhas acrescentadas ja o guardam; linhas do pedido
+  // original vao buscar ao menu atual pelo nome do sabor.
+  let precoUnit = parseInt(linha.preco_unit_cent, 10) || 0;
+  if (!precoUnit) {
+    const sab = Object.values(SABORES).find(s => s.nome === linha.sabor);
+    precoUnit = sab ? sab.preco_cent : 0;
+  }
+
+  const deltaGratis = novoGratis - antigoGratis;   // positivo = mais unidades a ficar oferta (desconta)
+  const novoTotalCent = Math.max(0, (p.total_cent || 0) - deltaGratis * precoUnit);
+  linha.gratis = novoGratis;
+
+  it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
+  it.linhas.push(novoGratis > antigoGratis
+    ? `Correção no painel: ${novoGratis}x ${linha.sabor} passou a oferta (desconto de ${((deltaGratis * precoUnit) / 100).toFixed(2).replace('.', ',')}€)`
+    : `Correção no painel: ${linha.sabor} deixou de ser oferta (acrescentado ${((-deltaGratis * precoUnit) / 100).toFixed(2).replace('.', ',')}€)`);
+
+  const agora = new Date().toISOString();
+  await env.DB.prepare('UPDATE pedidos SET itens = ?, total_cent = ?, atualizado_em = ? WHERE id = ?')
+    .bind(JSON.stringify(it), novoTotalCent, agora, id).run();
+
+  return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
+}
+
 // Corrige a PRODUCAO de um pedido ja enviado (o que vai para a cozinha e
 // para o talao), sem alterar o preco cobrado ao cliente -- para o caso de
 // um pedido especial dentro de um combo (ex.: cliente preferiu 17 salgadas
@@ -2128,6 +2182,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido' && request.method === 'POST') return await mudarPedido(request, env);
         if (p === '/api/painel/pedido-item' && request.method === 'POST') return await adicionarItemPedido(request, env);
         if (p === '/api/painel/pedido-item-acrescentado' && request.method === 'POST') return await ajustarItemAcrescentado(request, env);
+        if (p === '/api/painel/pedido-producao-oferta' && request.method === 'POST') return await marcarOfertaProducao(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-oferta-bebida' && request.method === 'POST') return await resolverOfertaBebida(request, env);
