@@ -236,7 +236,7 @@
   <nav class="nav">
     <a class="nav-i on" href="/painel/"><span>🫓</span>Pedidos</a>
     <a class="nav-i" href="/admin/"><span>📊</span>Análise</a>
-    <a class="nav-i" href="https://web.whatsapp.com/send?phone=351938211480" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>
+    <a class="nav-i" href="https://wa.me/351938211480" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>
     <a class="nav-i" href="/painel/recibos.html"><span>🧾</span>Recibos</a>
     <a class="nav-i" href="/painel/caixa.html"><span>💰</span>Caixa</a>
     <a class="nav-i" href="/painel/seguranca.html"><span>🧼</span>Higiene</a>
@@ -378,7 +378,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, momento));
-    window.open(num ? `https://web.whatsapp.com/send?phone=${num}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`, '_blank', 'noopener');
+    window.open(num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`, 'esfiha_wa_cliente');
   }
 
   // Ao marcar como pago, já manda logo o recibo pelo WhatsApp — sem precisar
@@ -386,7 +386,7 @@
   // Safari/iOS não bloquear o popup depois do pedido à API.
   async function marcarPago(id, novoValor) {
     let janela = null;
-    if (novoValor) janela = window.open('', '_blank');
+    if (novoValor) janela = window.open('', 'esfiha_wa_cliente');
     await marcar(id, { pago: novoValor });
     if (!novoValor) { if (janela) janela.close(); return; }
     const p = pedidos.find(x => x.id === id);
@@ -394,21 +394,23 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, 'pago'));
-    const url = num ? `https://web.whatsapp.com/send?phone=${num}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`;
-    if (janela) janela.location.href = url; else window.open(url, '_blank', 'noopener');
+    const url = num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`;
+    if (janela) janela.location.href = url; else window.open(url, 'esfiha_wa_cliente');
   }
 
   // Ao carregar em "Começar a fazer": marca sempre a preparação (desconta
-  // stock) e, para pedidos de ENTREGA, abre logo o WhatsApp da Andreza com
-  // a mensagem pronta -- para nunca se esquecer de a chamar, tal como
-  // antes acontecia com o Uber. O botão "🛵 Enviar ao estafeta" continua
-  // no cartão, para reenviar à mão se isto falhar ou se enganar.
+  // stock), avisa o CLIENTE que o pedido já está a ser feito e, para
+  // pedidos de ENTREGA, avisa também a estafeta -- para nunca se esquecer
+  // de avisar nenhum dos dois, tal como antes acontecia com o Uber. O
+  // botão "🛵 Enviar ao estafeta" continua no cartão, para reenviar à mão
+  // se isto falhar ou se enganar; o botão de WhatsApp do cliente também.
   async function comecarFazer(id) {
     const p = pedidos.find(x => x.id === id);
     // Abre o WhatsApp já aqui, antes do "await" -- alguns browsers (Safari
     // incluído) só deixam abrir uma janela nova dentro do mesmo clique do
     // utilizador; se isto corresse depois do marcar() abaixo, o popup
     // podia ser bloqueado em silêncio.
+    if (p) abrirWhats(id, 'preparacao');
     if (p && p.modo === 'entrega') enviarEstafeta(id);
     await marcar(id, { estado: 'preparacao' });
   }
@@ -437,7 +439,7 @@
     const p = pedidos.find(x => x.id === id);
     if (!p) return;
     const txt = encodeURIComponent(mensagemEstafeta(p));
-    window.open(ESTAFETA_WA ? `https://web.whatsapp.com/send?phone=${ESTAFETA_WA}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`, '_blank', 'noopener');
+    window.open(ESTAFETA_WA ? `https://wa.me/${ESTAFETA_WA}?text=${txt}` : `https://wa.me/?text=${txt}`, 'esfiha_wa_estafeta');
   }
 
   async function chamarUber(id) {
@@ -494,7 +496,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemCancelado(Object.assign({}, p, { motivo_cancelamento: motivo }), '#' + p.numero));
-    window.open(num ? `https://web.whatsapp.com/send?phone=${num}&text=${txt}` : `https://web.whatsapp.com/send?text=${txt}`, '_blank', 'noopener');
+    window.open(num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`, 'esfiha_wa_cliente');
 
     const d = dadosDe(p);
     const temUber = d.entrega && d.entrega.uber_delivery_id && !d.entrega.uber_cancelada_em;

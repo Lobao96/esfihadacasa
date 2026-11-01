@@ -3,7 +3,7 @@
   "short_name": "Pedidos",
   "description": "Painel de pedidos da Esfiha da Casa.",
   "start_url": "/painel/",
-  "scope": "/painel/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#F6EFE1",
   "theme_color": "#3A1F12",
