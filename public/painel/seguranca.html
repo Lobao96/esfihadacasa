@@ -181,7 +181,12 @@
   }
 
   async function carregar() {
-    const t = await api('/painel/seguranca-temperaturas?dias=60');
+    // Garante que o historico de temperaturas esta completo desde o
+    // inicio do negocio ate hoje (so preenche os dias que ainda faltam,
+    // nunca mexe num dia ja existente) -- assim a folha aparece sempre
+    // pronta, sem o Miguel ter de clicar em nada.
+    try { await api('/painel/seguranca-temperaturas-historico', { method: 'POST', body: '{}' }); } catch (e) {}
+    const t = await api('/painel/seguranca-temperaturas?dias=90');
     if (t.ok) {
       ultimoTemp = t.historico || [];
       document.getElementById('padraoFrigo').textContent = t.padrao.frigorifico_c;

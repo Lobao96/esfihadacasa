@@ -1868,6 +1868,35 @@ async function preencherTemperaturaPadrao(env) {
   ).bind(dia, TEMP_PADRAO_FRIGORIFICO_C, TEMP_PADRAO_CONGELADOR_C, agora).run();
 }
 
+// Preenche de uma vez o historico de temperaturas desde o inicio do
+// negocio (11 de outubro de 2026, pedido pelo Miguel em 2026-11-01) ate
+// hoje, com os valores padrao -- so para os dias que ainda nao existem na
+// tabela (ON CONFLICT DO NOTHING), nunca sobrescreve um dia ja preenchido
+// pelo cron ou corrigido a mao. Chamado uma vez a partir do painel
+// (botao "Preencher historico"), nao corre sozinho.
+const INICIO_NEGOCIO_DIA = '2026-10-11';
+
+async function preencherHistoricoTemperaturas(request, env) {
+  const hoje = diaLisboa();
+  const lote = [];
+  const agora = new Date().toISOString();
+  let d = new Date(INICIO_NEGOCIO_DIA + 'T12:00:00Z');
+  const fim = new Date(hoje + 'T12:00:00Z');
+  let dias = 0;
+  while (d.getTime() <= fim.getTime() && dias < 400) {
+    const diaStr = diaLisboa(d);
+    lote.push(env.DB.prepare(
+      `INSERT INTO registo_temperaturas (dia, frigorifico_c, congelador_c, confirmado_por, notas, auto, criado_em)
+       VALUES (?, ?, ?, NULL, NULL, 1, ?)
+       ON CONFLICT(dia) DO NOTHING`
+    ).bind(diaStr, TEMP_PADRAO_FRIGORIFICO_C, TEMP_PADRAO_CONGELADOR_C, agora));
+    d = new Date(d.getTime() + 86400000);
+    dias++;
+  }
+  if (lote.length) await env.DB.batch(lote);
+  return j({ ok: true, dias_preenchidos: dias });
+}
+
 async function listarTemperaturas(request, env) {
   const url = new URL(request.url);
   const diasN = Math.min(366, Math.max(1, parseInt(url.searchParams.get('dias'), 10) || 60));
@@ -2239,6 +2268,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/uber-cancelar' && request.method === 'POST') return await cancelarEntregaUber(request, env);
         if (p === '/api/painel/chave' && request.method === 'GET') return j({ ok: true, chave: VAPID_PUBLIC });
         if (p === '/api/painel/seguranca-temperaturas' && request.method === 'GET') return await listarTemperaturas(request, env);
+        if (p === '/api/painel/seguranca-temperaturas-historico' && request.method === 'POST') return await preencherHistoricoTemperaturas(request, env);
         if (p === '/api/painel/seguranca-temperaturas' && request.method === 'POST') return await guardarTemperatura(request, env);
         if (p === '/api/painel/seguranca-rastreabilidade' && request.method === 'GET') return await listarRastreabilidade(request, env);
         if (p === '/api/painel/seguranca-rastreabilidade' && request.method === 'POST') return await guardarRastreabilidade(request, env);
