@@ -160,3 +160,60 @@
     },
   };
 })();
+
+/* Navegacao de datas sem escrever a mao: setas (dia anterior/seguinte) e
+   seletor de mes com setas + listas de mes e ano. Funciona em qualquer
+   browser (o <input type="month"> nao existe no Safari do computador). */
+(function () {
+  'use strict';
+  var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var ESTILO = 'border:1.5px solid var(--line);background:transparent;border-radius:8px;padding:9px 12px;cursor:pointer;font-weight:800;font-family:inherit;color:var(--red);font-size:1rem;';
+  var SEL = 'border:1.5px solid var(--line);border-radius:8px;padding:9px 8px;font-family:inherit;font-weight:700;font-size:0.95rem;background:#fff;color:inherit;';
+
+  function mudaDia(inputId, delta, cb) {
+    var el = document.getElementById(inputId); if (!el || !el.value) return;
+    var p = el.value.split('-').map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + delta));
+    el.value = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+    cb();
+  }
+
+  window.NAVD = {
+    diaInit: function (inputId, cb) {
+      var el = document.getElementById(inputId); if (!el || el.dataset.nav) return;
+      el.dataset.nav = '1';
+      var a = document.createElement('button'); a.type = 'button'; a.textContent = '◀'; a.title = 'Dia anterior'; a.style.cssText = ESTILO; a.onclick = function () { mudaDia(inputId, -1, cb); };
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = '▶'; b.title = 'Dia seguinte'; b.style.cssText = ESTILO; b.onclick = function () { mudaDia(inputId, 1, cb); };
+      el.parentNode.insertBefore(a, el); el.parentNode.insertBefore(b, el.nextSibling);
+    },
+    // hiddenId: input hidden com o valor AAAA-MM; boxId: onde desenhar; cb: chamado ao mudar
+    mesInit: function (hiddenId, boxId, cb, hojeMes) {
+      var h = document.getElementById(hiddenId), box = document.getElementById(boxId);
+      if (!h || !box || box.dataset.nav) return;
+      box.dataset.nav = '1';
+      var anoAtual = parseInt(hojeMes.slice(0, 4), 10);
+      var anos = []; for (var y = 2026; y <= Math.max(anoAtual + 1, 2027); y++) anos.push(y);
+      box.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap';
+      box.innerHTML = '<button type="button" style="' + ESTILO + '" data-d="-1" title="Mês anterior">◀</button>' +
+        '<select data-k="m" style="' + SEL + '">' + MESES.map(function (n, i) { return '<option value="' + String(i + 1).padStart(2, '0') + '">' + n + '</option>'; }).join('') + '</select>' +
+        '<select data-k="a" style="' + SEL + '">' + anos.map(function (y) { return '<option value="' + y + '">' + y + '</option>'; }).join('') + '</select>' +
+        '<button type="button" style="' + ESTILO + '" data-d="1" title="Mês seguinte">▶</button>';
+      var sm = box.querySelector('[data-k=m]'), sa = box.querySelector('[data-k=a]');
+      function desdeSelects() { h.value = sa.value + '-' + sm.value; cb(); }
+      sm.onchange = desdeSelects; sa.onchange = desdeSelects;
+      box.querySelectorAll('button').forEach(function (bt) {
+        bt.onclick = function () {
+          var p = h.value.split('-').map(Number), d = new Date(Date.UTC(p[0], p[1] - 1 + parseInt(bt.dataset.d, 10), 1));
+          NAVD.setMes(hiddenId, d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0')); cb();
+        };
+      });
+      h._sinc = function () {
+        if (!h.value) return;
+        var a = h.value.slice(0, 4);
+        if (!Array.prototype.some.call(sa.options, function (o) { return o.value === a; })) { var o = document.createElement('option'); o.value = a; o.textContent = a; sa.appendChild(o); }
+        sa.value = a; sm.value = h.value.slice(5, 7);
+      };
+    },
+    setMes: function (hiddenId, v) { var h = document.getElementById(hiddenId); h.value = v; if (h._sinc) h._sinc(); },
+  };
+})();

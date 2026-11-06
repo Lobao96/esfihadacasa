@@ -161,7 +161,7 @@
     <div class="bloco">
       <h2>Histórico e conta do mês</h2>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
-        <input type="month" id="mesSel" onchange="renderHistorico()">
+        <div id="mesNav"></div><input type="hidden" id="mesSel">
         <button class="secundario" onclick="exportarCsv()">⬇️ CSV</button>
         <button class="secundario" onclick="imprimirMes()">📄 Guardar PDF do mês</button>
       </div>
@@ -275,6 +275,7 @@
       document.getElementById('login').style.display = 'none';
       document.getElementById('app').style.display = '';
       document.getElementById('diaSel').value = diaLisboaHoje();
+      NAVD.diaInit('diaSel', carregar);
       relogio(); setInterval(relogio, 1000);
       carregar();
     } catch (e) {
@@ -477,8 +478,9 @@
   }
 
   function mesSelecionado() {
+    NAVD.mesInit('mesSel', 'mesNav', renderHistorico, diaLisboaHoje().slice(0, 7));
     const el = document.getElementById('mesSel');
-    if (!el.value) el.value = diaLisboaHoje().slice(0, 7);
+    if (!el.value) NAVD.setMes('mesSel', diaLisboaHoje().slice(0, 7));
     return el.value;
   }
   function diasDoMes() {
@@ -626,6 +628,7 @@
         document.getElementById('app').style.display = '';
         document.getElementById('diaSel').value = new URLSearchParams(location.search).get('dia') || diaLisboaHoje();
         if (new URLSearchParams(location.search).get('dia') && document.referrer.indexOf('/painel/recibos') >= 0) mostrarVoltar('← Voltar aos recibos');
+        NAVD.diaInit('diaSel', carregar);
         relogio(); setInterval(relogio, 1000);
         carregar();
       }).catch(() => {});

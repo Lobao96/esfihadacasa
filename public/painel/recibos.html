@@ -115,7 +115,7 @@
     </div>
     <div id="vistaMes" style="display:none">
       <div class="filtros no-print">
-        <input type="month" id="mesSel" onchange="carregarMes()">
+        <div id="mesNav"></div><input type="hidden" id="mesSel">
         <button onclick="exportarMesCsv()">⬇️ Exportar mês (CSV)</button>
         <button onclick="gerarPdfMes(false)">📄 PDF resumo do mês</button>
         <button onclick="gerarPdfMes(true)">📚 PDF do mês com recibos de cada dia</button>
@@ -201,6 +201,7 @@
       document.getElementById('login').style.display = 'none';
       document.getElementById('app').style.display = '';
       document.getElementById('diaSel').value = diaLisboaHoje();
+      NAVD.diaInit('diaSel', carregar);
       relogio(); setInterval(relogio, 1000);
       carregar();
     } catch (e) {
@@ -394,8 +395,9 @@
     document.getElementById('btDia').style.fontWeight = m === 'dia' ? '800' : '';
     document.getElementById('btMes').style.fontWeight = m === 'mes' ? '800' : '';
     if (m === 'mes') {
+      NAVD.mesInit('mesSel', 'mesNav', carregarMes, diaLisboaHoje().slice(0, 7));
       const el = document.getElementById('mesSel');
-      if (!el.value) el.value = document.getElementById('diaSel').value.slice(0, 7) || diaLisboaHoje().slice(0, 7);
+      if (!el.value) NAVD.setMes('mesSel', document.getElementById('diaSel').value.slice(0, 7) || diaLisboaHoje().slice(0, 7));
       carregarMes();
     } else carregar();
   }
@@ -579,6 +581,7 @@
         document.getElementById('login').style.display = 'none';
         document.getElementById('app').style.display = '';
         document.getElementById('diaSel').value = diaLisboaHoje();
+        NAVD.diaInit('diaSel', carregar);
         relogio(); setInterval(relogio, 1000);
         carregar();
       }).catch(() => {});
