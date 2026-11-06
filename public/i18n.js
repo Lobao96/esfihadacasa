@@ -28,6 +28,9 @@
     { id: 'fr', flag: '\u{1F1EB}\u{1F1F7}', code: 'FR', nome: 'Français', html: 'fr' },
     { id: 'de', flag: '\u{1F1E9}\u{1F1EA}', code: 'DE', nome: 'Deutsch', html: 'de' },
   ];
+  // Idiomas extra (NL, IT, PL, SV, UA) vem de /i18n-extra.js, se estiver carregado.
+  var EX = window.I18N_EXTRA || { langs: [], sug: {}, D: {}, pat: null };
+  LANGS = LANGS.concat(EX.langs);
   var CHAVE = 'esfiha_idioma';
   var CHAVE_SUGESTAO = 'esfiha_idioma_sugerido';
   var COL = { en: 0, es: 1, fr: 2, de: 3 };
@@ -157,9 +160,9 @@
     'Para sabermos a quem entregar.': ['So we know who to deliver to.', 'Para saber a quién entregar.', 'Pour savoir à qui livrer.', 'Damit wir wissen, an wen wir liefern.'],
     'Seu WhatsApp': ['Your WhatsApp', 'Tu WhatsApp', 'Votre WhatsApp', 'Deine WhatsApp-Nummer'],
     'Seu número de WhatsApp': ['Your WhatsApp number', 'Tu número de WhatsApp', 'Votre numéro WhatsApp', 'Deine WhatsApp-Nummer'],
-    'Ex.: 912 345 678': ['E.g. 912 345 678 or +44 7700 900123', 'Ej.: 912 345 678 o +34 612 345 678', 'Ex. : 912 345 678 ou +33 6 12 34 56 78', 'z. B. 912 345 678 oder +49 151 23456789'],
+    'Ex.: +351 912 345 678': ['E.g.: +351 912 345 678', 'Ej.: +351 912 345 678', 'Ex. : +351 912 345 678', 'z. B.: +351 912 345 678'],
     'Para avisarmos quando o pedido estiver a caminho, e para o estafeta poder ligar se não encontrar a morada.': ['So we can tell you when the order is on its way, and the driver can call if they can’t find the address.', 'Para avisarte cuando el pedido esté en camino y para que el repartidor pueda llamar si no encuentra la dirección.', 'Pour vous prévenir quand la commande est en route, et pour que le livreur puisse appeler s’il ne trouve pas l’adresse.', 'Damit wir dir Bescheid geben, wenn die Bestellung unterwegs ist, und der Fahrer anrufen kann, falls er die Adresse nicht findet.'],
-    'Esse número não parece certo — confirme os 9 dígitos (ex.: 912 345 678). Número estrangeiro? Comece com + e o indicativo do país. Sem isto não conseguimos entrar em contato se houver algum problema.': ['That number doesn’t look right. For a non-Portuguese number, start with + and the country code (e.g. +44 7700 900123). Without it we can’t reach you if there’s a problem.', 'Ese número no parece correcto. Si no es portugués, empieza con + y el prefijo del país (ej.: +34 612 345 678). Sin esto no podemos contactarte si hay algún problema.', 'Ce numéro ne semble pas correct. Pour un numéro non portugais, commencez par + et l’indicatif du pays (ex. : +33 6 12 34 56 78). Sans cela, nous ne pourrons pas vous joindre en cas de problème.', 'Diese Nummer scheint nicht zu stimmen. Bei einer nicht-portugiesischen Nummer beginne mit + und der Ländervorwahl (z. B. +49 151 23456789). Sonst können wir dich bei Problemen nicht erreichen.'],
+    'Esse número não parece certo — comece com + e o indicativo do país (ex.: +351 912 345 678). Sem indicativo não conseguimos entrar em contato se houver algum problema.': ['This number doesn’t look right — start with + and the country code (e.g. +351 912 345 678). Without the country code we can’t reach you if there’s a problem.', 'Este número no parece correcto: empieza con + y el prefijo del país (p. ej., +351 912 345 678). Sin el prefijo no podemos contactarte si hay algún problema.', 'Ce numéro ne semble pas correct — commencez par + et l’indicatif du pays (ex. : +351 912 345 678). Sans indicatif, nous ne pouvons pas vous joindre en cas de problème.', 'Diese Nummer scheint nicht zu stimmen – beginne mit + und der Landesvorwahl (z. B. +351 912 345 678). Ohne Vorwahl können wir dich bei Problemen nicht erreichen.'],
     'Pagamento': ['Payment', 'Pago', 'Paiement', 'Zahlung'],
     'Dinheiro': ['Cash', 'Efectivo', 'Espèces', 'Bar'],
     'Pagamento por MB Way antes do envio.': ['MB Way payment before dispatch (Portuguese mobile payment).', 'Pago por MB Way antes del envío (pago móvil portugués).', 'Paiement par MB Way avant l’envoi (paiement mobile portugais).', 'Zahlung per MB Way vor dem Versand (portugiesische Mobile-Payment-App).'],
@@ -206,7 +209,7 @@
     // ---- o que falta para enviar ----
     'Falta completar o pedido:': ['Your order is incomplete:', 'Falta completar el pedido:', 'Votre commande est incomplète :', 'Deine Bestellung ist noch unvollständig:'],
     'Falta escrever o seu nome.': ['Please enter your name.', 'Falta escribir tu nombre.', 'Indiquez votre nom.', 'Bitte gib deinen Namen ein.'],
-    'O número de WhatsApp está incompleto ou errado — confirme os 9 dígitos (ex.: 912 345 678). Número estrangeiro? Comece com + e o indicativo do país. É por aí que entramos em contacto se houver algum problema.': ['The WhatsApp number is incomplete or wrong. For a non-Portuguese number, start with + and the country code (e.g. +44 7700 900123). That’s how we’ll reach you if there’s a problem.', 'El número de WhatsApp está incompleto o es incorrecto. Si no es portugués, empieza con + y el prefijo del país (ej.: +34 612 345 678). Es por ahí que te contactamos si hay algún problema.', 'Le numéro WhatsApp est incomplet ou erroné. Pour un numéro non portugais, commencez par + et l’indicatif du pays (ex. : +33 6 12 34 56 78). C’est par là que nous vous contacterons en cas de problème.', 'Die WhatsApp-Nummer ist unvollständig oder falsch. Bei einer nicht-portugiesischen Nummer beginne mit + und der Ländervorwahl (z. B. +49 151 23456789). Darüber erreichen wir dich bei Problemen.'],
+    'O número de WhatsApp está incompleto ou errado — comece com + e o indicativo do país (ex.: +351 912 345 678). É por aí que entramos em contacto se houver algum problema.': ['The WhatsApp number is incomplete or wrong — start with + and the country code (e.g. +351 912 345 678). That’s how we get in touch if there’s a problem.', 'El número de WhatsApp está incompleto o es incorrecto: empieza con + y el prefijo del país (p. ej., +351 912 345 678). Así nos ponemos en contacto si hay algún problema.', 'Le numéro WhatsApp est incomplet ou erroné — commencez par + et l’indicatif du pays (ex. : +351 912 345 678). C’est ainsi que nous vous contactons en cas de problème.', 'Die WhatsApp-Nummer ist unvollständig oder falsch – beginne mit + und der Landesvorwahl (z. B. +351 912 345 678). So melden wir uns bei Problemen.'],
     'Troco: falta dizer com que nota você vai pagar.': ['Change: tell us which note you’ll pay with.', 'Cambio: falta decir con qué billete vas a pagar.', 'Monnaie : indiquez le billet avec lequel vous allez payer.', 'Wechselgeld: Sag uns, mit welchem Schein du zahlst.'],
     'Troco: a nota tem de ser maior ou igual ao total do pedido.': ['Change: the note must be equal to or more than the order total.', 'Cambio: el billete debe ser igual o mayor que el total del pedido.', 'Monnaie : le billet doit être supérieur ou égal au total de la commande.', 'Wechselgeld: Der Schein muss mindestens so hoch sein wie die Bestellsumme.'],
     'Entrega: falta escrever a morada completa (rua, número e andar).': ['Delivery: please enter the full address (street, number and floor).', 'Entrega: falta escribir la dirección completa (calle, número y piso).', 'Livraison : indiquez l’adresse complète (rue, numéro et étage).', 'Lieferung: Bitte gib die vollständige Adresse ein (Straße, Hausnummer und Stockwerk).'],
@@ -444,12 +447,19 @@
   var INV = {};
   Object.keys(D).forEach(function (pt) { D[pt].forEach(function (tr) { if (!(tr in INV)) INV[tr] = pt; }); });
 
+  Object.keys(EX.D).forEach(function (l) { Object.keys(EX.D[l]).forEach(function (pt) { var tr = EX.D[l][pt]; if (!(tr in INV)) INV[tr] = pt; }); });
+
   function norm(s) { return s.replace(/\s+/g, ' ').trim(); }
   function paraPt(s) { return D[s] ? s : (INV[s] || s); }
 
   function t(pt, L) {
     if (L === 'pt') return pt;
     if (L === 'pe') return paraPE(pt);
+    if (EX.D[L]) {
+      var vx = EX.D[L][pt];
+      if (vx != null) return vx;
+      return EX.pat ? EX.pat(pt, L, t) : null;
+    }
     var row = D[pt];
     if (row) return row[COL[L]];
     for (var i = 0; i < P.length; i++) {
@@ -650,6 +660,7 @@
     de: ['Diese Seite auf Deutsch anzeigen?', 'Ja', 'Nein danke'],
     pe: ['Ver esta página em português de Portugal?', 'Sim', 'Não, obrigado'],
   };
+  Object.keys(EX.sug).forEach(function (k) { TXT_SUG[k] = EX.sug[k]; });
   function esconderSugestao() { if (sugestao) { sugestao.remove(); sugestao = null; } }
   function sugerir(wrap, id) {
     var tx = TXT_SUG[id];
@@ -669,7 +680,8 @@
       var tag = String(ls[i] || '').toLowerCase();
       var c = tag.slice(0, 2);
       if (c === 'pt') return tag === 'pt-pt' ? 'pe' : 'pt';
-      if (COL.hasOwnProperty(c)) return c;
+      if (c === 'uk') return 'ua';
+      if (COL.hasOwnProperty(c) || EX.D.hasOwnProperty(c)) return c;
     }
     return 'en';
   }
@@ -679,7 +691,7 @@
     var guardada = null;
     try { guardada = localStorage.getItem(CHAVE); } catch (e) {}
     observar();
-    if (guardada && (guardada === 'pt' || guardada === 'pe' || COL.hasOwnProperty(guardada))) {
+    if (guardada && LANGS.some(function (l) { return l.id === guardada; })) {
       aplicar(guardada);
     } else {
       aplicar('pt');

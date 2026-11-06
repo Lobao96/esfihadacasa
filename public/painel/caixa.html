@@ -140,7 +140,7 @@
 
       <div class="campo">
         <label>Notas (opcional)</label>
-        <textarea id="inNotas" placeholder="Ex.: ela não veio hoje, faltam 13€ a confirmar amanhã…"></textarea>
+        <textarea id="inNotas" placeholder="Ex.: o estafeta não veio hoje, faltam 13€ a confirmar amanhã…"></textarea>
       </div>
 
       <button class="primario" onclick="confirmarFecho()" style="width:100%">Confirmar fecho do dia</button>
@@ -156,9 +156,10 @@
     </div>
 
     <div class="bloco">
-      <h2>Histórico</h2>
-      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-        <button class="secundario" onclick="exportarCsv()">⬇️ Exportar CSV</button>
+      <h2>Histórico e conta do mês</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
+        <input type="month" id="mesSel" onchange="renderHistorico()">
+        <button class="secundario" onclick="exportarCsv()">⬇️ Exportar mês (CSV)</button>
       </div>
       <div id="historico"></div>
     </div>
@@ -445,67 +446,117 @@
   }
 
   let historicoCache = [];
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const fmtNum = v => v.toFixed(2).replace('.', ',');
+  const fmtHoras = h => (Math.round(h * 100) / 100).toString().replace('.', ',');
+
+  // Calculo de um dia (tudo em cêntimos). Mao de obra = horas x valor/hora.
+  function calcDia(f) {
+    const horas = (f.horas_trabalhadas_centesimos || 0) / 100;
+    const receita = (f.dinheiro_confirmado_cent || 0) + (f.mbway_confirmado_cent || 0);
+    const maoObra = Math.round(horas * VALOR_HORA * 100);
+    const estafeta = f.andreza_confirmado_cent || 0;
+    const extra = f.custo_extra_cent || 0;
+    const ingred = f.ingredientes_cent || 0;
+    const resultado = receita - estafeta - maoObra - extra - ingred - RESERVA_SS_DIA_CENT - SEGURO_DIA_CENT;
+    return { horas, receita, maoObra, estafeta, extra, ingred, resultado };
+  }
+
+  function mesSelecionado() {
+    const el = document.getElementById('mesSel');
+    if (!el.value) el.value = diaLisboaHoje().slice(0, 7);
+    return el.value;
+  }
+  function diasDoMes() {
+    const m = mesSelecionado();
+    return historicoCache.filter(f => f.dia.slice(0, 7) === m).sort((x, y) => x.dia < y.dia ? -1 : 1);
+  }
+
   async function carregarHistorico() {
-    const r = await api('/painel/fecho-caixa?dias=90');
+    const r = await api('/painel/fecho-caixa?dias=366');
     historicoCache = r.historico || [];
+    renderHistorico();
+  }
+
+  function renderHistorico() {
+    const m = mesSelecionado();
+    const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
     const hojeStr = diaLisboaHoje();
+    const dias = diasDoMes();
     const div = document.getElementById('historico');
-    if (!historicoCache.length) {
-      div.innerHTML = '<div class="vazio">Ainda sem nenhum dia confirmado.</div>';
+    if (!dias.length) {
+      div.innerHTML = `<div class="vazio">Sem nenhum dia confirmado em ${nomeMes}.</div>`;
       return;
     }
-    const resultadoDia = f => {
-      const receita = (f.dinheiro_confirmado_cent || 0) + (f.mbway_confirmado_cent || 0);
-      const maoObraCent = Math.round(((f.horas_trabalhadas_centesimos || 0) / 100) * VALOR_HORA * 100);
-      return receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0) - (f.ingredientes_cent || 0) - RESERVA_SS_DIA_CENT - SEGURO_DIA_CENT;
-    };
+    const T = { horas: 0, receita: 0, maoObra: 0, estafeta: 0, extra: 0, ingred: 0, resultado: 0, din: 0, mb: 0 };
+    const linhas = dias.map(f => {
+      const c = calcDia(f);
+      T.horas += c.horas; T.receita += c.receita; T.maoObra += c.maoObra; T.estafeta += c.estafeta;
+      T.extra += c.extra; T.ingred += c.ingred; T.resultado += c.resultado;
+      T.din += f.dinheiro_confirmado_cent || 0; T.mb += f.mbway_confirmado_cent || 0;
+      return `
+        <tr${f.dia === hojeStr ? ' class="hoje"' : ''}>
+          <td>${dataLonga(f.dia)}${f.notas ? `<div class="notas">${esc(f.notas)}</div>` : ''}</td>
+          <td class="num">${eurCent(f.dinheiro_confirmado_cent)}</td>
+          <td class="num">${eurCent(f.mbway_confirmado_cent)}</td>
+          <td class="num">${eurCent(c.estafeta)}</td>
+          <td class="num">${fmtHoras(c.horas)}h × ${VALOR_HORA}€ = <b>${eurCent(c.maoObra)}</b></td>
+          <td class="num" style="color:${c.resultado >= 0 ? 'var(--verde)' : 'var(--red)'}">${c.resultado < 0 ? '-' : ''}${eurCent(Math.abs(c.resultado))}</td>
+          <td><a class="editar" href="#" onclick="editarDia('${f.dia}');return false;">editar</a></td>
+        </tr>`;
+    }).join('');
+    const nDias = dias.length;
+    const reservas = (RESERVA_SS_DIA_CENT + SEGURO_DIA_CENT) * nDias;
+    const antesMO = T.resultado + T.maoObra;
+    const lucro = T.resultado >= 0;
+    const neg = c => (c < 0 ? '-' : '') + eurCent(Math.abs(c));
     div.innerHTML = `
+      <div style="border-radius:12px;padding:14px;margin-bottom:14px;background:${lucro ? 'rgba(30,140,70,0.10)' : 'rgba(200,35,43,0.10)'};border:1px solid ${lucro ? 'var(--verde)' : 'var(--red)'}">
+        <div style="font-weight:800;font-size:1.05rem">${lucro ? '✅ LUCRO' : '⚠️ PREJUÍZO'} em ${nomeMes}: <span style="color:${lucro ? 'var(--verde)' : 'var(--red)'}">${neg(T.resultado)}</span></div>
+        <div class="nota-custo" style="margin-top:4px">${nDias} dia${nDias > 1 ? 's' : ''} confirmado${nDias > 1 ? 's' : ''} · já depois de te pagares as horas.</div>
+      </div>
       <table class="historico">
-        <thead><tr><th>Dia</th><th class="num">💵</th><th class="num">💳</th><th class="num">🛵</th><th class="num" title="Receita - estafeta - mão de obra - eletricidade/outros - ingredientes - reserva SS - reserva seguro">Resultado*</th><th></th></tr></thead>
-        <tbody>
-          ${historicoCache.map(f => { const res = resultadoDia(f); return `
-            <tr${f.dia === hojeStr ? ' class="hoje"' : ''}>
-              <td>${dataLonga(f.dia)}${f.notas ? `<div class="notas">${esc(f.notas)}</div>` : ''}</td>
-              <td class="num">${eurCent(f.dinheiro_confirmado_cent)}</td>
-              <td class="num">${eurCent(f.mbway_confirmado_cent)}</td>
-              <td class="num">${eurCent(f.andreza_confirmado_cent)}</td>
-              <td class="num" style="color:${res >= 0 ? 'var(--verde)' : 'var(--red)'}">${res < 0 ? '-' : ''}${eurCent(Math.abs(res))}</td>
-              <td><a class="editar" href="#" onclick="editarDia('${f.dia}');return false;">editar</a></td>
-            </tr>`; }).join('')}
-        </tbody>
+        <thead><tr><th>Dia</th><th class="num">💵</th><th class="num">💳</th><th class="num">🛵 Estafeta</th><th class="num">🧑‍🍳 Horas × €/h</th><th class="num" title="Receita - estafeta - mão de obra - eletricidade/outros - ingredientes - reserva SS - reserva seguro">Resultado*</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody>
+        <tfoot><tr style="font-weight:800;border-top:2px solid var(--line)">
+          <td>Total do mês</td><td class="num">${eurCent(T.din)}</td><td class="num">${eurCent(T.mb)}</td><td class="num">${eurCent(T.estafeta)}</td>
+          <td class="num">${fmtHoras(T.horas)}h = ${eurCent(T.maoObra)}</td>
+          <td class="num" style="color:${lucro ? 'var(--verde)' : 'var(--red)'}">${neg(T.resultado)}</td><td></td></tr></tfoot>
       </table>
-      <div class="nota-custo">*Lucro/prejuízo do dia (receita − estafeta − mão de obra − eletricidade/outros − ingredientes estimados − reserva SS − reserva seguro).</div>`;
+      <div class="nota-custo">*Lucro/prejuízo do dia (receita − estafeta − mão de obra − eletricidade/outros − ingredientes estimados − reserva SS − reserva seguro).</div>
+      <h3 style="margin:16px 0 6px">Conta final de ${nomeMes}</h3>
+      <div class="resultado-linha"><span>Receita (dinheiro + MB Way)</span><b>${eurCent(T.receita)}</b></div>
+      <div class="resultado-linha"><span>− Estafeta</span><b>${eurCent(T.estafeta)}</b></div>
+      <div class="resultado-linha"><span>− Ingredientes (estimados)</span><b>${eurCent(T.ingred)}</b></div>
+      <div class="resultado-linha"><span>− Eletricidade / outros</span><b>${eurCent(T.extra)}</b></div>
+      <div class="resultado-linha"><span>− Reservas SS + seguro (${nDias} dias)</span><b>${eurCent(reservas)}</b></div>
+      <div class="resultado-linha"><span><b>= Sobra antes de te pagares</b></span><b>${neg(antesMO)}</b></div>
+      <div class="resultado-linha"><span>− Teu trabalho: ${fmtHoras(T.horas)}h × ${VALOR_HORA}€/h</span><b>${eurCent(T.maoObra)}</b></div>
+      <div class="resultado-linha"><span><b>= ${lucro ? 'LUCRO' : 'PREJUÍZO'} do mês</b></span><b style="color:${lucro ? 'var(--verde)' : 'var(--red)'}">${neg(T.resultado)}</b></div>
+      <div class="nota-custo">${antesMO >= 0 ? `Sem contar o teu trabalho, o negócio sobrou ${eurCent(antesMO)} — isso dá ${T.horas ? fmtNum(antesMO / 100 / T.horas) : '0,00'}€ por hora trabalhada (a tua meta é ${VALOR_HORA}€/h).` : `Mesmo sem te pagares nada, o negócio ficou ${eurCent(-antesMO)} no vermelho.`}</div>`;
   }
 
   function exportarCsv() {
-    if (!historicoCache.length) return;
-    const linhas = [['Dia', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Andreza (EUR)', 'Horas', 'Eletricidade/outros (EUR)', 'Ingredientes estimados (EUR)', 'Reserva SS (EUR)', 'Reserva seguro (EUR)', 'Resultado (EUR)', 'Notas']];
-    historicoCache.slice().reverse().forEach(f => {
-      const horas = (f.horas_trabalhadas_centesimos || 0) / 100;
-      const maoObraCent = Math.round(horas * VALOR_HORA * 100);
-      const receita = (f.dinheiro_confirmado_cent || 0) + (f.mbway_confirmado_cent || 0);
-      const ingredientesCent = f.ingredientes_cent || 0;
-      const resultadoCent = receita - (f.andreza_confirmado_cent || 0) - maoObraCent - (f.custo_extra_cent || 0) - ingredientesCent - RESERVA_SS_DIA_CENT - SEGURO_DIA_CENT;
-      linhas.push([
-        f.dia,
-        (f.dinheiro_confirmado_cent / 100).toFixed(2).replace('.', ','),
-        (f.mbway_confirmado_cent / 100).toFixed(2).replace('.', ','),
-        (f.andreza_confirmado_cent / 100).toFixed(2).replace('.', ','),
-        horas.toFixed(2).replace('.', ','),
-        ((f.custo_extra_cent || 0) / 100).toFixed(2).replace('.', ','),
-        (ingredientesCent / 100).toFixed(2).replace('.', ','),
-        (RESERVA_SS_DIA_CENT / 100).toFixed(2).replace('.', ','),
-        (SEGURO_DIA_CENT / 100).toFixed(2).replace('.', ','),
-        (resultadoCent / 100).toFixed(2).replace('.', ','),
-        (f.notas || '').replace(/[\r\n;]+/g, ' '),
-      ]);
+    const dias = diasDoMes();
+    if (!dias.length) { alert('Sem dias confirmados neste mês.'); return; }
+    const m = mesSelecionado();
+    const e = c => fmtNum(c / 100);
+    const linhas = [['Dia', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Estafeta (EUR)', 'Horas', 'Valor hora (EUR/h)', 'Mão de obra = horas x valor hora (EUR)', 'Eletricidade/outros (EUR)', 'Ingredientes estimados (EUR)', 'Reserva SS (EUR)', 'Reserva seguro (EUR)', 'Resultado (EUR)', 'Notas']];
+    const T = { din: 0, mb: 0, estafeta: 0, horas: 0, maoObra: 0, extra: 0, ingred: 0, ss: 0, seg: 0, resultado: 0 };
+    dias.forEach(f => {
+      const c = calcDia(f);
+      T.din += f.dinheiro_confirmado_cent || 0; T.mb += f.mbway_confirmado_cent || 0; T.estafeta += c.estafeta;
+      T.horas += c.horas; T.maoObra += c.maoObra; T.extra += c.extra; T.ingred += c.ingred;
+      T.ss += RESERVA_SS_DIA_CENT; T.seg += SEGURO_DIA_CENT; T.resultado += c.resultado;
+      linhas.push([f.dia, e(f.dinheiro_confirmado_cent || 0), e(f.mbway_confirmado_cent || 0), e(c.estafeta), fmtNum(c.horas), fmtNum(VALOR_HORA), e(c.maoObra), e(c.extra), e(c.ingred), e(RESERVA_SS_DIA_CENT), e(SEGURO_DIA_CENT), e(c.resultado), (f.notas || '').replace(/[\r\n;]+/g, ' ')]);
     });
+    linhas.push(['TOTAL DO MÊS', e(T.din), e(T.mb), e(T.estafeta), fmtNum(T.horas), fmtNum(VALOR_HORA), e(T.maoObra), e(T.extra), e(T.ingred), e(T.ss), e(T.seg), e(T.resultado), T.resultado >= 0 ? 'LUCRO' : 'PREJUIZO']);
     const csv = '﻿' + linhas.map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'caixa-esfiha-da-casa.csv';
+    a.download = 'caixa-esfiha-da-casa-' + m + '.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

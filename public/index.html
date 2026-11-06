@@ -903,10 +903,10 @@
       <p class="tel-nota">Para sabermos a quem entregar.</p>
 
       <p class="extras-title">Seu WhatsApp</p>
-      <input type="tel" id="telInput" inputmode="tel" placeholder="Ex.: 912 345 678"
+      <input type="tel" id="telInput" inputmode="tel" placeholder="Ex.: +351 912 345 678" value="+351 "
              autocomplete="tel" aria-label="Seu número de WhatsApp" oninput="validarTelAoVivo()" onblur="validarTelAoVivo()">
       <p class="tel-nota">Para avisarmos quando o pedido estiver a caminho, e para o estafeta poder ligar se não encontrar a morada.</p>
-      <p class="tel-erro" id="telErro" style="display:none;">Esse número não parece certo — confirme os 9 dígitos (ex.: 912 345 678). Número estrangeiro? Comece com + e o indicativo do país. Sem isto não conseguimos entrar em contato se houver algum problema.</p>
+      <p class="tel-erro" id="telErro" style="display:none;">Esse número não parece certo — comece com + e o indicativo do país (ex.: +351 912 345 678). Sem indicativo não conseguimos entrar em contato se houver algum problema.</p>
 
       <p class="extras-title">Pagamento</p>
       <div class="pay-row" id="payRow"></div>
@@ -2599,23 +2599,20 @@
     mostrarFaltas([]);
   }
 
-  // Numero de telemovel/fixo portugues: 9 digitos, a comecar por 2 (fixo),
-  // 3 (linhas VoIP) ou 9 (movel); aceita +351/00351 na frente, e rejeita
-  // sequencias obviamente erradas (todos os digitos iguais).
+  // Numero de WhatsApp: o INDICATIVO DO PAIS e obrigatorio (+ ou 00 na frente),
+  // para portugueses e estrangeiros. +351: 9 digitos a comecar por 2, 3 ou 9
+  // (rejeita sequencias de digitos todos iguais). Outros paises: 8 a 15
+  // digitos -- o WhatsApp so precisa do numero completo com indicativo.
   function telValido(tel) {
     const bruto = (tel || '').trim();
+    if (!/^(\+|00)/.test(bruto)) return false;
     let d = bruto.replace(/\D/g, '');
-    // Numero estrangeiro (turistas): escrito com + ou 00 e o indicativo do
-    // pais. Aceita-se qualquer pais, com 8 a 15 digitos -- o WhatsApp so
-    // precisa do numero completo com indicativo.
-    const internacional = /^(\+|00)/.test(bruto);
-    if (internacional && d.startsWith('00')) d = d.slice(2);
-    if (internacional && !d.startsWith('351')) return d.length >= 8 && d.length <= 15 && !/^(\d)\1+$/.test(d);
-    if (d.startsWith('00351')) d = d.slice(5);
-    else if (d.startsWith('351') && d.length > 9) d = d.slice(3);
-    if (!/^[239]\d{8}$/.test(d)) return false;
-    if (/^(\d)\1{8}$/.test(d)) return false;
-    return true;
+    if (bruto.startsWith('00')) d = d.slice(2);
+    if (d.startsWith('351')) {
+      d = d.slice(3);
+      return /^[239]\d{8}$/.test(d) && !/^(\d)\1{8}$/.test(d);
+    }
+    return d.length >= 8 && d.length <= 15 && !/^(\d)\1+$/.test(d);
   }
 
   // O que segue para o servidor: "00" no inicio passa a "+", para o numero
@@ -2630,7 +2627,7 @@
     const erro = document.getElementById('telErro');
     if (!el || !erro) return;
     const v = el.value || '';
-    const mostrar = v.replace(/\D/g, '').length >= 9 && !telValido(v);
+    const mostrar = (v.replace(/\D/g, '').length >= 9 || (v.trim() && !/^(\+|00)/.test(v.trim()))) && !telValido(v);
     erro.style.display = mostrar ? 'block' : 'none';
     el.classList.toggle('campo-erro', mostrar);
   }
@@ -2938,7 +2935,7 @@
     const nomeV = ((document.getElementById('nomeInput') || {}).value || '').trim();
     if (nomeV.length < 2) faltas.push('Falta escrever o seu nome.');
     const telRaw = (document.getElementById('telInput') || {}).value || '';
-    if (!telValido(telRaw)) faltas.push('O número de WhatsApp está incompleto ou errado — confirme os 9 dígitos (ex.: 912 345 678). Número estrangeiro? Comece com + e o indicativo do país. É por aí que entramos em contacto se houver algum problema.');
+    if (!telValido(telRaw)) faltas.push('O número de WhatsApp está incompleto ou errado — comece com + e o indicativo do país (ex.: +351 912 345 678). É por aí que entramos em contacto se houver algum problema.');
     if (pagaDinheiro()) {
       const chk = document.getElementById('trocoCheck');
       if (chk && chk.checked) {
@@ -3246,6 +3243,7 @@
 <a class="wa-float" href="https://wa.me/351938211480" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
   <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1-.2.3-.7 1-.9 1.2-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3z"/><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2z"/></svg>
 </a>
+<script src="/i18n-extra.js" defer></script>
 <script src="/i18n.js" defer></script>
 </body>
 </html>
