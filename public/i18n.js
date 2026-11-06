@@ -21,7 +21,8 @@
   'use strict';
 
   var LANGS = [
-    { id: 'pt', flag: '\u{1F1E7}\u{1F1F7}', code: 'PT', nome: 'Português', html: 'pt-BR' },
+    { id: 'pe', flag: '\u{1F1F5}\u{1F1F9}', code: 'PT', nome: 'Português (Portugal)', html: 'pt-PT' },
+    { id: 'pt', flag: '\u{1F1E7}\u{1F1F7}', code: 'BR', nome: 'Português (Brasil)', html: 'pt-BR' },
     { id: 'en', flag: '\u{1F1EC}\u{1F1E7}', code: 'EN', nome: 'English', html: 'en' },
     { id: 'es', flag: '\u{1F1EA}\u{1F1F8}', code: 'ES', nome: 'Español', html: 'es' },
     { id: 'fr', flag: '\u{1F1EB}\u{1F1F7}', code: 'FR', nome: 'Français', html: 'fr' },
@@ -368,6 +369,76 @@
     return null;
   }
 
+
+  // ---- Portugues de Portugal (pe) ----
+  // O texto-base do site esta em PT-BR (com algumas partes ja em PT-PT).
+  // Para 'pe' aplicam-se frases exatas e, depois, regras de palavras.
+  //PE-INICIO
+  var PE_EXATO = {
+    'Tem sabor que a gente não esquece.': 'Há sabores que não se esquecem.',
+    'Salgadas pra quem ama o clássico, doces pra fechar com chave de ouro.': 'Salgadas para quem adora os clássicos, doces para terminar em grande.',
+    'Tem certeza? Toque outra vez': 'Tem a certeza? Toque outra vez',
+    'Você ainda não escolheu nada. Use os botões + nos sabores acima.': 'Ainda não escolheu nada. Use os botões + nos sabores acima.',
+    'Como você quer receber?': 'Como quer receber?',
+    'Todas as esfihas levam massa de trigo, então contêm glúten. O extra queijo (leite) também é alérgeno.': 'Todas as esfihas levam massa de trigo, pelo que contêm glúten. O extra de queijo (leite) também é um alergénio.',
+    'Tudo é preparado na mesma cozinha, então pode ter traços de outros alérgenos. Se você tem alguma alergia, avisa a gente no WhatsApp antes de pedir.': 'Tudo é preparado na mesma cozinha, pelo que pode ter vestígios de outros alergénios. Se tem alguma alergia, avise-nos no WhatsApp antes de pedir.',
+    'Diga o valor da nota com que vai pagar (ex.: 50€) — a gente já calcula o troco na hora, pronto tanto para a entrega quanto para quando você vier buscar.': 'Diga o valor da nota com que vai pagar (ex.: 50€) — calculamos logo o troco, tanto para a entrega como para quando vier buscar.',
+    'Ao enviar seu pedido, seu nome, telefone e morada (quando for entrega) ficam guardados no nosso sistema de pedidos, só para preparar, entregar e dar suporte ao seu pedido. A mensagem final também é enviada por você pelo WhatsApp, que é um serviço fornecido pela Meta — a conversa fica guardada lá também, sujeita à política de privacidade da própria Meta.': 'Ao enviar o seu pedido, o seu nome, telefone e morada (quando for entrega) ficam guardados no nosso sistema de pedidos, apenas para preparar, entregar e dar apoio ao seu pedido. A mensagem final é também enviada por si pelo WhatsApp, um serviço fornecido pela Meta — a conversa fica igualmente guardada aí, sujeita à política de privacidade da própria Meta.',
+    'Você tem direito a acessar, corrigir ou pedir a eliminação dos seus dados a qualquer momento, é só escrever no WhatsApp. Se não resolvermos, você pode reclamar à CNPD (Comissão Nacional de Proteção de Dados) —': 'Tem direito a aceder, corrigir ou pedir a eliminação dos seus dados a qualquer momento, basta escrever no WhatsApp. Se não resolvermos, pode reclamar à CNPD (Comissão Nacional de Proteção de Dados) —',
+    'A gente usa uma ferramenta de estatísticas que conta visitas de forma anônima e agregada, sem cookies e sem identificar ninguém. O site não tem publicidade nem perfis de usuário.': 'Utilizamos uma ferramenta de estatísticas que conta visitas de forma anónima e agregada, sem cookies e sem identificar ninguém. O site não tem publicidade nem perfis de utilizador.',
+    'Sua opinião ajuda a gente a melhorar. Se tiver uma sugestão ou uma crítica, fale direto com a gente — a gente prefere saber.': 'A sua opinião ajuda-nos a melhorar. Se tiver uma sugestão ou uma crítica, fale diretamente connosco — preferimos saber.'
+  };
+  var PE_ARTIGO_SEU = /(^|\s)(o|do|no|ao|pelo|um|os|dos|nos|aos|pelos)\s$/;
+  var PE_ARTIGO_SUA = /(^|\s)(a|da|na|à|pela|uma|as|das|nas|às|pelas)\s$/;
+  var PE_REGRAS = [
+    [/\b([Nn])a retirada/g, '$1o levantamento'],
+    [/\bda retirada/g, 'do levantamento'],
+    [/\ba retirada/g, 'o levantamento'],
+    [/\bà retirada/g, 'ao levantamento'],
+    [/Retirada/g, 'Levantamento'],
+    [/retirada/g, 'levantamento'],
+    [/retirado/g, 'levantado'],
+    [/levantamento combinada/g, 'levantamento combinado'],
+    [/\bDelivery\b/g, 'Entrega'],
+    [/\bdelivery\b/g, 'entrega'],
+    [/(^|[.!?—]\s*)Você\s+(\S)/g, function (m, a, b) { return a + b.toUpperCase(); }],
+    [/\b(por|para|a) você(?=\s|[.,;:!?]|$)/g, function (m, p) { return p === 'a' ? 'a si' : p + ' si'; }],
+    [/\bcom você(?=\s|[.,;:!?]|$)/g, 'consigo'],
+    [/\b[Vv]ocê\s+/g, ''],
+    [/\b([Aa]visa|[Aa]vise|[Aa]juda|[Aa]valia|[Aa]valie) a gente(?=\s|[.,;:!?]|$)/g, '$1-nos'],
+    [/alimentícios/g, 'alimentares'],
+    [/\bcom a gente(?=\s|[.,;:!?]|$)/g, 'connosco'],
+    [/\bA gente /g, 'Nós '],
+    [/\ba gente /g, 'nós '],
+    [/\bSeu(s?)(?=\s|[.,;:!?]|$)/g, function (m, pl) { return pl ? 'Os seus' : 'O seu'; }],
+    [/\bSua(s?)(?=\s|[.,;:!?]|$)/g, function (m, pl) { return pl ? 'As suas' : 'A sua'; }],
+    [/\bseu(s?)(?=\s|[.,;:!?]|$)/g, function (m, pl, off, str) { var b = str.slice(Math.max(0, off - 7), off).toLowerCase(); return PE_ARTIGO_SEU.test(b) ? m : (pl ? 'os ' : 'o ') + m; }],
+    [/\bsua(s?)(?=\s|[.,;:!?]|$)/g, function (m, pl, off, str) { var b = str.slice(Math.max(0, off - 7), off).toLowerCase(); return PE_ARTIGO_SUA.test(b) ? m : (pl ? 'as ' : 'a ') + m; }],
+    [/\b([Cc])ontato/g, '$1ontacto'],
+    [/\bcelular\b/g, 'telemóvel'],
+    [/\bno cardápio/g, 'na ementa'],
+    [/\bdo cardápio/g, 'da ementa'],
+    [/\bo cardápio/g, 'a ementa'],
+    [/Cardápio/g, 'Ementa'],
+    [/cardápio/g, 'ementa'],
+    [/([Mm])ussarela/g, '$1ozarela'],
+    [/([Aa])lérgeno/g, '$1lergénio'],
+    [/\btraços\b/g, 'vestígios'],
+    [/anônim/g, 'anónim'],
+    [/\busuário/g, 'utilizador'],
+    [/, então /g, ', pelo que '],
+    [/\bdireto (no|com)\b/g, 'diretamente $1'],
+    [/\b([Cc])onfira\b/g, function (m, c) { return c + 'onfirme'; }],
+    [/\bacessar\b/g, 'aceder']
+  ];
+  function paraPE(s) {
+    if (PE_EXATO[s]) return PE_EXATO[s];
+    var r = s;
+    for (var i = 0; i < PE_REGRAS.length; i++) r = r.replace(PE_REGRAS[i][0], PE_REGRAS[i][1]);
+    return r === s ? null : r;
+  }
+  //PE-FIM
+
   // Traducao inversa (qualquer lingua -> PT), para quando o proprio site
   // repoe um texto que ja tinha sido traduzido (ex.: o botao de enviar).
   var INV = {};
@@ -378,6 +449,7 @@
 
   function t(pt, L) {
     if (L === 'pt') return pt;
+    if (L === 'pe') return paraPE(pt);
     var row = D[pt];
     if (row) return row[COL[L]];
     for (var i = 0; i < P.length; i++) {
@@ -576,6 +648,7 @@
     es: ['¿Ver esta página en español?', 'Sí', 'No, gracias'],
     fr: ['Afficher cette page en français ?', 'Oui', 'Non merci'],
     de: ['Diese Seite auf Deutsch anzeigen?', 'Ja', 'Nein danke'],
+    pe: ['Ver esta página em português de Portugal?', 'Sim', 'Não, obrigado'],
   };
   function esconderSugestao() { if (sugestao) { sugestao.remove(); sugestao = null; } }
   function sugerir(wrap, id) {
@@ -593,8 +666,9 @@
   function linguaDoBrowser() {
     var ls = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || 'pt'];
     for (var i = 0; i < ls.length; i++) {
-      var c = String(ls[i] || '').slice(0, 2).toLowerCase();
-      if (c === 'pt') return 'pt';
+      var tag = String(ls[i] || '').toLowerCase();
+      var c = tag.slice(0, 2);
+      if (c === 'pt') return tag === 'pt-pt' ? 'pe' : 'pt';
       if (COL.hasOwnProperty(c)) return c;
     }
     return 'en';
@@ -605,7 +679,7 @@
     var guardada = null;
     try { guardada = localStorage.getItem(CHAVE); } catch (e) {}
     observar();
-    if (guardada && (guardada === 'pt' || COL.hasOwnProperty(guardada))) {
+    if (guardada && (guardada === 'pt' || guardada === 'pe' || COL.hasOwnProperty(guardada))) {
       aplicar(guardada);
     } else {
       aplicar('pt');
