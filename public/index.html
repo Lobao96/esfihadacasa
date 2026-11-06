@@ -468,6 +468,14 @@
     border-radius: 10px; background: var(--white); color: var(--ink);
   }
   #cpInput, #locInput { margin-top: 8px; }
+  .tel-row { display: flex; gap: 8px; }
+  .tel-row #telInput { flex: 1; min-width: 0; width: auto; }
+  #telPais {
+    flex: 0 0 auto; width: 118px; font-family: inherit; font-size: 1rem; font-weight: 700;
+    padding: 11px 6px 11px 10px; border: 1.5px solid rgba(58,31,18,0.18);
+    border-radius: 10px; background: var(--white); color: var(--ink);
+  }
+  #telPais:focus { outline: none; border-color: var(--red); }
   #cpInput:focus, #locInput:focus, #telInput:focus, #nomeInput:focus { outline: none; border-color: var(--red); }
   .cotacao {
     margin-top: 10px; padding: 11px 13px; border-radius: 10px;
@@ -903,10 +911,13 @@
       <p class="tel-nota">Para sabermos a quem entregar.</p>
 
       <p class="extras-title">Seu WhatsApp</p>
-      <input type="tel" id="telInput" inputmode="tel" placeholder="Ex.: +351 912 345 678" value="+351 "
-             autocomplete="tel" aria-label="Seu número de WhatsApp" oninput="validarTelAoVivo()" onblur="validarTelAoVivo()">
+      <div class="tel-row">
+        <select id="telPais" aria-label="Indicativo do país" onchange="telPaisManual=true;validarTelAoVivo()"><option value="+351">🇵🇹 +351</option><option value="+55">🇧🇷 +55</option><option value="+44">🇬🇧 +44</option><option value="+353">🇮🇪 +353</option><option value="+34">🇪🇸 +34</option><option value="+33">🇫🇷 +33</option><option value="+49">🇩🇪 +49</option><option value="+41">🇨🇭 +41</option><option value="+31">🇳🇱 +31</option><option value="+32">🇧🇪 +32</option><option value="+39">🇮🇹 +39</option><option value="+48">🇵🇱 +48</option><option value="+46">🇸🇪 +46</option><option value="+380">🇺🇦 +380</option><option value="+47">🇳🇴 +47</option><option value="+45">🇩🇰 +45</option><option value="+358">🇫🇮 +358</option><option value="+43">🇦🇹 +43</option><option value="+352">🇱🇺 +352</option><option value="+1">🇺🇸 +1</option></select>
+        <input type="tel" id="telInput" inputmode="tel" placeholder="912 345 678" value=""
+               autocomplete="tel-national" aria-label="Seu número de WhatsApp" oninput="validarTelAoVivo()" onblur="validarTelAoVivo()">
+      </div>
       <p class="tel-nota">Para avisarmos quando o pedido estiver a caminho, e para o estafeta poder ligar se não encontrar a morada.</p>
-      <p class="tel-erro" id="telErro" style="display:none;">Esse número não parece certo — comece com + e o indicativo do país (ex.: +351 912 345 678). Sem indicativo não conseguimos entrar em contato se houver algum problema.</p>
+      <p class="tel-erro" id="telErro" style="display:none;">Esse número não parece certo — confirme o indicativo do país e escreva só o número (ex.: 912 345 678). Sem um número válido não conseguimos entrar em contato se houver algum problema.</p>
 
       <p class="extras-title">Pagamento</p>
       <div class="pay-row" id="payRow"></div>
@@ -2599,35 +2610,63 @@
     mostrarFaltas([]);
   }
 
-  // Numero de WhatsApp: o INDICATIVO DO PAIS e obrigatorio (+ ou 00 na frente),
-  // para portugueses e estrangeiros. +351: 9 digitos a comecar por 2, 3 ou 9
-  // (rejeita sequencias de digitos todos iguais). Outros paises: 8 a 15
-  // digitos -- o WhatsApp so precisa do numero completo com indicativo.
+  // Numero de WhatsApp: indicativo numa caixa a parte (muda com o idioma, mas
+  // o cliente pode trocar) + numero nacional. O que segue para o servidor e
+  // sempre "+<indicativo><numero>". Se o cliente escrever o numero ja com
+  // + ou 00 na frente, esse indicativo manda e a caixa acompanha.
+  let telPaisManual = false;
+  const INDICATIVO_IDIOMA = { pe: '+351', pt: '+55', en: '+44', es: '+34', fr: '+33', de: '+49', nl: '+31', it: '+39', pl: '+48', sv: '+46', ua: '+380' };
+  function telPaisPorIdioma(l) {
+    const sel = document.getElementById('telPais');
+    const cod = INDICATIVO_IDIOMA[l];
+    if (!sel || !cod || telPaisManual) return;
+    sel.value = cod;
+  }
+  window.addEventListener('esfiha-idioma', e => telPaisPorIdioma(e.detail));
+  document.addEventListener('DOMContentLoaded', () => telPaisPorIdioma(window.esfihaLang));
+
+  function telCompleto() {
+    const sel = document.getElementById('telPais');
+    const raw = ((document.getElementById('telInput') || {}).value || '').trim();
+    if (!raw) return '';
+    if (/^(\+|00)/.test(raw)) {
+      const d = raw.replace(/\D/g, '');
+      return '+' + (raw.startsWith('00') ? d.slice(2) : d);
+    }
+    let d = raw.replace(/\D/g, '');
+    const cod = (sel && sel.value) || '+351';
+    if (cod !== '+351') d = d.replace(/^0+/, '');
+    return cod + d;
+  }
+
+  // +351: 9 digitos a comecar por 2, 3 ou 9 (rejeita todos iguais).
+  // Outros paises: 8 a 15 digitos no total -- chega para o WhatsApp.
   function telValido(tel) {
     const bruto = (tel || '').trim();
-    if (!/^(\+|00)/.test(bruto)) return false;
+    if (!bruto.startsWith('+')) return false;
     let d = bruto.replace(/\D/g, '');
-    if (bruto.startsWith('00')) d = d.slice(2);
     if (d.startsWith('351')) {
       d = d.slice(3);
       return /^[239]\d{8}$/.test(d) && !/^(\d)\1{8}$/.test(d);
     }
     return d.length >= 8 && d.length <= 15 && !/^(\d)\1+$/.test(d);
   }
-
-  // O que segue para o servidor: "00" no inicio passa a "+", para o numero
-  // ficar com o indicativo certo no painel e no link do WhatsApp.
-  function telParaEnviar(tel) {
-    const bruto = (tel || '').trim();
-    return bruto.startsWith('00') ? '+' + bruto.slice(2) : bruto;
-  }
+  function telParaEnviar() { return telCompleto(); }
 
   function validarTelAoVivo() {
     const el = document.getElementById('telInput');
     const erro = document.getElementById('telErro');
     if (!el || !erro) return;
-    const v = el.value || '';
-    const mostrar = (v.replace(/\D/g, '').length >= 9 || (v.trim() && !/^(\+|00)/.test(v.trim()))) && !telValido(v);
+    const raw = (el.value || '').trim();
+    // Se escreveu +xx / 00xx no campo do numero, a caixa acompanha
+    const sel = document.getElementById('telPais');
+    if (sel && /^(\+|00)/.test(raw)) {
+      const d = raw.replace(/\D/g, '').replace(/^00/, '');
+      const hit = Array.from(sel.options).map(o => o.value).filter(v => d.startsWith(v.slice(1))).sort((x, y) => y.length - x.length)[0];
+      if (hit) { sel.value = hit; telPaisManual = true; }
+    }
+    const completo = telCompleto();
+    const mostrar = raw.replace(/\D/g, '').length >= 7 && !telValido(completo);
     erro.style.display = mostrar ? 'block' : 'none';
     el.classList.toggle('campo-erro', mostrar);
   }
@@ -2934,8 +2973,8 @@
     if (qtdGratisEsfihas() > 0 && gratisEsfihas.some(s => !s)) faltas.push('Esfihas grátis: falta escolher o sabor de todas.');
     const nomeV = ((document.getElementById('nomeInput') || {}).value || '').trim();
     if (nomeV.length < 2) faltas.push('Falta escrever o seu nome.');
-    const telRaw = (document.getElementById('telInput') || {}).value || '';
-    if (!telValido(telRaw)) faltas.push('O número de WhatsApp está incompleto ou errado — comece com + e o indicativo do país (ex.: +351 912 345 678). É por aí que entramos em contacto se houver algum problema.');
+    const telRaw = telCompleto();
+    if (!telValido(telRaw)) faltas.push('O número de WhatsApp está incompleto ou errado — confirme o indicativo do país e escreva o número. É por aí que entramos em contacto se houver algum problema.');
     if (pagaDinheiro()) {
       const chk = document.getElementById('trocoCheck');
       if (chk && chk.checked) {
@@ -3014,7 +3053,7 @@
           morada: orderType === 'entrega' ? ruaCompleta() : '',
           localidade: orderType === 'entrega' ? ((document.getElementById('locInput') || {}).value || '').trim() : '',
           nome: (document.getElementById('nomeInput') || {}).value || '',
-          telefone: telParaEnviar((document.getElementById('telInput') || {}).value || ''),
+          telefone: telParaEnviar(),
           origem: ORIGEM.origem,
           campanha: ORIGEM.campanha,
           total_cent: Math.round(computeTotalBruto() * 100),
