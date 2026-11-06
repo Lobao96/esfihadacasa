@@ -2639,7 +2639,7 @@
     return cod + d;
   }
 
-  // +351: 9 digitos a comecar por 2, 3 ou 9 (rejeita todos iguais).
+  // +351: 9 digitos a comecar por 9 (telemovel; rejeita todos iguais).
   // Outros paises: 8 a 15 digitos no total -- chega para o WhatsApp.
   function telValido(tel) {
     const bruto = (tel || '').trim();
@@ -2647,7 +2647,7 @@
     let d = bruto.replace(/\D/g, '');
     if (d.startsWith('351')) {
       d = d.slice(3);
-      return /^[239]\d{8}$/.test(d) && !/^(\d)\1{8}$/.test(d);
+      return /^9\d{8}$/.test(d) && !/^(\d)\1{8}$/.test(d);
     }
     return d.length >= 8 && d.length <= 15 && !/^(\d)\1+$/.test(d);
   }
