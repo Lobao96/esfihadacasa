@@ -570,7 +570,7 @@
       api('/painel/pedidos').then(() => {
         document.getElementById('login').style.display = 'none';
         document.getElementById('app').style.display = '';
-        document.getElementById('diaSel').value = diaLisboaHoje();
+        document.getElementById('diaSel').value = new URLSearchParams(location.search).get('dia') || diaLisboaHoje();
         relogio(); setInterval(relogio, 1000);
         carregar();
       }).catch(() => {});

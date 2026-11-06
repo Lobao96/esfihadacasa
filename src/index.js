@@ -978,6 +978,17 @@ async function registarVisita(request, env) {
 
 async function listar(request, env) {
   const url = new URL(request.url);
+  // Vista mensal (Recibos): ?mes=AAAA-MM devolve os pedidos de todo o mes,
+  // sem stock nem estado -- so o necessario para a tabela mensal.
+  const mes = (url.searchParams.get('mes') || '').trim();
+  if (/^\d{4}-\d{2}$/.test(mes)) {
+    const { results } = await env.DB.prepare(
+      `SELECT id, numero, dia, ensaio, estado, pago, modo, localidade, morada,
+              total_cent, n_esfihas, itens, criado_em, telefone, nome
+         FROM pedidos WHERE dia LIKE ? ORDER BY dia ASC, numero ASC`
+    ).bind(mes + '-%').all();
+    return j({ ok: true, mes, pedidos: results || [] });
+  }
   const dia = url.searchParams.get('dia') || diaLisboa();
   const { results } = await env.DB.prepare(
     `SELECT id, numero, senha, ensaio, estado, pago, modo, localidade, morada,

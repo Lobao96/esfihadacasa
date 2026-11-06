@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <style>
   :root {
-    --red: #C8232B; --cream: #FFF3DC; --ink: #3A1F12; --ink-soft: #6B4A38;
+    --red: #C8232B; --cream: #FFF3DC; --ink: #3A1F12; --ink-soft: #6B4A38; --verde: #1E8C46;
     --line: rgba(58,31,18,0.14); --card: #FFFFFF;
   }
   * { box-sizing: border-box; }
@@ -88,14 +88,28 @@
   </header>
   <div class="wrap">
     <div class="filtros no-print">
+      <button id="btDia" onclick="setModo('dia')" style="font-weight:800">📅 Dia</button>
+      <button id="btMes" onclick="setModo('mes')">🗓️ Mês</button>
+    </div>
+    <div id="vistaDia">
+    <div class="filtros no-print">
       <input type="date" id="diaSel" onchange="carregar()">
       <button onclick="hoje()">Hoje</button>
       <button onclick="ontem()">Ontem</button>
       <button onclick="window.print()">🖨️ Imprimir</button>
     </div>
+    <div id="caixaDia" class="no-print"></div>
     <div class="resumo" id="resumo"></div>
     <div id="lista"></div>
     <div id="porConfirmar" class="no-print"></div>
+    </div>
+    <div id="vistaMes" style="display:none">
+      <div class="filtros no-print">
+        <input type="month" id="mesSel" onchange="carregarMes()">
+        <button onclick="exportarMesCsv()">⬇️ Exportar mês (CSV)</button>
+      </div>
+      <div id="mesConteudo"></div>
+    </div>
   </div>
   <nav class="nav no-print">
     <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
@@ -258,6 +272,13 @@
     const lista = document.getElementById('lista');
     const resumo = document.getElementById('resumo');
 
+    // Caixa do dia: compara o que os recibos dizem com o que foi confirmado
+    // na Caixa e deixa confirmar com um toque.
+    mostrarCaixaDia(dia,
+      pedidos.filter(p => metodoDe(p) === 'dinheiro').reduce((a, p) => a + (p.total_cent || 0), 0),
+      pedidos.filter(p => metodoDe(p) === 'mbway').reduce((a, p) => a + (p.total_cent || 0), 0),
+      pendentes.length);
+
     if (!pedidos.length) {
       lista.innerHTML = '<div class="vazio">Sem pedidos pagos neste dia.</div>';
       resumo.innerHTML = '';
@@ -316,6 +337,119 @@
       <div><b>${retiradas}</b>levantamentos</div>
       <div><b>${esfihasPagas}</b>esfihas pagas</div>
       <div><b>${esfihasGratis}</b>esfihas em oferta</div>${andrezaHtml}`;
+  }
+
+  // ---------- Caixa junto aos recibos ----------
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const fmtNum = v => v.toFixed(2).replace('.', ',');
+  function estadoCaixa(fecho, din, mb, nPend) {
+    // devolve {tipo, texto}
+    if (!fecho) return { tipo: 'por', texto: din || mb || nPend ? '⏳ Caixa por confirmar' : 'sem movimento' };
+    const dD = (fecho.dinheiro_confirmado_cent || 0) - din, dM = (fecho.mbway_confirmado_cent || 0) - mb;
+    if (Math.abs(dD) >= 1 || Math.abs(dM) >= 1) {
+      const partes = [];
+      if (Math.abs(dD) >= 1) partes.push(`💵 ${dD > 0 ? '+' : '-'}${eurCent(Math.abs(dD))}`);
+      if (Math.abs(dM) >= 1) partes.push(`💳 ${dM > 0 ? '+' : '-'}${eurCent(Math.abs(dM))}`);
+      return { tipo: 'dif', texto: '⚠️ Diferença: ' + partes.join(' · ') };
+    }
+    return { tipo: 'ok', texto: '✅ Caixa confirmada' };
+  }
+  async function mostrarCaixaDia(dia, din, mb, nPend) {
+    const box = document.getElementById('caixaDia');
+    let fecho = null;
+    try { const r = await api('/painel/fecho-caixa?dia=' + encodeURIComponent(dia)); fecho = r.fecho || null; } catch (e) {}
+    const st = estadoCaixa(fecho, din, mb, nPend);
+    if (st.tipo === 'por' && !din && !mb && !nPend) { box.innerHTML = ''; return; }
+    const cor = st.tipo === 'ok' ? 'var(--verde)' : (st.tipo === 'dif' ? 'var(--red)' : '#8A5A00');
+    box.innerHTML = `<div class="pendentes" style="border-color:${cor}">
+      <div class="linha"><span><b style="color:${cor}">${st.texto}</b><br><small>Recibos: 💵 ${eurCent(din)} · 💳 ${eurCent(mb)}${fecho ? ` — Caixa: 💵 ${eurCent(fecho.dinheiro_confirmado_cent)} · 💳 ${eurCent(fecho.mbway_confirmado_cent)}` : ''}</small></span>
+      <a class="no-print" href="/painel/caixa.html?dia=${dia}" style="color:var(--red);font-weight:800;white-space:nowrap">${st.tipo === 'ok' ? 'ver caixa' : 'confirmar na caixa'} →</a></div></div>`;
+  }
+
+  // ---------- Vista mensal ----------
+  let modo = 'dia';
+  let mesDados = [];
+  function setModo(m) {
+    modo = m;
+    document.getElementById('vistaDia').style.display = m === 'dia' ? '' : 'none';
+    document.getElementById('vistaMes').style.display = m === 'mes' ? '' : 'none';
+    document.getElementById('btDia').style.fontWeight = m === 'dia' ? '800' : '';
+    document.getElementById('btMes').style.fontWeight = m === 'mes' ? '800' : '';
+    if (m === 'mes') {
+      const el = document.getElementById('mesSel');
+      if (!el.value) el.value = document.getElementById('diaSel').value.slice(0, 7) || diaLisboaHoje().slice(0, 7);
+      carregarMes();
+    } else carregar();
+  }
+  function abrirDia(dia) { document.getElementById('diaSel').value = dia; setModo('dia'); window.scrollTo({ top: 0 }); }
+
+  function calcMes(pedidosMes, fechos) {
+    const reais = pedidosMes.filter(p => !p.ensaio && p.estado !== 'cancelado');
+    const dias = {};
+    reais.forEach(p => {
+      const d = dias[p.dia] || (dias[p.dia] = { dia: p.dia, n: 0, ent: 0, ret: 0, din: 0, mb: 0, total: 0, pend: 0, pendCent: 0, esf: 0 });
+      if (!p.pago) { d.pend++; d.pendCent += p.total_cent || 0; return; }
+      d.n++; d.total += p.total_cent || 0;
+      if (p.modo === 'entrega') d.ent++; else d.ret++;
+      const m = metodoDe(p);
+      if (m === 'dinheiro') d.din += p.total_cent || 0; else if (m === 'mbway') d.mb += p.total_cent || 0;
+      d.esf += p.n_esfihas || 0;
+    });
+    const mapaF = {}; (fechos || []).forEach(f => { mapaF[f.dia] = f; });
+    return Object.values(dias).sort((a, b) => a.dia < b.dia ? -1 : 1).map(d => Object.assign(d, { fecho: mapaF[d.dia] || null, st: estadoCaixa(mapaF[d.dia] || null, d.din, d.mb, d.pend) }));
+  }
+
+  async function carregarMes() {
+    const m = document.getElementById('mesSel').value;
+    if (!m) return;
+    const [r, rf] = await Promise.all([api('/painel/pedidos?mes=' + encodeURIComponent(m)), api('/painel/fecho-caixa?dias=366')]);
+    mesDados = calcMes(r.pedidos || [], rf.historico || []);
+    const div = document.getElementById('mesConteudo');
+    const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
+    if (!mesDados.length) { div.innerHTML = `<div class="vazio">Sem pedidos em ${nomeMes}.</div>`; return; }
+    const T = mesDados.reduce((a, d) => { ['n','ent','ret','din','mb','total','pend','pendCent','esf'].forEach(k => a[k] += d[k]); return a; }, { n:0, ent:0, ret:0, din:0, mb:0, total:0, pend:0, pendCent:0, esf:0 });
+    const porConf = mesDados.filter(d => d.st.tipo !== 'ok' && d.st.tipo !== undefined && (d.n || d.pend) && d.st.texto !== 'sem movimento').length;
+    const dd = d => { const [y, mo, di] = d.split('-'); const w = ['dom','seg','ter','qua','qui','sex','sáb'][new Date(+y, +mo - 1, +di).getDay()]; return `${w}, ${di}/${mo}`; };
+    div.innerHTML = `
+      <div class="resumo">
+        <div><b>${T.n}</b>recibos</div>
+        <div><b>${eurCent(T.total)}</b>total do mês</div>
+        <div><b>💵 ${eurCent(T.din)}</b>em dinheiro</div>
+        <div><b>💳 ${eurCent(T.mb)}</b>em MB Way</div>
+        <div><b>${T.ent}</b>entregas</div>
+        <div><b>${T.ret}</b>levantamentos</div>
+        <div><b>${T.esf}</b>esfihas</div>
+        <div><b>${mesDados.length}</b>dias com pedidos</div>
+      </div>
+      ${T.pend ? `<div class="pendentes"><h2>⏳ ${T.pend} pedido(s) por marcar como pago (${eurCent(T.pendCent)})</h2><div class="linha"><span>Abre o dia indicado na tabela para os marcar.</span></div></div>` : ''}
+      ${porConf ? `<div class="pendentes"><h2>💰 ${porConf} dia(s) com a caixa por confirmar ou com diferença</h2></div>` : ''}
+      <table class="itens" style="width:100%;font-size:0.85rem">
+        <thead><tr><th>Dia</th><th class="preco">Rec.</th><th class="preco">💵</th><th class="preco">💳</th><th class="preco">Total</th><th>Caixa</th></tr></thead>
+        <tbody>${mesDados.map(d => `
+          <tr style="cursor:pointer" onclick="abrirDia('${d.dia}')">
+            <td><b>${dd(d.dia)}</b><div style="font-size:0.75rem;color:var(--ink-soft)">${d.ent} ent. · ${d.ret} lev.${d.pend ? ` · <span style="color:var(--red)">${d.pend} por pagar</span>` : ''}</div></td>
+            <td class="preco">${d.n}</td><td class="preco">${eurCent(d.din)}</td><td class="preco">${eurCent(d.mb)}</td><td class="preco"><b>${eurCent(d.total)}</b></td>
+            <td style="font-size:0.78rem">${d.st.texto}</td></tr>`).join('')}
+        </tbody>
+        <tfoot><tr style="font-weight:800;border-top:2px solid var(--line)"><td>Total</td><td class="preco">${T.n}</td><td class="preco">${eurCent(T.din)}</td><td class="preco">${eurCent(T.mb)}</td><td class="preco">${eurCent(T.total)}</td><td></td></tr></tfoot>
+      </table>
+      <div class="nota-custo" style="font-size:0.78rem;color:var(--ink-soft);margin-top:8px">Toca num dia para ver os recibos desse dia. Só entram pedidos pagos nos totais; cancelados e ensaios ficam de fora.</div>`;
+  }
+
+  function exportarMesCsv() {
+    if (!mesDados.length) return;
+    const m = document.getElementById('mesSel').value;
+    const e = c => fmtNum((c || 0) / 100);
+    const L = [['Dia', 'Recibos', 'Entregas', 'Levantamentos', 'Esfihas', 'Dinheiro (EUR)', 'MB Way (EUR)', 'Total (EUR)', 'Por pagar (nº)', 'Caixa dinheiro confirmado (EUR)', 'Caixa MB Way confirmado (EUR)', 'Estado da caixa']];
+    const strip = t => t.replace(/[✅⏳⚠️💵💳]/gu, '').trim();
+    mesDados.forEach(d => L.push([d.dia, d.n, d.ent, d.ret, d.esf, e(d.din), e(d.mb), e(d.total), d.pend, d.fecho ? e(d.fecho.dinheiro_confirmado_cent) : '', d.fecho ? e(d.fecho.mbway_confirmado_cent) : '', strip(d.st.texto)]));
+    const T = mesDados.reduce((a, d) => { ['n','ent','ret','esf','din','mb','total','pend'].forEach(k => a[k] += d[k]); return a; }, { n:0, ent:0, ret:0, esf:0, din:0, mb:0, total:0, pend:0 });
+    L.push(['TOTAL DO MÊS', T.n, T.ent, T.ret, T.esf, e(T.din), e(T.mb), e(T.total), T.pend, '', '', '']);
+    const csv = '﻿' + L.map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = 'recibos-esfiha-da-casa-' + m + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
 
   (function () {
