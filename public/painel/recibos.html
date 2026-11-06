@@ -100,11 +100,13 @@
       <button id="btMes" onclick="setModo('mes')">🗓️ Mês</button>
     </div>
     <div id="vistaDia">
+    <div id="voltarMes" class="no-print" style="display:none;margin-bottom:10px"><button onclick="history.back()" style="border:1.5px solid var(--line);background:transparent;border-radius:8px;padding:9px 14px;font-weight:800;color:var(--red);cursor:pointer;font-family:inherit">← Voltar ao mês</button></div>
     <div class="filtros no-print">
       <input type="date" id="diaSel" onchange="carregar()">
       <button onclick="hoje()">Hoje</button>
       <button onclick="ontem()">Ontem</button>
       <button onclick="window.print()">🖨️ Imprimir</button>
+      <button onclick="gerarPdfDia()">📄 Guardar PDF do dia</button>
     </div>
     <div id="caixaDia" class="no-print"></div>
     <div class="resumo" id="resumo"></div>
@@ -115,11 +117,8 @@
       <div class="filtros no-print">
         <input type="month" id="mesSel" onchange="carregarMes()">
         <button onclick="exportarMesCsv()">⬇️ Exportar mês (CSV)</button>
-        <button onclick="imprimirMes()">📄 PDF do mês</button>
-      </div>
-      <div id="cabImpressao" class="cab-impressao">
-        <img src="/icon-512.png" alt="Esfiha da Casa">
-        <div><div class="t1">Esfiha da Casa</div><div class="t2" id="cabTitulo"></div><div class="t3" id="cabData"></div></div>
+        <button onclick="gerarPdfMes(false)">📄 PDF resumo do mês</button>
+        <button onclick="gerarPdfMes(true)">📚 PDF do mês com recibos de cada dia</button>
       </div>
       <div id="mesConteudo"></div>
     </div>
@@ -133,6 +132,8 @@
   </nav>
 </div>
 
+<script src="/painel/jspdf.umd.min.js"></script>
+<script src="/painel/pdf-util.js"></script>
 <script>
   const API = '/api';
   let pass = '';
@@ -382,8 +383,12 @@
   // ---------- Vista mensal ----------
   let modo = 'dia';
   let mesDados = [];
-  function setModo(m) {
+  let mesPedidos = [];
+  let veioDoMes = false;
+  function setModo(m, doMes) {
     modo = m;
+    veioDoMes = !!(m === 'dia' && doMes);
+    document.getElementById('voltarMes').style.display = veioDoMes ? '' : 'none';
     document.getElementById('vistaDia').style.display = m === 'dia' ? '' : 'none';
     document.getElementById('vistaMes').style.display = m === 'mes' ? '' : 'none';
     document.getElementById('btDia').style.fontWeight = m === 'dia' ? '800' : '';
@@ -394,7 +399,13 @@
       carregarMes();
     } else carregar();
   }
-  function abrirDia(dia) { document.getElementById('diaSel').value = dia; setModo('dia'); window.scrollTo({ top: 0 }); }
+  function abrirDia(dia) {
+    document.getElementById('diaSel').value = dia;
+    try { history.pushState({ dia: 1 }, ''); } catch (e) {}
+    setModo('dia', true); window.scrollTo({ top: 0 });
+  }
+  // gesto/botao "voltar" do telemovel regressa ao mes
+  window.addEventListener('popstate', () => { if (modo === 'dia' && veioDoMes) setModo('mes'); });
 
   function calcMes(pedidosMes, fechos) {
     const reais = pedidosMes.filter(p => !p.ensaio && p.estado !== 'cancelado');
@@ -416,7 +427,8 @@
     const m = document.getElementById('mesSel').value;
     if (!m) return;
     const [r, rf] = await Promise.all([api('/painel/pedidos?mes=' + encodeURIComponent(m)), api('/painel/fecho-caixa?dias=366')]);
-    mesDados = calcMes(r.pedidos || [], rf.historico || []);
+    mesPedidos = r.pedidos || [];
+    mesDados = calcMes(mesPedidos, rf.historico || []);
     const div = document.getElementById('mesConteudo');
     const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
     if (!mesDados.length) { div.innerHTML = `<div class="vazio">Sem pedidos em ${nomeMes}.</div>`; return; }
@@ -449,17 +461,6 @@
       <div class="no-print" style="font-size:0.78rem;color:var(--ink-soft);margin-top:8px">Toca num dia para ver os recibos desse dia. Só entram pedidos pagos nos totais; cancelados e ensaios ficam de fora.</div>`;
   }
 
-  function imprimirMes() {
-    if (!mesDados.length) return;
-    const m = document.getElementById('mesSel').value;
-    document.getElementById('cabTitulo').textContent = 'Recibos — ' + MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
-    document.getElementById('cabData').textContent = 'Gerado em ' + new Date().toLocaleDateString('pt-PT') + ' · só pedidos pagos (cancelados e ensaios excluídos)';
-    const antes = document.title;
-    document.title = 'recibos-esfiha-da-casa-' + m;
-    window.print();
-    document.title = antes;
-  }
-
   function exportarMesCsv() {
     if (!mesDados.length) return;
     const m = document.getElementById('mesSel').value;
@@ -474,6 +475,100 @@
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     a.download = 'recibos-esfiha-da-casa-' + m + '.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  // ---------- PDFs (guardados direto, sem passar pela impressao) ----------
+  const dataLongaPdf = d => { const [y, m, di] = d.split('-').map(Number); return new Date(y, m - 1, di).toLocaleDateString('pt-PT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }); };
+  const corEstado = t => t === 'ok' ? PDFU.VERDE : (t === 'dif' ? PDFU.VERMELHO : PDFU.AMBAR);
+
+  function pdfRecibo(c, p) {
+    const d = c.doc, X = PDFU.MX + 4, W = PDFU.UTIL - 8;
+    const dados = dadosDe(p);
+    const cp = (dados.entrega && dados.entrega.codigo_postal) ? String(dados.entrega.codigo_postal).trim() : '';
+    const addr = p.modo === 'entrega'
+      ? 'Entrega — ' + ([p.morada, p.localidade].filter(Boolean).join(', ') || 'morada não indicada') + (cp ? ' · ' + cp : '')
+      : 'Retirada no local';
+    const tel = p.telefone ? 'Tel: ' + p.telefone : '';
+    d.setFont('helvetica', 'normal'); d.setFontSize(9);
+    const addrL = d.splitTextToSize(PDFU.limpa(addr + (tel ? ' · ' + tel : '')), W);
+    const itens = linhasTabela(dados);
+    const metodo = PDFU.limpa(metodoPagamentoLabel(p));
+    const h = 8 + addrL.length * 4.2 + Math.max(1, itens.length) * 4.4 + 16;
+    c.precisa(h + 3);
+    const top = c.y - 4;
+    d.setDrawColor(200, 190, 175); d.setLineWidth(0.3); d.roundedRect(PDFU.MX, top, PDFU.UTIL, h, 2, 2);
+    let y = c.y + 1;
+    d.setFont('helvetica', 'bold'); d.setFontSize(10.5); d.setTextColor.apply(d, PDFU.TINTA);
+    d.text(PDFU.limpa('Pedido #' + p.numero + ' · ' + horaDe(p.criado_em) + (p.nome ? ' · ' + p.nome : '')), X, y); y += 5.2;
+    d.setFont('helvetica', 'normal'); d.setFontSize(9); d.setTextColor.apply(d, PDFU.CINZA);
+    d.text(addrL, X, y); y += addrL.length * 4.2 + 1.5;
+    d.setTextColor.apply(d, PDFU.TINTA); d.setFontSize(9);
+    (itens.length ? itens : [{ texto: '(sem detalhe)', preco: '', sub: false }]).forEach(l => {
+      d.setTextColor.apply(d, l.sub ? PDFU.CINZA : PDFU.TINTA);
+      d.text(PDFU.limpa(l.texto), X + (l.sub ? 4 : 0), y);
+      if (l.preco) d.text(PDFU.limpa(l.preco), PDFU.LARG - PDFU.MX - 4, y, { align: 'right' });
+      y += 4.4;
+    });
+    y += 1.2; d.setDrawColor(200, 190, 175); d.line(X, y - 3, PDFU.LARG - PDFU.MX - 4, y - 3);
+    d.setFont('helvetica', 'bold'); d.setFontSize(10.5); d.setTextColor.apply(d, PDFU.TINTA);
+    d.text('Total', X, y + 1); d.text(PDFU.limpa(eurCent(p.total_cent)), PDFU.LARG - PDFU.MX - 4, y + 1, { align: 'right' });
+    d.setFont('helvetica', 'normal'); d.setFontSize(8.5); d.setTextColor.apply(d, PDFU.CINZA);
+    d.text(metodo, X, y + 6);
+    c.y = top + h + 5;
+  }
+
+  function pdfSecaoDia(c, dia, reais, fecho) {
+    const pagos = reais.filter(p => p.pago), pend = reais.filter(p => !p.pago);
+    let din = 0, mb = 0, total = 0, ent = 0, ret = 0, esf = 0;
+    pagos.forEach(p => {
+      total += p.total_cent || 0; if (p.modo === 'entrega') ent++; else ret++;
+      const m = metodoDe(p); if (m === 'dinheiro') din += p.total_cent || 0; else if (m === 'mbway') mb += p.total_cent || 0;
+      esf += p.n_esfihas || 0;
+    });
+    c.titulo2(dataLongaPdf(dia).replace(/^./, x => x.toUpperCase()), PDFU.VERMELHO);
+    c.resumo([[String(pagos.length), 'recibos'], [eurCent(total), 'total do dia'], [eurCent(din), 'em dinheiro'], [eurCent(mb), 'em MB Way'],
+              [String(ent), 'entregas'], [String(ret), 'levantamentos'], [String(esf), 'esfihas'], [String(pend.length), 'por pagar']], 4);
+    const st = estadoCaixa(fecho, din, mb, pend.length);
+    c.aviso(st.texto + (fecho ? '   (Caixa: dinheiro ' + eurCent(fecho.dinheiro_confirmado_cent) + ' · MB Way ' + eurCent(fecho.mbway_confirmado_cent) + ')' : ''), corEstado(st.tipo));
+    if (pend.length) {
+      c.texto('Por marcar como pago: ' + pend.map(p => '#' + p.numero + (p.nome ? ' ' + p.nome : '') + ' ' + eurCent(p.total_cent)).join(' · '), { cor: PDFU.AMBAR, bold: true, depois: 4 });
+    }
+    pagos.sort((a, b) => (a.criado_em || '').localeCompare(b.criado_em || '')).forEach(p => pdfRecibo(c, p));
+    if (!pagos.length) c.texto('Sem recibos pagos neste dia.', { cor: PDFU.CINZA });
+  }
+
+  async function gerarPdfDia() {
+    const dia = document.getElementById('diaSel').value;
+    const [r, rf] = await Promise.all([api('/painel/pedidos?dia=' + encodeURIComponent(dia)), api('/painel/fecho-caixa?dia=' + encodeURIComponent(dia))]);
+    const reais = (r.pedidos || []).filter(p => !p.ensaio && p.estado !== 'cancelado');
+    const c = await PDFU.novo('Recibos do dia ' + dia.split('-').reverse().join('/'), 'Gerado em ' + new Date().toLocaleDateString('pt-PT') + ' · só pedidos pagos nos totais');
+    pdfSecaoDia(c, dia, reais, rf.fecho || null);
+    c.guardar('recibos-esfiha-da-casa-' + dia + '.pdf');
+  }
+
+  async function gerarPdfMes(detalhe) {
+    if (!mesDados.length) return;
+    const m = document.getElementById('mesSel').value;
+    const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
+    const c = await PDFU.novo('Recibos — ' + nomeMes, 'Gerado em ' + new Date().toLocaleDateString('pt-PT') + ' · só pedidos pagos nos totais (cancelados e ensaios excluídos)');
+    const T = mesDados.reduce((a, d) => { ['n','ent','ret','din','mb','total','pend','pendCent','esf'].forEach(k => a[k] += d[k]); return a; }, { n:0, ent:0, ret:0, din:0, mb:0, total:0, pend:0, pendCent:0, esf:0 });
+    c.resumo([[String(T.n), 'recibos'], [eurCent(T.total), 'total do mês'], [eurCent(T.din), 'em dinheiro'], [eurCent(T.mb), 'em MB Way'],
+              [String(T.ent), 'entregas'], [String(T.ret), 'levantamentos'], [String(T.esf), 'esfihas'], [String(mesDados.length), 'dias com pedidos']], 4);
+    if (T.pend) c.aviso(T.pend + ' pedido(s) por marcar como pago (' + eurCent(T.pendCent) + ')', PDFU.AMBAR);
+    const semOk = mesDados.filter(d => d.st.tipo !== 'ok' && d.st.texto !== 'sem movimento').length;
+    if (semOk) c.aviso(semOk + ' dia(s) com a caixa por confirmar ou com diferença', PDFU.AMBAR);
+    const dd = d => { const [y, mo, di] = d.split('-'); return ['dom','seg','ter','qua','qui','sex','sáb'][new Date(+y, +mo - 1, +di).getDay()] + ' ' + di + '/' + mo; };
+    c.tabela(
+      [{ h: 'Dia', w: 24 }, { h: 'Rec.', w: 10, a: 'r' }, { h: 'Ent./Lev.', w: 16, a: 'r' }, { h: 'Dinheiro', w: 19, a: 'r' }, { h: 'MB Way', w: 19, a: 'r' }, { h: 'Total', w: 20, a: 'r' }, { h: 'Caixa', w: 52 }],
+      mesDados.map(d => [dd(d.dia), String(d.n), d.ent + ' / ' + d.ret, eurCent(d.din), eurCent(d.mb), { t: eurCent(d.total), b: true }, { t: d.st.texto + (d.pend ? ' · ' + d.pend + ' por pagar' : ''), cor: corEstado(d.st.tipo) }]),
+      { totalRow: ['Total', String(T.n), T.ent + ' / ' + T.ret, eurCent(T.din), eurCent(T.mb), eurCent(T.total), ''] });
+    if (detalhe) {
+      const porDia = {};
+      mesPedidos.filter(p => !p.ensaio && p.estado !== 'cancelado').forEach(p => { (porDia[p.dia] = porDia[p.dia] || []).push(p); });
+      const fechos = {}; mesDados.forEach(d => { if (d.fecho) fechos[d.dia] = d.fecho; });
+      Object.keys(porDia).sort().forEach(dia => { c.forcaNova(); pdfSecaoDia(c, dia, porDia[dia], fechos[dia] || null); });
+    }
+    c.guardar('recibos-esfiha-da-casa-' + m + (detalhe ? '-com-recibos' : '') + '.pdf');
   }
 
   (function () {
