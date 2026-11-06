@@ -73,9 +73,15 @@
   #reciboCaixaImpressao .data-impressao { color: #666; margin-bottom: 22px; font-size: 0.9rem; }
   #reciboCaixaImpressao .notas-impressao { margin-top: 22px; font-size: 0.88rem; color: #444; white-space: pre-wrap; border-top: 1px solid #e5e5e5; padding-top: 12px; }
   @media print {
+    #app > *:not(#reciboCaixaImpressao), #login, .nav { display: none !important; }
     body * { visibility: hidden; }
     #reciboCaixaImpressao, #reciboCaixaImpressao * { visibility: visible; }
-    #reciboCaixaImpressao { display: block; position: absolute; top: 0; left: 0; width: 100%; padding: 24px; max-width: 420px; margin: 0 auto; }
+    #reciboCaixaImpressao.mes { max-width: none; font-size: 11px; }
+    #reciboCaixaImpressao.mes table { width: 100%; border-collapse: collapse; }
+    #reciboCaixaImpressao.mes th, #reciboCaixaImpressao.mes td { padding: 4px; border-bottom: 1px solid #ccc; text-align: left; }
+    #reciboCaixaImpressao.mes td.num, #reciboCaixaImpressao.mes th.num { text-align: right; }
+    @page { size: A4; margin: 14mm; }
+    #reciboCaixaImpressao { display: block; position: static; top: 0; left: 0; width: 100%; padding: 24px; max-width: 420px; margin: 0 auto; }
   }
 </style>
 </head>
@@ -159,7 +165,8 @@
       <h2>Histórico e conta do mês</h2>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
         <input type="month" id="mesSel" onchange="renderHistorico()">
-        <button class="secundario" onclick="exportarCsv()">⬇️ Exportar mês (CSV)</button>
+        <button class="secundario" onclick="exportarCsv()">⬇️ CSV</button>
+        <button class="secundario" onclick="imprimirMes()">📄 PDF do mês</button>
       </div>
       <div id="historico"></div>
     </div>
@@ -534,6 +541,27 @@
       <div class="resultado-linha"><span>− Teu trabalho: ${fmtHoras(T.horas)}h × ${VALOR_HORA}€/h</span><b>${eurCent(T.maoObra)}</b></div>
       <div class="resultado-linha"><span><b>= ${lucro ? 'LUCRO' : 'PREJUÍZO'} do mês</b></span><b style="color:${lucro ? 'var(--verde)' : 'var(--red)'}">${neg(T.resultado)}</b></div>
       <div class="nota-custo">${antesMO >= 0 ? `Sem contar o teu trabalho, o negócio sobrou ${eurCent(antesMO)} — isso dá ${T.horas ? fmtNum(antesMO / 100 / T.horas) : '0,00'}€ por hora trabalhada (a tua meta é ${VALOR_HORA}€/h).` : `Mesmo sem te pagares nada, o negócio ficou ${eurCent(-antesMO)} no vermelho.`}</div>`;
+  }
+
+  function imprimirMes() {
+    const dias = diasDoMes();
+    if (!dias.length) { alert('Sem dias confirmados neste mês.'); return; }
+    const m = mesSelecionado();
+    const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
+    const clone = document.getElementById('historico').cloneNode(true);
+    clone.querySelectorAll('a.editar').forEach(a => a.parentNode.remove());
+    clone.querySelectorAll('thead th:last-child, tfoot td:last-child').forEach(x => { if (!x.textContent.trim()) x.remove(); });
+    const box = document.getElementById('reciboCaixaImpressao');
+    box.className = 'mes';
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:14px;border-bottom:2px solid #C8232B;padding-bottom:10px;margin-bottom:14px">
+        <img src="/icon-512.png" style="width:56px;height:56px;border-radius:12px" alt="">
+        <div><div style="font-size:1.3rem;font-weight:800">Esfiha da Casa</div><div style="font-weight:700">💰 Caixa — ${nomeMes}</div>
+        <div style="font-size:0.78rem;color:#666">Gerado em ${new Date().toLocaleDateString('pt-PT')} · estimativa de referência, não é contabilidade</div></div></div>` + clone.innerHTML;
+    const antes = document.title;
+    document.title = 'caixa-esfiha-da-casa-' + m;
+    window.print();
+    document.title = antes;
+    box.className = '';
   }
 
   function exportarCsv() {

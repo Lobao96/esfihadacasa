@@ -64,7 +64,15 @@
   .nav-i { flex: 1; text-align: center; padding: 9px 0 7px; color: var(--ink-soft); text-decoration: none; font-size: 0.72rem; font-weight: 700; border: none; background: none; font-family: inherit; }
   .nav-i span { display: block; font-size: 1.2rem; }
   .nav-i.on { color: var(--red); }
+  .cab-impressao { display: none; }
   @media print {
+    .cab-impressao { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #C8232B; padding-bottom: 10px; margin-bottom: 14px; }
+    .cab-impressao img { width: 56px; height: 56px; border-radius: 12px; }
+    .cab-impressao .t1 { font-size: 1.3rem; font-weight: 800; }
+    .cab-impressao .t2 { font-size: 1rem; font-weight: 700; }
+    .cab-impressao .t3 { font-size: 0.78rem; color: #666; }
+    #vistaMes table { page-break-inside: auto; } #vistaMes tr { break-inside: avoid; }
+    @page { size: A4; margin: 14mm; }
     header, .filtros, .nav, .no-print { display: none !important; }
     body { background: #fff; padding-bottom: 0; }
     .recibo { break-inside: avoid; border: 1px solid #999; box-shadow: none; }
@@ -107,6 +115,11 @@
       <div class="filtros no-print">
         <input type="month" id="mesSel" onchange="carregarMes()">
         <button onclick="exportarMesCsv()">⬇️ Exportar mês (CSV)</button>
+        <button onclick="imprimirMes()">📄 PDF do mês</button>
+      </div>
+      <div id="cabImpressao" class="cab-impressao">
+        <img src="/icon-512.png" alt="Esfiha da Casa">
+        <div><div class="t1">Esfiha da Casa</div><div class="t2" id="cabTitulo"></div><div class="t3" id="cabData"></div></div>
       </div>
       <div id="mesConteudo"></div>
     </div>
@@ -421,19 +434,30 @@
         <div><b>${T.esf}</b>esfihas</div>
         <div><b>${mesDados.length}</b>dias com pedidos</div>
       </div>
-      ${T.pend ? `<div class="pendentes"><h2>⏳ ${T.pend} pedido(s) por marcar como pago (${eurCent(T.pendCent)})</h2><div class="linha"><span>Abre o dia indicado na tabela para os marcar.</span></div></div>` : ''}
+      ${T.pend ? `<div class="pendentes"><h2>⏳ ${T.pend} pedido(s) por marcar como pago (${eurCent(T.pendCent)})</h2><div class="linha no-print"><span>Abre o dia indicado na tabela para os marcar.</span></div></div>` : ''}
       ${porConf ? `<div class="pendentes"><h2>💰 ${porConf} dia(s) com a caixa por confirmar ou com diferença</h2></div>` : ''}
       <table class="itens" style="width:100%;font-size:0.85rem">
-        <thead><tr><th>Dia</th><th class="preco">Rec.</th><th class="preco">💵</th><th class="preco">💳</th><th class="preco">Total</th><th>Caixa</th></tr></thead>
+        <thead><tr><th>Dia</th><th class="preco">Rec.</th><th class="preco">💵</th><th class="preco">💳</th><th class="preco">Total</th><th style="padding-left:12px">Caixa</th></tr></thead>
         <tbody>${mesDados.map(d => `
           <tr style="cursor:pointer" onclick="abrirDia('${d.dia}')">
             <td><b>${dd(d.dia)}</b><div style="font-size:0.75rem;color:var(--ink-soft)">${d.ent} ent. · ${d.ret} lev.${d.pend ? ` · <span style="color:var(--red)">${d.pend} por pagar</span>` : ''}</div></td>
             <td class="preco">${d.n}</td><td class="preco">${eurCent(d.din)}</td><td class="preco">${eurCent(d.mb)}</td><td class="preco"><b>${eurCent(d.total)}</b></td>
-            <td style="font-size:0.78rem">${d.st.texto}</td></tr>`).join('')}
+            <td style="font-size:0.78rem;padding-left:12px">${d.st.texto}</td></tr>`).join('')}
         </tbody>
         <tfoot><tr style="font-weight:800;border-top:2px solid var(--line)"><td>Total</td><td class="preco">${T.n}</td><td class="preco">${eurCent(T.din)}</td><td class="preco">${eurCent(T.mb)}</td><td class="preco">${eurCent(T.total)}</td><td></td></tr></tfoot>
       </table>
-      <div class="nota-custo" style="font-size:0.78rem;color:var(--ink-soft);margin-top:8px">Toca num dia para ver os recibos desse dia. Só entram pedidos pagos nos totais; cancelados e ensaios ficam de fora.</div>`;
+      <div class="no-print" style="font-size:0.78rem;color:var(--ink-soft);margin-top:8px">Toca num dia para ver os recibos desse dia. Só entram pedidos pagos nos totais; cancelados e ensaios ficam de fora.</div>`;
+  }
+
+  function imprimirMes() {
+    if (!mesDados.length) return;
+    const m = document.getElementById('mesSel').value;
+    document.getElementById('cabTitulo').textContent = 'Recibos — ' + MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
+    document.getElementById('cabData').textContent = 'Gerado em ' + new Date().toLocaleDateString('pt-PT') + ' · só pedidos pagos (cancelados e ensaios excluídos)';
+    const antes = document.title;
+    document.title = 'recibos-esfiha-da-casa-' + m;
+    window.print();
+    document.title = antes;
   }
 
   function exportarMesCsv() {
