@@ -137,13 +137,18 @@
     this.y += 6.5;
   };
 
-  Ctx.prototype.guardar = function (nome) {
+  Ctx.prototype.rodape = function () {
     var d = this.doc, n = d.getNumberOfPages();
     for (var i = 1; i <= n; i++) {
       d.setPage(i); d.setFont('helvetica', 'normal'); d.setFontSize(8); d.setTextColor.apply(d, CINZA);
       d.text('Esfiha da Casa · página ' + i + ' de ' + n, LARG / 2, ALT - 9, { align: 'center' });
     }
-    d.save(nome);
+  };
+  Ctx.prototype.guardar = function (nome) { this.rodape(); this.doc.save(nome); };
+  // devolve um File (para partilhar com a Web Share API) em vez de descarregar
+  Ctx.prototype.ficheiro = function (nome) {
+    this.rodape();
+    return new File([this.doc.output('blob')], nome, { type: 'application/pdf' });
   };
 
   window.PDFU = {
