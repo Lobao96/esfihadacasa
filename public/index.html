@@ -2628,7 +2628,7 @@
   // sempre "+<indicativo><numero>". Se o cliente escrever o numero ja com
   // + ou 00 na frente, esse indicativo manda e a caixa acompanha.
   let telPaisManual = false;
-  const INDICATIVO_IDIOMA = { pe: '+351', pt: '+55', en: '+44', es: '+34', fr: '+33', de: '+49', nl: '+31', it: '+39', pl: '+48', sv: '+46', ua: '+380' };
+  const INDICATIVO_IDIOMA = { pe: '+351', pt: '+351', en: '+44', es: '+34', fr: '+33', de: '+49', nl: '+31', it: '+39', pl: '+48', sv: '+46', ua: '+380' };
   function telPaisPorIdioma(l) {
     const sel = document.getElementById('telPais');
     const cod = INDICATIVO_IDIOMA[l];
