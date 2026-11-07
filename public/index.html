@@ -1561,6 +1561,7 @@
         if (units[k].itemId === id) { units.splice(k, 1); break; }
       }
     }
+    absorverBrinde();
     syncCounts();
     renderOrderList();
     updateTotal();
@@ -1614,6 +1615,7 @@
         if (units[k].itemId === id) { units.splice(k, 1); tirar--; }
       }
     }
+    absorverBrinde();
     syncCounts();
     renderOrderList();
     updateTotal();
@@ -1783,6 +1785,17 @@
     // proprio premio/desconto, nao acumulam com a bebida gratis automatica.
     if (promoAplicado) return false;
     return contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas;
+  }
+  // Se o cliente ja ganhou a bebida de 1L gratis mas escolheu uma garrafa de 1L
+  // no menu normal (paga), aquela garrafa passa a ser a gratis -- evita o preco
+  // a subir e o envio bloqueado por "falta escolher qual".
+  function absorverBrinde() {
+    if (!temBrinde() || brindeBebida) return false;
+    const k = units.findIndex(u => bebidas1L().some(b => b.id === u.itemId) && !bebidaEsgotada(u.itemId));
+    if (k < 0) return false;
+    brindeBebida = units[k].itemId;
+    units.splice(k, 1);
+    return true;
   }
   function setBrinde(bid) {
     brindeBebida = brindeBebida === bid ? null : bid;
@@ -2969,6 +2982,7 @@
       if (!c.bebidaFixa && u.bebidas.length < c.nBebidas) f.push((c.nBebidas - u.bebidas.length) + ' bebida(s)');
       if (f.length) faltas.push(c.name + ': falta escolher ' + f.join(', '));
     });
+    if (absorverBrinde()) { syncCounts(); renderOrderList(); updateTotal(); }
     if (temBrinde() && !brindeBebida) faltas.push('Bebida de 1L grátis: falta escolher qual.');
     if (qtdGratisEsfihas() > 0 && gratisEsfihas.some(s => !s)) faltas.push('Esfihas grátis: falta escolher o sabor de todas.');
     const nomeV = ((document.getElementById('nomeInput') || {}).value || '').trim();
