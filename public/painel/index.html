@@ -1110,7 +1110,7 @@
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
-          ${p.origem === 'congelados' ? `<button class="ac wa" onclick="enviarReciboPedido(${p.id})">📤 Enviar recibo</button><button class="ac" onclick="pedidoCongeladoPdf(${p.id})">📄 PDF</button>` : ''}
+          ${p.origem === 'congelados' ? `<button class="ac wa" onclick="pedidoCongeladoPdf(${p.id})">👁️ Ver recibo</button><button class="ac" onclick="enviarReciboPedido(${p.id})">📤 Enviar</button>` : ''}
           <button class="ac" onclick="imprimirPedido(${p.id})">🖨️ Imprimir</button>
           ${p.estado !== 'cancelado' ? `<button class="ac" onclick="abrirModalAdicionar(${p.id})">✏️ Editar itens</button>` : ''}
           ${p.estado !== 'cancelado' ? `<button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>` : ''}
@@ -1381,9 +1381,9 @@
       ok.innerHTML = `<h3>✅ Encomenda #${r.numero} guardada</h3>
         <p class="nota">${esc(nome)} · ${eur(r.total_cent)}${r.pago ? ' · pago' : ' · por pagar ' + eur(r.total_cent - r.sinal_cent)}</p>
         ${(r.aviso_stock || []).length ? `<p class="nota" style="color:var(--red);font-weight:700">⚠️ Stock curto — ${r.aviso_stock.map(esc).join('; ')}. Ajusta o stock em cima.</p>` : '<p class="nota">O stock já foi descontado.</p>'}
-        <button class="ac destaque" style="width:100%;margin-bottom:8px" onclick="enviarReciboWhats(cgUltima)">📤 Enviar recibo (PDF) pelo WhatsApp</button>
-        <p class="nota" style="margin:-2px 0 8px">Abre a folha de partilha com o PDF já anexado: escolhe o WhatsApp Business e o cliente.</p>
-        <button class="ac" style="width:100%;margin-bottom:8px" onclick="reciboCongeladoPdf(cgUltima)">📄 Só guardar o PDF</button>
+        <button class="ac destaque" style="width:100%;margin-bottom:8px" onclick="reciboCongeladoPdf(cgUltima)">👁️ Ver recibo (PDF)</button>
+        <p class="nota" style="margin:-2px 0 8px">Abre num separador, não guarda nada no computador.</p>
+        <button class="ac" style="width:100%;margin-bottom:8px" onclick="enviarReciboWhats(cgUltima)">📤 Enviar PDF pelo WhatsApp (telemóvel)</button>
         <button class="ac wa" style="width:100%;margin-bottom:8px" onclick="cgWhats()">💬 Abrir conversa só com o texto</button>
         <button class="ac" style="width:100%;margin-bottom:8px" onclick="abrirCongelados()">+ Outra encomenda</button>
         <button class="ac sec-fechar" onclick="fecharCongelados()">Fechar</button>`;
@@ -1438,7 +1438,17 @@
     const nome = 'recibo-congelados-' + e.numero + '-' + (e.nome || 'cliente').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
     return { c, nome };
   }
-  async function reciboCongeladoPdf(e) { const r = await construirReciboCongelado(e); r.c.guardar(r.nome); }
+  // Abre o recibo num separador para ver (e imprimir/guardar se quiseres),
+  // sem descarregar nada para o computador.
+  async function reciboCongeladoPdf(e) {
+    const w = window.open('', '_blank');
+    try {
+      if (!e._file) { const r = await construirReciboCongelado(e); e._file = r.c.ficheiro(r.nome); }
+      const url = URL.createObjectURL(e._file);
+      if (w) w.location.href = url; else window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) { if (w) w.close(); alert('Não foi possível gerar o recibo.'); }
+  }
 
   function textoReciboWhats(e) {
     return `Olá ${e.nome}! Segue o recibo da sua encomenda de congelados nº ${e.numero} (${eur(e.total_cent)}${e.pago ? ', pago' : ', por pagar ' + eur(e.total_cent - (e.sinal_cent || 0))}). Obrigado! Esfiha da Casa`;
@@ -1455,11 +1465,11 @@
         return;
       }
     } catch (err) { if (err && err.name === 'AbortError') return; }
-    // alternativa: descarregar o PDF e abrir a conversa com o texto
-    const url = URL.createObjectURL(e._file);
-    const a = document.createElement('a'); a.href = url; a.download = e._file.name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    window.open(`https://wa.me/${(e.telefone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(txt + '\n(o PDF segue em anexo)')}`, 'esfiha_wa_cliente');
+    // Este aparelho não deixa partilhar ficheiros (ex.: computador): abre o
+    // recibo para ver e a conversa com o texto. Nada é descarregado; para o
+    // anexar à conversa, grava-o a partir do separador do recibo.
+    reciboCongeladoPdf(e);
+    window.open(`https://wa.me/${(e.telefone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(txt)}`, 'esfiha_wa_cliente');
   }
   async function enviarReciboPedido(id) { const p = pedidos.find(x => x.id === id); if (p) enviarReciboWhats(encomendaDoPedido(p)); }
 
