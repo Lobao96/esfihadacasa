@@ -432,7 +432,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, momento));
-    window.open(num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`, 'esfiha_wa_cliente');
+    window.open(waUrl(num, txt), 'esfiha_wa_cliente');
   }
 
   // Ao marcar como pago, já manda logo o recibo pelo WhatsApp — sem precisar
@@ -451,7 +451,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, 'pago'));
-    const url = num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`;
+    const url = waUrl(num, txt);
     if (janela) janela.location.href = url; else window.open(url, 'esfiha_wa_cliente');
   }
 
@@ -473,6 +473,23 @@
   }
 
   // WhatsApp do estafeta (só dígitos, com 351).
+  // Abre sempre o WhatsApp BUSINESS (nao o pessoal): no Android indica a app
+  // pelo nome do pacote, no iPhone usa o esquema da app Business e no
+  // computador abre o WhatsApp Web (onde se entra com a conta Business).
+  // num = so digitos (pode vir vazio); txt = texto ja codificado.
+  function waUrl(num, txt) {
+    const ua = navigator.userAgent || '';
+    const n = num || '';
+    const ph = n ? 'phone=' + n + '&' : '';
+    if (/Android/i.test(ua)) {
+      const fb = encodeURIComponent('https://wa.me/' + n + '?text=' + txt);
+      return 'intent://send/?' + ph + 'text=' + txt +
+        '#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=' + fb + ';end';
+    }
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'whatsapp-business://send?' + ph + 'text=' + txt;
+    return 'https://web.whatsapp.com/send?' + ph + 'text=' + txt;
+  }
+
   const ESTAFETA_WA = '351913825385';
 
   function mensagemEstafeta(p) {
@@ -496,7 +513,7 @@
     const p = pedidos.find(x => x.id === id);
     if (!p) return;
     const txt = encodeURIComponent(mensagemEstafeta(p));
-    window.open(ESTAFETA_WA ? `https://wa.me/${ESTAFETA_WA}?text=${txt}` : `https://wa.me/?text=${txt}`, 'esfiha_wa_estafeta');
+    window.open(waUrl(ESTAFETA_WA, txt), 'esfiha_wa_estafeta');
   }
 
   async function chamarUber(id) {
@@ -553,7 +570,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemCancelado(Object.assign({}, p, { motivo_cancelamento: motivo }), '#' + p.numero));
-    window.open(num ? `https://wa.me/${num}?text=${txt}` : `https://wa.me/?text=${txt}`, 'esfiha_wa_cliente');
+    window.open(waUrl(num, txt), 'esfiha_wa_cliente');
 
     const d = dadosDe(p);
     const temUber = d.entrega && d.entrega.uber_delivery_id && !d.entrega.uber_cancelada_em;
@@ -1397,7 +1414,7 @@
     const e = cgUltima; if (!e) return;
     const num = e.telefone.replace(/[^0-9]/g, '');
     const txt = textoReciboWhats(e);
-    window.open(`https://wa.me/${num}?text=${encodeURIComponent(txt)}`, 'esfiha_wa_cliente');
+    window.open(waUrl(num, encodeURIComponent(txt)), 'esfiha_wa_cliente');
   }
   function encomendaDoPedido(p) {
     const d = dadosDe(p), c = d.congelado || {};
@@ -1469,7 +1486,7 @@
     // recibo para ver e a conversa com o texto. Nada é descarregado; para o
     // anexar à conversa, grava-o a partir do separador do recibo.
     reciboCongeladoPdf(e);
-    window.open(`https://wa.me/${(e.telefone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(txt)}`, 'esfiha_wa_cliente');
+    window.open(waUrl((e.telefone || '').replace(/[^0-9]/g, ''), encodeURIComponent(txt)), 'esfiha_wa_cliente');
   }
   async function enviarReciboPedido(id) { const p = pedidos.find(x => x.id === id); if (p) enviarReciboWhats(encomendaDoPedido(p)); }
 
