@@ -1023,6 +1023,88 @@ const SABORES = {
   dif:      { nome: 'A Diferentona',        preco_cent: 260, doce: true },
 };
 
+// Encomendas de congelados feitas a mao no painel (o cliente pede por
+// WhatsApp e o Miguel regista aqui). Sao sempre para levantar (takeaway),
+// entram como "pronto", descontam o stock de salgadas/doces e contam nos
+// Recibos e na Caixa quando estiverem pagas. O preco por unidade e livre
+// (varia por cliente/quantidade); o sinal fica guardado em itens.congelado.
+async function criarEncomendaCongelados(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const nome = limpar((b.nome || '').trim(), 80);
+  if (!nome) return j({ ok: false, erro: 'nome em falta' }, 400);
+  const tel = soDigitos(b.telefone);
+  const linhasIn = Array.isArray(b.linhas) ? b.linhas.slice(0, 30) : [];
+  if (!linhasIn.length) return j({ ok: false, erro: 'sem itens' }, 400);
+
+  const itensLista = [];
+  let total = 0, nEsf = 0;
+  for (const l of linhasIn) {
+    const sabor = SABORES[l && l.item];
+    const n = Math.max(0, Math.min(999, parseInt(l && l.n, 10) || 0));
+    const preco = Math.max(0, Math.min(100000, Math.round(Number(l && l.preco_cent)) || 0));
+    if (!sabor || !n) return j({ ok: false, erro: 'item invalido' }, 400);
+    itensLista.push({ item: l.item, nome: sabor.nome, doce: sabor.doce ? 1 : 0, n, preco_cent: preco });
+    total += n * preco; nEsf += n;
+  }
+  const eur = c => (c / 100).toFixed(2).replace('.', ',') + '€';
+  const metodo = b.metodo === 'dinheiro' ? 'dinheiro' : 'mbway';
+  let sinal = Math.max(0, Math.round(Number(b.sinal_cent)) || 0);
+  const pagoTotal = !!b.pago || (total > 0 && sinal >= total) || total === 0;
+  if (pagoTotal) sinal = total;
+  if (sinal > total) sinal = total;
+  const levant = /^\d{4}-\d{2}-\d{2}$/.test(b.levantamento || '') ? b.levantamento : '';
+  const notas = limpar((b.notas || '').trim(), 300) || '';
+
+  // aviso (nao bloqueia) se o stock nao chega
+  const aviso = [];
+  const { results: salg } = await env.DB.prepare('SELECT nome, quantidade FROM stock_salgadas').all();
+  const doceRow = await env.DB.prepare('SELECT quantidade FROM stock_doces WHERE id = 1').first();
+  const falta = {};
+  for (const it of itensLista) falta[it.doce ? '__doce' : it.nome] = (falta[it.doce ? '__doce' : it.nome] || 0) + it.n;
+  for (const k of Object.keys(falta)) {
+    const disp = k === '__doce' ? ((doceRow && doceRow.quantidade) || 0) : (((salg || []).find(x => x.nome === k) || {}).quantidade || 0);
+    if (falta[k] > disp) aviso.push((k === '__doce' ? 'Doces' : k) + ': pediste ' + falta[k] + ', no stock ' + disp);
+  }
+
+  const linhasTxt = itensLista.map(it => `${it.n}× ${it.nome} (congelada, ${eur(it.preco_cent)} cada) — ${eur(it.n * it.preco_cent)}`);
+  const itensObj = {
+    linhas: linhasTxt,
+    producao: itensLista.map(it => ({ sabor: it.nome, ing: '', extras: [], n: it.n, gratis: 0, doce: it.doce })),
+    bebidas: [],
+    pagamento: { metodo_pagamento: metodo },
+    pagas_original: nEsf,
+    congelado: { itens: itensLista, sinal_cent: sinal, levantamento: levant, notas },
+  };
+  if (notas) itensObj.observacao = notas;
+  const itens = JSON.stringify(itensObj);
+
+  const dia = diaLisboa();
+  const agora = new Date().toISOString();
+  const token = novoToken();
+  const res = await env.DB.prepare(
+    `INSERT INTO pedidos
+       (dia, numero, senha, ensaio, estado, pago, modo, localidade, morada, total_cent, n_esfihas,
+        itens, mensagem, criado_em, token, telefone, origem, campanha, nome, stock_debitado)
+     SELECT ?, COALESCE(MAX(numero), 0) + 1, NULL, 0, 'pronto', ?, 'retirada', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, 'congelados', NULL, ?, 1
+       FROM pedidos WHERE ensaio = 0
+     RETURNING id, numero, token`
+  ).bind(dia, pagoTotal ? 1 : 0, total, nEsf, itens, 'Encomenda de congelados (registada no painel)', agora, token, tel, nome).first();
+
+  const lote = [];
+  for (const it of itensLista) {
+    if (it.doce) {
+      lote.push(env.DB.prepare('UPDATE stock_doces SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE id = 1').bind(it.n, agora));
+    } else {
+      lote.push(env.DB.prepare('UPDATE stock_salgadas SET quantidade = MAX(0, quantidade - ?), atualizado_em = ? WHERE nome = ?').bind(it.n, agora, it.nome));
+    }
+  }
+  if (lote.length) await env.DB.batch(lote);
+
+  return j({ ok: true, id: res.id, numero: res.numero, token: res.token, dia, criado_em: agora, total_cent: total,
+             sinal_cent: sinal, pago: pagoTotal ? 1 : 0, aviso_stock: aviso, estado: await estadoDoDia(env.DB, dia) });
+}
+
 // Acrescenta esfihas a um pedido ja enviado -- para quando o cliente pede
 // mais depois (por telefone ou WhatsApp), seja a pagar ou como oferta.
 // Atualiza a lista de producao, o total, o n_esfihas e debita o stock na
@@ -2259,6 +2341,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido-total' && request.method === 'POST') return await corrigirTotalPedido(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
+        if (p === '/api/painel/congelados' && request.method === 'POST') return await criarEncomendaCongelados(request, env);
         if (p === '/api/painel/pedido-oferta-bebida' && request.method === 'POST') return await resolverOfertaBebida(request, env);
         if (p === '/api/painel/stock' && request.method === 'POST') return await mudarStock(request, env);
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);

@@ -170,6 +170,12 @@
     .print-ticket .prod-extra{color:#000}
     .print-ticket .obs-pedido{background:none;padding:0;color:#000}
   }
+  .cg-l{display:block;font-size:.78rem;font-weight:800;color:var(--ink-soft);margin:10px 0 4px}
+  .cg-i{width:100%;font-family:inherit;font-size:.95rem;font-weight:700;padding:10px 12px;border:1.5px solid rgba(58,31,18,.2);border-radius:10px;background:var(--white);color:var(--ink)}
+  .cg-linha{display:grid;grid-template-columns:1fr 62px 72px 30px;gap:6px;margin-bottom:6px;align-items:center}
+  .cg-linha .cg-i{padding:9px 8px;font-size:.88rem}
+  .cg-linha button{border:none;background:none;font-size:1.1rem;color:var(--red);cursor:pointer}
+  .cg-tot{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-top:1px solid rgba(58,31,18,.15);font-size:1rem}
 </style>
 </head>
 <body>
@@ -218,6 +224,12 @@
       <h3>Entregas (estafeta)</h3>
       <p class="nota">Taxa de entrega: 3,50€ por entrega, por dia aberto.</p>
       <div id="estafetaResumo"></div>
+    </div>
+
+    <div class="saboresbox">
+      <h3>🧊 Encomendas de congelados</h3>
+      <p class="nota">O cliente pede por WhatsApp; registas aqui, desconta do stock e envias-lhe o recibo em PDF. Sempre para levantar.</p>
+      <button class="ac destaque" onclick="abrirCongelados()">+ Nova encomenda de congelados</button>
     </div>
 
     <div class="filtros">
@@ -300,9 +312,50 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalCongelados" style="display:none" onclick="if(event.target===this) fecharCongelados()">
+    <div class="modal-box" style="max-width:420px">
+      <div id="cgForm">
+        <h3>🧊 Nova encomenda de congelados</h3>
+        <p class="nota">Para levantar. Os preços são por unidade e podes mudá-los para cada cliente.</p>
+
+        <label class="cg-l">Nome do cliente</label>
+        <input type="text" id="cgNome" class="cg-i" placeholder="Nome" autocomplete="off">
+        <label class="cg-l">WhatsApp do cliente</label>
+        <input type="tel" id="cgTel" class="cg-i" value="+351 " placeholder="+351 912 345 678" autocomplete="off">
+
+        <label class="cg-l">Itens</label>
+        <div id="cgLinhas"></div>
+        <button class="ac" style="margin:6px 0 10px" onclick="cgAddLinha()">+ Adicionar sabor</button>
+
+        <div class="cg-tot"><span>Total</span><b id="cgTotal">0,00€</b></div>
+
+        <label class="cg-l">Pagamento</label>
+        <select id="cgMetodo" class="cg-i"><option value="mbway">💳 MB Way</option><option value="dinheiro">💵 Dinheiro</option></select>
+        <label class="cg-l">Sinal recebido (€)</label>
+        <input type="number" id="cgSinal" class="cg-i" step="0.01" min="0" placeholder="0,00" oninput="cgCalc()">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:.88rem;color:var(--ink-soft);margin:6px 0">
+          <input type="checkbox" id="cgPago" style="width:18px;height:18px" onchange="cgCalc()"> Já pagou tudo
+        </label>
+        <div class="cg-tot" id="cgPorPagarBox"><span>Por pagar</span><b id="cgPorPagar">0,00€</b></div>
+
+        <label class="cg-l">Levantamento combinado (opcional)</label>
+        <input type="date" id="cgLevant" class="cg-i">
+        <label class="cg-l">Notas (opcional)</label>
+        <input type="text" id="cgNotas" class="cg-i" placeholder="Ex.: levanta sábado de manhã">
+
+        <div id="cgErro" style="color:var(--red);font-weight:700;font-size:.85rem;margin:8px 0;display:none"></div>
+        <button class="ac destaque" style="width:100%;margin:8px 0" onclick="cgGuardar()" id="cgBtnGuardar">Guardar encomenda</button>
+        <button class="ac sec-fechar" onclick="fecharCongelados()">Cancelar</button>
+      </div>
+      <div id="cgOk" style="display:none"></div>
+    </div>
+  </div>
+
   <div class="print-ticket" id="printTicket"></div>
 </div>
 
+<script src="/painel/jspdf.umd.min.js"></script>
+<script src="/painel/pdf-util.js"></script>
 <script>
   const API = '/api';
   let pass = '';
@@ -386,8 +439,11 @@
   // Safari/iOS não bloquear o popup depois do pedido à API.
   async function marcarPago(id, novoValor) {
     let janela = null;
-    if (novoValor) janela = window.open('', 'esfiha_wa_cliente');
+    const pCg = pedidos.find(x => x.id === id);
+    const eCg = !!(pCg && pCg.origem === 'congelados');
+    if (novoValor && !eCg) janela = window.open('', 'esfiha_wa_cliente');
     await marcar(id, { pago: novoValor });
+    if (eCg) return;
     if (!novoValor) { if (janela) janela.close(); return; }
     const p = pedidos.find(x => x.id === id);
     if (!p) { if (janela) janela.close(); return; }
@@ -1016,7 +1072,7 @@
       <div class="p ${p.estado}">
         <div class="p-top">
           <span class="num">#${p.numero}${!p.ensaio && idx.has(p.id) ? `<small style="opacity:.6;font-weight:700">-${idx.get(p.id)}</small>` : ''}</span>
-          <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega · estafeta' : 'Levantamento'}</span>
+          <span class="modo ${entrega ? 'entrega' : ''}">${entrega ? 'Entrega · estafeta' : (p.origem === 'congelados' ? '🧊 Congelados · levantar' : 'Levantamento')}</span>
           ${p.ensaio ? '<span class="tag-ensaio">ENSAIO</span>' : ''}
           <span class="tot">${eur(p.total_cent)}</span>
         </div>
@@ -1028,8 +1084,10 @@
           ${entrega && p.morada ? '<br>' + esc(p.morada) : ''}
           ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
           ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
-          ${p.origem ? ' · veio de ' + esc(p.origem) : ''}
+          ${p.origem && p.origem !== 'congelados' ? ' · veio de ' + esc(p.origem) : ''}
           <br>${metodoPagamentoLabel(p)}
+          ${p.origem === 'congelados' && !p.pago ? `<br><b style="color:var(--red)">💰 Sinal ${eur((dados.congelado || {}).sinal_cent || 0)} · por pagar ${eur((p.total_cent || 0) - ((dados.congelado || {}).sinal_cent || 0))}</b>` : ''}
+          ${p.origem === 'congelados' && (dados.congelado || {}).levantamento ? `<br>📅 Levanta a ${esc(dados.congelado.levantamento.split('-').reverse().join('/'))}` : ''}
           ${dados.observacao ? `<br><span class="obs-pedido">📝 ${esc(dados.observacao)}</span>` : ''}
           ${dados.aviso_preco ? `<br><span class="cancel-motivo">⚠️ ${esc(dados.aviso_preco)}</span>` : ''}
           ${p.estado === 'cancelado' ? `<br><span class="cancel-motivo">❌ Cancelado — ${esc(motivoCancelamentoLbl(p.motivo_cancelamento))}</span>` : ''}
@@ -1051,6 +1109,7 @@
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
+          ${p.origem === 'congelados' ? `<button class="ac wa" onclick="pedidoCongeladoPdf(${p.id})">📄 Recibo PDF</button>` : ''}
           <button class="ac" onclick="imprimirPedido(${p.id})">🖨️ Imprimir</button>
           ${p.estado !== 'cancelado' ? `<button class="ac" onclick="abrirModalAdicionar(${p.id})">✏️ Editar itens</button>` : ''}
           ${p.estado !== 'cancelado' ? `<button class="ac" onclick="cancelarPedido(${p.id})">Cancelar</button>` : ''}
@@ -1230,6 +1289,141 @@
     document.getElementById('maTotalNovo').value = '';
     await carregar();
     renderLinhasAtuais(id);
+  }
+
+  // ---------- Encomendas de congelados ----------
+  const CG_SABORES = [
+    ['trad', 'A Tradicional'], ['suc', 'A Suculenta'], ['caip', 'A Caipira'], ['quer', 'A Queridinha'],
+    ['classica', 'A Clássica'], ['italiana', 'A Italiana'],
+    ['todo', 'A Que Todo Mundo Ama (doce)'], ['irres', 'A Irresistível (doce)'], ['dif', 'A Diferentona (doce)'],
+  ];
+  const CG_PRECO_PADRAO = '1.50';
+  let cgUltima = null;
+
+  function cgNum(v) { return parseFloat(String(v).replace(',', '.')) || 0; }
+  function abrirCongelados() {
+    document.getElementById('cgForm').style.display = '';
+    document.getElementById('cgOk').style.display = 'none';
+    ['cgNome', 'cgSinal', 'cgNotas', 'cgLevant'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('cgTel').value = '+351 ';
+    document.getElementById('cgPago').checked = false;
+    document.getElementById('cgMetodo').value = 'mbway';
+    document.getElementById('cgErro').style.display = 'none';
+    document.getElementById('cgLinhas').innerHTML = '';
+    cgAddLinha();
+    cgCalc();
+    document.getElementById('modalCongelados').style.display = 'flex';
+  }
+  function fecharCongelados() { document.getElementById('modalCongelados').style.display = 'none'; }
+  function cgAddLinha() {
+    const d = document.createElement('div');
+    d.className = 'cg-linha';
+    d.innerHTML = `<select class="cg-i cg-s">${CG_SABORES.map(x => `<option value="${x[0]}">${x[1]}</option>`).join('')}</select>
+      <input type="number" class="cg-i cg-n" min="1" step="1" value="12" aria-label="Quantidade" oninput="cgCalc()">
+      <input type="number" class="cg-i cg-p" min="0" step="0.05" value="${CG_PRECO_PADRAO}" aria-label="Preço por unidade (€)" oninput="cgCalc()">
+      <button type="button" title="Tirar" onclick="this.parentNode.remove();cgCalc()">✕</button>`;
+    document.getElementById('cgLinhas').appendChild(d);
+    cgCalc();
+  }
+  function cgLinhasLidas() {
+    return Array.from(document.querySelectorAll('#cgLinhas .cg-linha')).map(r => ({
+      item: r.querySelector('.cg-s').value,
+      n: parseInt(r.querySelector('.cg-n').value, 10) || 0,
+      preco_cent: Math.round(cgNum(r.querySelector('.cg-p').value) * 100),
+    })).filter(l => l.n > 0);
+  }
+  function cgCalc() {
+    const total = cgLinhasLidas().reduce((a, l) => a + l.n * l.preco_cent, 0);
+    const pago = document.getElementById('cgPago').checked;
+    const sinal = pago ? total : Math.min(total, Math.round(cgNum(document.getElementById('cgSinal').value) * 100));
+    document.getElementById('cgTotal').textContent = eur(total);
+    document.getElementById('cgPorPagar').textContent = eur(Math.max(0, total - sinal));
+  }
+  function cgTelNormal(t) {
+    let d = String(t || '').replace(/[^0-9+]/g, '');
+    if (!d.startsWith('+') && d.startsWith('00')) d = '+' + d.slice(2);
+    if (!d.startsWith('+') && /^9\d{8}$/.test(d)) d = '+351' + d;
+    return d;
+  }
+  async function cgGuardar() {
+    const erro = document.getElementById('cgErro');
+    const falha = t => { erro.textContent = t; erro.style.display = 'block'; };
+    erro.style.display = 'none';
+    const nome = document.getElementById('cgNome').value.trim();
+    const tel = cgTelNormal(document.getElementById('cgTel').value);
+    const linhas = cgLinhasLidas();
+    if (!nome) return falha('Falta o nome do cliente.');
+    if (!/^\+\d{9,15}$/.test(tel)) return falha('Falta o número de WhatsApp com indicativo (ex.: +351 912 345 678).');
+    if (!linhas.length) return falha('Acrescenta pelo menos um sabor com quantidade.');
+    const body = {
+      nome, telefone: tel, linhas,
+      metodo: document.getElementById('cgMetodo').value,
+      sinal_cent: Math.round(cgNum(document.getElementById('cgSinal').value) * 100),
+      pago: document.getElementById('cgPago').checked,
+      levantamento: document.getElementById('cgLevant').value,
+      notas: document.getElementById('cgNotas').value.trim(),
+    };
+    const btn = document.getElementById('cgBtnGuardar'); btn.disabled = true;
+    try {
+      const r = await api('/painel/congelados', { method: 'POST', body: JSON.stringify(body) });
+      if (!r.ok) { falha('Não foi possível guardar (' + (r.erro || 'erro') + ').'); return; }
+      cgUltima = { numero: r.numero, criado_em: r.criado_em, nome, telefone: tel, itens: linhas.map(l => Object.assign({ nome: (CG_SABORES.find(x => x[0] === l.item) || [0, l.item])[1].replace(' (doce)', '') }, l)), total_cent: r.total_cent, sinal_cent: r.sinal_cent, pago: r.pago, metodo: body.metodo, levantamento: body.levantamento, notas: body.notas };
+      const ok = document.getElementById('cgOk');
+      ok.innerHTML = `<h3>✅ Encomenda #${r.numero} guardada</h3>
+        <p class="nota">${esc(nome)} · ${eur(r.total_cent)}${r.pago ? ' · pago' : ' · por pagar ' + eur(r.total_cent - r.sinal_cent)}</p>
+        ${(r.aviso_stock || []).length ? `<p class="nota" style="color:var(--red);font-weight:700">⚠️ Stock curto — ${r.aviso_stock.map(esc).join('; ')}. Ajusta o stock em cima.</p>` : '<p class="nota">O stock já foi descontado.</p>'}
+        <button class="ac destaque" style="width:100%;margin-bottom:8px" onclick="reciboCongeladoPdf(cgUltima)">📄 Guardar recibo (PDF)</button>
+        <button class="ac wa" style="width:100%;margin-bottom:8px" onclick="cgWhats()">💬 Abrir o WhatsApp do cliente</button>
+        <button class="ac" style="width:100%;margin-bottom:8px" onclick="abrirCongelados()">+ Outra encomenda</button>
+        <button class="ac sec-fechar" onclick="fecharCongelados()">Fechar</button>`;
+      document.getElementById('cgForm').style.display = 'none'; ok.style.display = '';
+      carregar();
+    } catch (e) { falha('Sem ligação ao servidor. Tenta outra vez.'); }
+    finally { btn.disabled = false; }
+  }
+  function cgWhats() {
+    const e = cgUltima; if (!e) return;
+    const num = e.telefone.replace(/[^0-9]/g, '');
+    const txt = `Olá ${e.nome}! Aqui está o recibo da sua encomenda de congelados nº ${e.numero} (${eur(e.total_cent)}${e.pago ? ', pago' : ', por pagar ' + eur(e.total_cent - e.sinal_cent)}). Obrigado! 🫓 Esfiha da Casa`;
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(txt)}`, 'esfiha_wa_cliente');
+  }
+  function encomendaDoPedido(p) {
+    const d = dadosDe(p), c = d.congelado || {};
+    const metodo = (d.pagamento || {}).metodo_pagamento;
+    return { numero: p.numero, criado_em: p.criado_em, nome: p.nome, telefone: p.telefone,
+      itens: c.itens || [], total_cent: p.total_cent, sinal_cent: c.sinal_cent || 0, pago: p.pago,
+      metodo: metodo === 'dinheiro' ? 'dinheiro' : 'mbway', levantamento: c.levantamento || '', notas: c.notas || '' };
+  }
+  function pedidoCongeladoPdf(id) { const p = pedidos.find(x => x.id === id); if (p) reciboCongeladoPdf(encomendaDoPedido(p)); }
+
+  async function reciboCongeladoPdf(e) {
+    const dt = new Date(e.criado_em);
+    const dataTxt = dt.toLocaleDateString('pt-PT') + ' ' + dt.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    const c = await PDFU.novo('Recibo — Encomenda de congelados nº ' + e.numero, 'Emitido em ' + dataTxt);
+    c.texto('Cliente: ' + (e.nome || ''), { bold: true, size: 11, depois: 1 });
+    if (e.telefone) c.texto('WhatsApp: ' + e.telefone, { depois: 1 });
+    if (e.levantamento) c.texto('Levantamento combinado: ' + e.levantamento.split('-').reverse().join('/') + ' (no local)', { depois: 1 });
+    else c.texto('Levantamento no local', { depois: 1 });
+    c.y += 4;
+    const eu = v => eur(v);
+    c.tabela(
+      [{ h: 'Descrição', w: 70 }, { h: 'Qtd.', w: 16, a: 'r' }, { h: 'Preço unit.', w: 28, a: 'r' }, { h: 'Total', w: 28, a: 'r' }],
+      e.itens.map(it => [it.nome + ' (congelada)', String(it.n), eu(it.preco_cent), { t: eu(it.n * it.preco_cent), b: true }]),
+      { totalRow: ['Total', String(e.itens.reduce((a, it) => a + it.n, 0)), '', eu(e.total_cent)] });
+    c.y += 2;
+    const metodoTxt = e.metodo === 'dinheiro' ? 'Dinheiro' : 'MB Way';
+    if (e.pago) {
+      c.par('Pago (' + metodoTxt + ')', eu(e.total_cent), { bold: true, cor: PDFU.VERDE });
+    } else {
+      if (e.sinal_cent) c.par('Sinal recebido (' + metodoTxt + ')', eu(e.sinal_cent));
+      c.par('Por pagar', eu(e.total_cent - (e.sinal_cent || 0)), { bold: true, cor: PDFU.VERMELHO, size: 11 });
+    }
+    if (e.notas) { c.y += 3; c.texto('Notas: ' + e.notas, { size: 9 }); }
+    c.y += 6;
+    c.texto('Conservar congelado a -18 °C. Depois de descongelada, não voltar a congelar.', { size: 8.5, cor: PDFU.CINZA });
+    c.texto('Esfiha da Casa · WhatsApp +351 938 211 480 · esfihadacasa.com', { size: 8.5, cor: PDFU.CINZA });
+    c.texto('Documento informativo da encomenda.', { size: 8, cor: PDFU.CINZA });
+    c.guardar('recibo-congelados-' + e.numero + '-' + (e.nome || 'cliente').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf');
   }
 
   async function marcar(id, campos) {
