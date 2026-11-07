@@ -1102,7 +1102,7 @@
           ${entrega ? ' · ' + esc(p.localidade || 'localidade por confirmar') : ''}
           ${entrega && p.morada ? '<br>' + esc(p.morada) : ''}
           ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
-          ${p.telefone ? '<br>📞 ' + esc(p.telefone) : ''}
+          <br>📞 ${p.telefone ? esc(p.telefone) : '<i>sem número</i>'} <button class="ac" style="padding:2px 8px;font-size:12px" onclick="editarTelefone(${p.id})">✏️ Corrigir nº</button>
           ${p.origem && p.origem !== 'congelados' ? ' · veio de ' + esc(p.origem) : ''}
           <br>${metodoPagamentoLabel(p)}
           ${p.origem === 'congelados' && !p.pago ? `<br><b style="color:var(--red)">💰 Sinal ${eur((dados.congelado || {}).sinal_cent || 0)} · por pagar ${eur((p.total_cent || 0) - ((dados.congelado || {}).sinal_cent || 0))}</b>` : ''}
@@ -1308,6 +1308,26 @@
     document.getElementById('maTotalNovo').value = '';
     await carregar();
     renderLinhasAtuais(id);
+  }
+
+  // Corrige o telefone do cliente (erro de digitacao, indicativo errado...)
+  // para depois conseguir avisar pelo WhatsApp.
+  async function editarTelefone(id) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p) return;
+    const novo = prompt('Telefone do cliente (com indicativo, ex.: +351912345678).\nCorrija o que estiver errado:', p.telefone || '+351');
+    if (novo === null) return;
+    const r = await api('/painel/pedido-telefone', { method: 'POST', body: JSON.stringify({ id, telefone: novo }) });
+    if (!r.ok) {
+      const msg = {
+        telefone_sem_indicativo: 'Falta o indicativo (ex.: +351 para Portugal).',
+        telefone_invalido: 'Número inválido: use + e o indicativo seguido de 8 a 15 dígitos.',
+        telefone_pt_invalido: 'Número português inválido: tem de ter 9 dígitos e começar por 9.'
+      }[r.erro] || 'Não foi possível guardar.';
+      alert(msg);
+      return;
+    }
+    await carregar();
   }
 
   // ---------- Encomendas de congelados ----------

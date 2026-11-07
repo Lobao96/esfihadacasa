@@ -1294,6 +1294,38 @@ async function marcarOfertaProducao(request, env) {
 // em que a soma dos precos unitarios dos itens nao bate certo com o preco
 // real do combo. Pedido pelo Miguel em 2026-11-01. Fica sempre registado
 // em itens.linhas para ficar rastreavel quem/quando mudou o valor.
+// Corrige o telefone de um pedido (erro de digitacao do cliente, indicativo
+// errado, etc.) para a equipa conseguir avisar o cliente. Normaliza para
+// "+<indicativo><numero>" e valida: +351 so com numero movel (9xxxxxxxx).
+async function corrigirTelefonePedido(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  let t = String(b.telefone || '').trim().replace(/[\s().-]/g, '');
+  if (t.startsWith('00')) t = '+' + t.slice(2);
+  if (!t.startsWith('+')) {
+    if (/^9\d{8}$/.test(t)) t = '+351' + t;
+    else return j({ ok: false, erro: 'telefone_sem_indicativo' }, 400);
+  }
+  if (!/^\+\d{8,15}$/.test(t)) return j({ ok: false, erro: 'telefone_invalido' }, 400);
+  if (t.startsWith('+351') && !/^\+3519\d{8}$/.test(t)) return j({ ok: false, erro: 'telefone_pt_invalido' }, 400);
+
+  const p = await env.DB.prepare('SELECT * FROM pedidos WHERE id = ?').bind(id).first();
+  if (!p) return j({ ok: false, erro: 'pedido nao encontrado' }, 404);
+
+  let it = null;
+  try { it = JSON.parse(p.itens || 'null'); } catch (e) {}
+  if (it && !Array.isArray(it)) {
+    it.linhas = Array.isArray(it.linhas) ? it.linhas : [];
+    it.linhas.push(`Correção no painel: telefone alterado de ${p.telefone || '(vazio)'} para ${t}`);
+  }
+  const agora = new Date().toISOString();
+  await env.DB.prepare('UPDATE pedidos SET telefone = ?, itens = ?, atualizado_em = ? WHERE id = ?')
+    .bind(t, it && !Array.isArray(it) ? JSON.stringify(it) : p.itens, agora, id).run();
+  return j({ ok: true, telefone: t });
+}
+
 async function corrigirTotalPedido(request, env) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
@@ -2339,6 +2371,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido-item-acrescentado' && request.method === 'POST') return await ajustarItemAcrescentado(request, env);
         if (p === '/api/painel/pedido-producao-oferta' && request.method === 'POST') return await marcarOfertaProducao(request, env);
         if (p === '/api/painel/pedido-total' && request.method === 'POST') return await corrigirTotalPedido(request, env);
+        if (p === '/api/painel/pedido-telefone' && request.method === 'POST') return await corrigirTelefonePedido(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/congelados' && request.method === 'POST') return await criarEncomendaCongelados(request, env);
