@@ -432,7 +432,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, momento));
-    window.open(waUrl(num, txt), 'esfiha_wa_cliente');
+    abrirWa(waUrl(num, txt), 'esfiha_wa_cliente');
   }
 
   // Ao marcar como pago, já manda logo o recibo pelo WhatsApp — sem precisar
@@ -442,7 +442,7 @@
     let janela = null;
     const pCg = pedidos.find(x => x.id === id);
     const eCg = !!(pCg && pCg.origem === 'congelados');
-    if (novoValor && !eCg) janela = window.open('', 'esfiha_wa_cliente');
+    if (novoValor && !eCg && EH_MOVEL) janela = window.open('', 'esfiha_wa_cliente');
     await marcar(id, { pago: novoValor });
     if (eCg) return;
     if (!novoValor) { if (janela) janela.close(); return; }
@@ -452,7 +452,7 @@
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemPara(p, 'pago'));
     const url = waUrl(num, txt);
-    if (janela) janela.location.href = url; else window.open(url, 'esfiha_wa_cliente');
+    if (janela) janela.location.href = url; else abrirWa(url, 'esfiha_wa_cliente');
   }
 
   // Ao carregar em "Começar a fazer": marca sempre a preparação (desconta
@@ -473,10 +473,22 @@
   }
 
   // WhatsApp do estafeta (só dígitos, com 351).
-  // Link do WhatsApp (wa.me abre a app que o aparelho tem por defeito).
+  // WhatsApp. No telemovel: wa.me (abre a app por defeito, como antes).
+  // No computador: o wa.me abre uma pagina que tenta abrir sozinha a app
+  // pessoal do Mac, por isso vai-se direto ao WhatsApp Web, aberto como link
+  // externo (no navegador por defeito, onde esta a sessao do Business).
   // num = so digitos (pode vir vazio); txt = texto ja codificado.
+  const EH_MOVEL = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
   function waUrl(num, txt) {
-    return 'https://wa.me/' + (num || '') + '?text=' + txt;
+    const ph = num ? 'phone=' + num + '&' : '';
+    if (EH_MOVEL) return 'https://wa.me/' + (num || '') + '?text=' + txt;
+    return 'https://web.whatsapp.com/send?' + ph + 'text=' + txt;
+  }
+  function abrirWa(url, alvo) {
+    if (EH_MOVEL) { window.open(url, alvo); return; }
+    const l = document.createElement('a');
+    l.href = url; l.target = '_blank'; l.rel = 'noopener noreferrer';
+    document.body.appendChild(l); l.click(); l.remove();
   }
 
   const ESTAFETA_WA = '351913825385';
@@ -502,7 +514,7 @@
     const p = pedidos.find(x => x.id === id);
     if (!p) return;
     const txt = encodeURIComponent(mensagemEstafeta(p));
-    window.open(waUrl(ESTAFETA_WA, txt), 'esfiha_wa_estafeta');
+    abrirWa(waUrl(ESTAFETA_WA, txt), 'esfiha_wa_estafeta');
   }
 
   async function chamarUber(id) {
@@ -559,7 +571,7 @@
     const tel = (p.telefone || '').replace(/[^0-9]/g, '');
     const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
     const txt = encodeURIComponent(mensagemCancelado(Object.assign({}, p, { motivo_cancelamento: motivo }), '#' + p.numero));
-    window.open(waUrl(num, txt), 'esfiha_wa_cliente');
+    abrirWa(waUrl(num, txt), 'esfiha_wa_cliente');
 
     const d = dadosDe(p);
     const temUber = d.entrega && d.entrega.uber_delivery_id && !d.entrega.uber_cancelada_em;
@@ -1403,7 +1415,7 @@
     const e = cgUltima; if (!e) return;
     const num = e.telefone.replace(/[^0-9]/g, '');
     const txt = textoReciboWhats(e);
-    window.open(waUrl(num, encodeURIComponent(txt)), 'esfiha_wa_cliente');
+    abrirWa(waUrl(num, encodeURIComponent(txt)), 'esfiha_wa_cliente');
   }
   function encomendaDoPedido(p) {
     const d = dadosDe(p), c = d.congelado || {};
@@ -1475,7 +1487,7 @@
     // recibo para ver e a conversa com o texto. Nada é descarregado; para o
     // anexar à conversa, grava-o a partir do separador do recibo.
     reciboCongeladoPdf(e);
-    window.open(waUrl((e.telefone || '').replace(/[^0-9]/g, ''), encodeURIComponent(txt)), 'esfiha_wa_cliente');
+    abrirWa(waUrl((e.telefone || '').replace(/[^0-9]/g, ''), encodeURIComponent(txt)), 'esfiha_wa_cliente');
   }
   async function enviarReciboPedido(id) { const p = pedidos.find(x => x.id === id); if (p) enviarReciboWhats(encomendaDoPedido(p)); }
 
