@@ -473,21 +473,10 @@
   }
 
   // WhatsApp do estafeta (só dígitos, com 351).
-  // Abre sempre o WhatsApp BUSINESS (nao o pessoal): no Android indica a app
-  // pelo nome do pacote, no iPhone usa o esquema da app Business e no
-  // computador abre o WhatsApp Web (onde se entra com a conta Business).
+  // Link do WhatsApp (wa.me abre a app que o aparelho tem por defeito).
   // num = so digitos (pode vir vazio); txt = texto ja codificado.
   function waUrl(num, txt) {
-    const ua = navigator.userAgent || '';
-    const n = num || '';
-    const ph = n ? 'phone=' + n + '&' : '';
-    if (/Android/i.test(ua)) {
-      const fb = encodeURIComponent('https://wa.me/' + n + '?text=' + txt);
-      return 'intent://send/?' + ph + 'text=' + txt +
-        '#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=' + fb + ';end';
-    }
-    if (/iPhone|iPad|iPod/i.test(ua)) return 'whatsapp-business://send?' + ph + 'text=' + txt;
-    return 'https://web.whatsapp.com/send?' + ph + 'text=' + txt;
+    return 'https://wa.me/' + (num || '') + '?text=' + txt;
   }
 
   const ESTAFETA_WA = '351913825385';
