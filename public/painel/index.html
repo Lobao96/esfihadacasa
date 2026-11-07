@@ -316,7 +316,7 @@
     <div class="modal-box" style="max-width:420px">
       <div id="cgForm">
         <h3>🧊 Nova encomenda de congelados</h3>
-        <p class="nota">Para levantar. Preço automático: 2,00 € por unidade, 1,70 € acima de 20 unidades (soma de todos os sabores). Podes mudar o preço de cada linha.</p>
+        <p class="nota">Para levantar. Preço automático: 2,00 € por unidade, 1,70 € a partir de 20 unidades (soma de todos os sabores). Podes mudar o preço de cada linha.</p>
 
         <label class="cg-l">Nome do cliente</label>
         <input type="text" id="cgNome" class="cg-i" placeholder="Nome" autocomplete="off">
@@ -1298,9 +1298,9 @@
     ['classica', 'A Clássica'], ['italiana', 'A Italiana'],
     ['todo', 'A Que Todo Mundo Ama (doce)'], ['irres', 'A Irresistível (doce)'], ['dif', 'A Diferentona (doce)'],
   ];
-  // Tabela de preços das congeladas: 2,00€/un; 1,70€/un acima de 20 unidades
+  // Tabela de preços das congeladas: 2,00€/un; 1,70€/un a partir de 20 unidades
   // (soma de todos os sabores da encomenda). Continua editável por linha.
-  const CG_PRECO_NORMAL = 2.00, CG_PRECO_GRANDE = 1.70, CG_LIMITE = 20;
+  const CG_PRECO_NORMAL = 2.00, CG_PRECO_GRANDE = 1.70, CG_LIMITE = 20; // limite: a partir de 20 unidades inclusive
   let cgUltima = null;
 
   function cgNum(v) { return parseFloat(String(v).replace(',', '.')) || 0; }
@@ -1338,10 +1338,10 @@
   function cgCalc() {
     // preço automático por escalão, a não ser que o preço dessa linha tenha sido mexido à mão
     const nTotal = Array.from(document.querySelectorAll('#cgLinhas .cg-n')).reduce((a, x) => a + (parseInt(x.value, 10) || 0), 0);
-    const auto = nTotal > CG_LIMITE ? CG_PRECO_GRANDE : CG_PRECO_NORMAL;
+    const auto = nTotal >= CG_LIMITE ? CG_PRECO_GRANDE : CG_PRECO_NORMAL;
     document.querySelectorAll('#cgLinhas .cg-p').forEach(x => { if (!x.dataset.manual) x.value = auto.toFixed(2); });
     const dica = document.getElementById('cgDica');
-    if (dica) dica.textContent = nTotal + ' unidade' + (nTotal === 1 ? '' : 's') + ' → ' + eur(Math.round(auto * 100)) + ' cada' + (nTotal > CG_LIMITE ? ' (preço acima de 20 unidades)' : ' (passa a ' + eur(Math.round(CG_PRECO_GRANDE * 100)) + ' acima de 20)');
+    if (dica) dica.textContent = nTotal + ' unidade' + (nTotal === 1 ? '' : 's') + ' → ' + eur(Math.round(auto * 100)) + ' cada' + (nTotal >= CG_LIMITE ? ' (preço a partir de 20 unidades)' : ' (passa a ' + eur(Math.round(CG_PRECO_GRANDE * 100)) + ' a partir de 20)');
     const total = cgLinhasLidas().reduce((a, l) => a + l.n * l.preco_cent, 0);
     const pago = document.getElementById('cgPago').checked;
     const sinal = pago ? total : Math.min(total, Math.round(cgNum(document.getElementById('cgSinal').value) * 100));
