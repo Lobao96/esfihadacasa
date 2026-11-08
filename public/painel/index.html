@@ -468,7 +468,13 @@
     // utilizador; se isto corresse depois do marcar() abaixo, o popup
     // podia ser bloqueado em silêncio.
     if (p) abrirWhats(id, 'preparacao');
-    if (p && p.modo === 'entrega') enviarEstafeta(id);
+    if (p && p.modo === 'entrega') {
+      // No telemovel abrem-se as duas conversas de seguida. No computador o
+      // WhatsApp Web so tem uma aba: primeiro o cliente, e depois um botao
+      // para avisar a estafeta (assim a 2.a mensagem nao apaga a 1.a).
+      if (EH_MOVEL) enviarEstafeta(id);
+      else mostrarProximoEstafeta(id);
+    }
     await marcar(id, { estado: 'preparacao' });
   }
 
@@ -487,7 +493,9 @@
   function abrirWa(url, alvo) {
     if (EH_MOVEL) { window.open(url, alvo); return; }
     const l = document.createElement('a');
-    l.href = url; l.target = '_blank'; l.rel = 'noopener noreferrer';
+    // Sempre a MESMA aba (nome fixo): o WhatsApp Web nao deixa ter duas abas
+    // abertas ao mesmo tempo (a segunda mostra "ja esta aberto noutra janela").
+    l.href = url; l.target = 'esfiha_whatsapp_web'; l.rel = 'noopener';
     document.body.appendChild(l); l.click(); l.remove();
   }
 
@@ -508,6 +516,22 @@
       (p.telefone ? `Telefone: ${p.telefone}\n` : '') +
       (p.pago ? 'Já pago ✅\n' : `Cobrar ${eur(p.total_cent)} ao cliente\n`) +
       `\nDetalhes: ${link}`;
+  }
+
+  // Faixa no fundo do ecra: depois de enviar a mensagem ao cliente, um clique
+  // abre a conversa da estafeta na mesma aba do WhatsApp Web.
+  function mostrarProximoEstafeta(id) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p) return;
+    let b = document.getElementById('faixaEstafeta');
+    if (b) b.remove();
+    b = document.createElement('div');
+    b.id = 'faixaEstafeta';
+    b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:76px;z-index:9999;background:#3b2314;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px';
+    b.innerHTML = '<span style="flex:1;min-width:180px">1) Envia a mensagem ao cliente no WhatsApp. 2) Depois carrega aqui para avisar a estafeta (#' + esc(String(p.numero)) + ').</span>' +
+      '<button class="ac" style="background:#fff;color:#3b2314" onclick="document.getElementById(\'faixaEstafeta\').remove();enviarEstafeta(' + id + ')">🛵 Avisar estafeta</button>' +
+      '<button class="ac" style="background:transparent;color:#fff;border-color:#fff" onclick="document.getElementById(\'faixaEstafeta\').remove()">Fechar</button>';
+    document.body.appendChild(b);
   }
 
   function enviarEstafeta(id) {
