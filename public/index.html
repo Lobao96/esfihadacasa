@@ -1767,7 +1767,18 @@
   // Um codigo promocional nunca e valido com combos (ja tem preco fixo e
   // bebidas incluidas) nem com a promocao automatica de bebida gratis (10+
   // esfihas avulsas) -- sao beneficios que nao acumulam entre si.
-  function carrinhoTemCombo() { return units.some(u => isCombo(u.itemId)); }
+  // Codigos feitos para um combo especifico (o combo individual): so esse
+  // combo e aceite com eles. Tem de bater certo com PROMO_COMBO_PERMITIDO
+  // no servidor (src/index.js).
+  const PROMO_COMBO_PERMITIDO = { RAYGANHOU: ['combo1'] };
+  function codigoPromoAtual() {
+    const i = document.getElementById('promoInput');
+    return String(promoAplicado || (i && i.value) || '').trim().toUpperCase();
+  }
+  function carrinhoTemCombo() {
+    const ok = PROMO_COMBO_PERMITIDO[codigoPromoAtual()] || [];
+    return units.some(u => isCombo(u.itemId) && ok.indexOf(u.itemId) < 0);
+  }
   function promoBloqueadaPorOutraPromo() {
     if (carrinhoTemCombo()) return 'Este código não é válido com combos.';
     if (contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas) return 'Este código não acumula com a promoção de bebida grátis (10+ esfihas).';

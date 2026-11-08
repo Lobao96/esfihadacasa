@@ -651,7 +651,15 @@ async function novoPedido(request, env, ctx) {
     // combo no carrinho, isto e so a rede de segurança: toda linha de combo
     // comeca sempre por "Combo " (nome do catalogo em COMBOS).
     const linhasRecebidas = (b.itens && typeof b.itens === 'object' && !Array.isArray(b.itens) && Array.isArray(b.itens.linhas)) ? b.itens.linhas : [];
-    if (linhasRecebidas.some(l => /^Combo\s/i.test(String(l || '')))) {
+    // Excecao: certos codigos (PROMO_COMBO_PERMITIDO) foram feitos de
+    // proposito para um combo especifico (ex.: premio de sorteio = Combo
+    // individual) e so esse combo e aceite com eles.
+    const combosPermitidos = (PROMO_COMBO_PERMITIDO[codigoPromo] || []).map(x => x.toLowerCase());
+    if (linhasRecebidas.some(l => {
+      const t = String(l || '').trim();
+      if (!/^Combo\s/i.test(t)) return false;
+      return !combosPermitidos.some(n => t.toLowerCase().startsWith(n));
+    })) {
       return j({ ok: false, erro: 'promo_nao_acumula_combo' }, 400);
     }
     promoAplicado = linhaPromo;
@@ -1665,6 +1673,12 @@ async function mudarStock(request, env) {
 //   min_esfihas, deixa de ajustar ao preco fixo e passa a aplicar so o
 //   desconto_cent normal (para nao dar descontos cada vez maiores em
 //   pedidos cada vez maiores).
+// Codigos promocionais que SO funcionam com um combo especifico (o combo
+// individual). Qualquer outro codigo continua a nao acumular com combos.
+const PROMO_COMBO_PERMITIDO = {
+  RAYGANHOU: ['Combo Minha Fome, Minhas Regras'],
+};
+
 function calcularDescontoPromo(linha, totalOriginalCent, nEsfihas) {
   const minEsfihas = linha.min_esfihas || 0;
   if (minEsfihas > 0 && nEsfihas < minEsfihas) return null;
