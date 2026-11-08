@@ -1781,7 +1781,9 @@
   }
   function promoBloqueadaPorOutraPromo() {
     if (carrinhoTemCombo()) return 'Este código não é válido com combos.';
-    if (contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas) return 'Este código não acumula com a promoção de bebida grátis (10+ esfihas).';
+    // O codigo do sorteio (PROMO_COMBO_PERMITIDO) mantem-se sempre, mesmo com
+    // 10+ esfihas: nesse caso a bebida gratis automatica e que fica de fora.
+    if (!PROMO_COMBO_PERMITIDO[codigoPromoAtual()] && contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas) return 'Este código não acumula com a promoção de bebida grátis (10+ esfihas).';
     return null;
   }
 
