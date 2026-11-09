@@ -1127,6 +1127,7 @@
           ${entrega && p.morada ? '<br>' + esc(p.morada) : ''}
           ${entrega && infoEntrega.minutos ? '<br>🛵 ~' + infoEntrega.minutos + ' min estimados' + (infoEntrega.custo_cent ? ' · custo ' + eur(infoEntrega.custo_cent) : '') : ''}
           <br>📞 ${p.telefone ? esc(p.telefone) : '<i>sem número</i>'} <button class="ac" style="padding:2px 8px;font-size:12px" onclick="editarTelefone(${p.id})">✏️ Corrigir nº</button>
+          ${p.fiel_n ? `<br>⭐ Cartão fidelidade: ${(p.fiel_n % 5) || 5}/5 pedidos${p.fiel_codigo ? ` · código <b>${esc(p.fiel_codigo)}</b> ${p.fiel_usado ? '(já usado)' : '(por usar)'}` : ''}` : ''}
           ${p.origem && p.origem !== 'congelados' ? ' · veio de ' + esc(p.origem) : ''}
           <br>${metodoPagamentoLabel(p)}
           ${p.origem === 'congelados' && !p.pago ? `<br><b style="color:var(--red)">💰 Sinal ${eur((dados.congelado || {}).sinal_cent || 0)} · por pagar ${eur((p.total_cent || 0) - ((dados.congelado || {}).sinal_cent || 0))}</b>` : ''}
@@ -1151,6 +1152,7 @@
           ${entrega && p.estado !== 'entregue' && p.estado !== 'cancelado' ? `<button class="ac wa" onclick="enviarEstafeta(${p.id})">🛵 Enviar ao estafeta</button>` : ''}
           ${p.token && momentoDe(p) ? `<button class="ac wa" onclick="abrirWhats(${p.id}, '${momentoDe(p)}')">
             💬 Avisar${p.telefone ? '' : ' (sem nº)'}</button>` : ''}
+          ${p.fiel_codigo && !p.fiel_usado ? `<button class="ac destaque" onclick="enviarFidelidade(${p.id})">🎁 Enviar código de fidelidade</button>` : ''}
           ${p.token ? `<button class="ac" id="lnk${p.id}" onclick="copiarLink(${p.id})">🔗 Copiar link</button>` : ''}
           ${p.origem === 'congelados' ? `<button class="ac wa" onclick="pedidoCongeladoPdf(${p.id})">👁️ Ver recibo</button><button class="ac" onclick="enviarReciboPedido(${p.id})">📤 Enviar</button>` : ''}
           <button class="ac" onclick="imprimirPedido(${p.id})">🖨️ Imprimir</button>
@@ -1332,6 +1334,25 @@
     document.getElementById('maTotalNovo').value = '';
     await carregar();
     renderLinhasAtuais(id);
+  }
+
+  // Cartao de fidelidade: mensagem de parabens com o codigo de 10% (o codigo
+  // e criado pelo servidor quando o pedido 5, 10, 15... fica entregue).
+  function mensagemFidelidade(p) {
+    const nome = (p.nome || '').trim().split(/\s+/)[0];
+    return `Parabéns${nome ? ', ' + nome : ''}! Você já fez ${p.fiel_n || 5} encomendas com a gente ☺️\n\n` +
+      `Como agradecimento, você tem 10% de desconto na sua próxima encomenda (nas esfihas e bebidas).\n\n` +
+      `Seu código: ${p.fiel_codigo}\n` +
+      `É só escrever o código no campo "Código promocional" do pedido, em ${location.origin}\n` +
+      `(vale só para este número de WhatsApp e uma única vez).\n\n` +
+      `Obrigado pela fidelidade e por confiar na gente!`;
+  }
+  function enviarFidelidade(id) {
+    const p = pedidos.find(x => x.id === id);
+    if (!p || !p.fiel_codigo) return;
+    const tel = (p.telefone || '').replace(/[^0-9]/g, '');
+    const num = tel ? (tel.length === 9 ? '351' + tel : tel) : '';
+    abrirWa(waUrl(num, encodeURIComponent(mensagemFidelidade(p))), 'esfiha_wa_cliente');
   }
 
   // Corrige o telefone do cliente (erro de digitacao, indicativo errado...)

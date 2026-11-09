@@ -633,8 +633,13 @@ async function novoPedido(request, env, ctx) {
   const codigoPromoBruto = limpar(b.codigoPromo, 40);
   if (codigoPromoBruto && codigoPromoBruto.trim()) {
     const codigoPromo = codigoPromoBruto.trim().toUpperCase();
+    await garantirFidelidade(env);
     const linhaPromo = await env.DB.prepare('SELECT * FROM codigos_promo WHERE codigo = ?').bind(codigoPromo).first();
     if (!linhaPromo) return j({ ok: false, erro: 'promo_invalido' }, 400);
+    // Codigo de fidelidade: so vale para o telefone a que foi dado.
+    if (linhaPromo.tipo === 'fidelidade' && chaveTelefone(telCliente) !== linhaPromo.telefone) {
+      return j({ ok: false, erro: 'promo_telefone' }, 400);
+    }
     if ((linhaPromo.usos_contagem || 0) >= (linhaPromo.usos_max || 1)) return j({ ok: false, erro: 'promo_usado' }, 400);
     if ((linhaPromo.min_esfihas || 0) > 0 && nEsfihasReal < linhaPromo.min_esfihas) {
       return j({ ok: false, erro: 'promo_minimo_esfihas', min_esfihas: linhaPromo.min_esfihas }, 400);
@@ -689,7 +694,8 @@ async function novoPedido(request, env, ctx) {
   if (!ensaio && pisoCent > 0 && totalOriginalCent < pisoCent) {
     return j({ ok: false, erro: 'total_invalido' }, 400);
   }
-  const descontoPromoCent = promoAplicado ? (calcularDescontoPromo(promoAplicado, totalOriginalCent, nEsfihasReal) || 0) : 0;
+  const baseItensPromoCent = baseItensDoPedido(b, totalOriginalCent);
+  const descontoPromoCent = promoAplicado ? (calcularDescontoPromo(promoAplicado, totalOriginalCent, nEsfihasReal, baseItensPromoCent) || 0) : 0;
   const totalEnviadoCent = totalOriginalCent - descontoPromoCent;
   if (promoAplicado && itensObj && !Array.isArray(itensObj)) {
     if (!Array.isArray(itensObj.linhas)) itensObj.linhas = [];
@@ -1010,6 +1016,33 @@ async function listar(request, env) {
   const doces = await env.DB.prepare(
     'SELECT quantidade, minimo FROM stock_doces WHERE id = 1'
   ).first();
+  // Cartao de fidelidade: quantos pedidos entregues tem cada cliente do dia e
+  // o codigo gerado por cada pedido (se este foi o 5.o, 10.o...). Nunca deve
+  // impedir a lista de abrir.
+  try {
+    await garantirFidelidade(env);
+    const { results: contagens } = await env.DB.prepare(
+      `SELECT ${SQL_TEL_CHAVE} AS t, COUNT(*) AS n FROM pedidos
+        WHERE ${SQL_CONTA_FIEL} AND telefone IS NOT NULL GROUP BY t`
+    ).all();
+    const porTel = {};
+    (contagens || []).forEach(r => { if (r.t) porTel[r.t] = r.n; });
+    const ids = (results || []).map(r => r.id);
+    const codigos = {};
+    if (ids.length) {
+      const { results: cods } = await env.DB.prepare(
+        `SELECT codigo, pedido_origem_id, usos_contagem, usos_max FROM codigos_promo
+          WHERE tipo = 'fidelidade' AND pedido_origem_id IN (${ids.map(() => '?').join(',')})`
+      ).bind(...ids).all();
+      (cods || []).forEach(c => { codigos[c.pedido_origem_id] = c; });
+    }
+    (results || []).forEach(r => {
+      const t = chaveTelefone(r.telefone);
+      r.fiel_n = t ? (porTel[t] || 0) : 0;
+      const c = codigos[r.id];
+      if (c) { r.fiel_codigo = c.codigo; r.fiel_usado = (c.usos_contagem || 0) >= (c.usos_max || 1) ? 1 : 0; }
+    });
+  } catch (e) { /* sem fidelidade nesta resposta */ }
   return j({ ok: true, dia, pedidos: results, estado: await estadoDoDia(env.DB, dia),
              salgadas: salgadas || [], doces: doces || { quantidade: 0, minimo: 0 } });
 }
@@ -1634,6 +1667,12 @@ async function mudarPedido(request, env) {
   }
   await env.DB.batch(lote);
 
+  // Cartao de fidelidade: se este pedido acabou de ficar entregue (ou um
+  // congelado acabou de ser pago), ve se o cliente chegou a um multiplo de 5.
+  const acabouDeContar = (estado === 'entregue' && p.estado !== 'entregue')
+    || (p.origem === 'congelados' && pago && !p.pago);
+  if (acabouDeContar) await verificarFidelidade(env, p);
+
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
 }
 
@@ -1673,15 +1712,113 @@ async function mudarStock(request, env) {
 //   min_esfihas, deixa de ajustar ao preco fixo e passa a aplicar so o
 //   desconto_cent normal (para nao dar descontos cada vez maiores em
 //   pedidos cada vez maiores).
+// ------------------------------------------------------------- fidelidade
+// Cartao de fidelidade: cada 5 pedidos entregues do mesmo telefone geram um
+// codigo FIEL-XXXXXX de 10% (so nas esfihas e bebidas, nunca na taxa de
+// entrega), de uso unico e ligado a esse telefone. O ciclo repete-se de 5
+// em 5 (5.o, 10.o, 15.o...). Conta pedidos reais (nao ensaio, nao
+// cancelados) com estado "entregue"; os congelados contam quando pagos.
+const FIEL_CADA = 5;
+const FIEL_PCT = 10;
+let fidelidadeColunasOk = false;
+
+// Acrescenta as colunas novas a tabela codigos_promo na primeira vez que
+// sao precisas (sem migracao manual). "duplicate column" = ja existe.
+async function garantirFidelidade(env) {
+  if (fidelidadeColunasOk) return;
+  const cols = [
+    'desconto_pct INTEGER NOT NULL DEFAULT 0',
+    'telefone TEXT',
+    'tipo TEXT',
+    'marco INTEGER',
+    'pedido_origem_id INTEGER',
+  ];
+  for (const c of cols) {
+    try { await env.DB.prepare('ALTER TABLE codigos_promo ADD COLUMN ' + c).run(); } catch (e) { /* ja existe */ }
+  }
+  fidelidadeColunasOk = true;
+}
+
+// Ultimos 9 digitos do telefone (ignora indicativo, + e espacos) -- assim
+// "+351 931 441 324" e "931441324" sao o mesmo cliente.
+function chaveTelefone(v) {
+  const d = String(v || '').replace(/\D/g, '');
+  return d.length >= 9 ? d.slice(-9) : null;
+}
+
+const SQL_TEL_CHAVE = "substr(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '.', ''), -9)";
+const SQL_CONTA_FIEL = "ensaio = 0 AND estado != 'cancelado' AND (estado = 'entregue' OR (origem = 'congelados' AND pago = 1))";
+
+async function contarPedidosFiel(env, chave) {
+  if (!chave) return 0;
+  const r = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM pedidos WHERE ${SQL_CONTA_FIEL} AND ${SQL_TEL_CHAVE} = ?`
+  ).bind(chave).first();
+  return (r && r.n) || 0;
+}
+
+function gerarCodigoFiel() {
+  const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // sem I, L, O, 0, 1
+  const buf = new Uint8Array(6);
+  crypto.getRandomValues(buf);
+  let c = '';
+  for (const x of buf) c += alfabeto[x % alfabeto.length];
+  return 'FIEL-' + c;
+}
+
+// Chamado quando um pedido passa a "entregue" (ou um congelado a pago).
+// Se o cliente acabou de chegar a um multiplo de 5, cria o codigo (uma so
+// vez por marco). Nunca deixa a mudanca de estado falhar por causa disto.
+async function verificarFidelidade(env, p) {
+  try {
+    if (!p || p.ensaio) return null;
+    const chave = chaveTelefone(p.telefone);
+    if (!chave) return null;
+    await garantirFidelidade(env);
+    const n = await contarPedidosFiel(env, chave);
+    if (n < FIEL_CADA || n % FIEL_CADA !== 0) return null;
+    const ja = await env.DB.prepare(
+      "SELECT codigo FROM codigos_promo WHERE tipo = 'fidelidade' AND telefone = ? AND marco = ?"
+    ).bind(chave, n).first();
+    if (ja) return ja.codigo;
+    const codigo = gerarCodigoFiel();
+    await env.DB.prepare(
+      `INSERT INTO codigos_promo (codigo, descricao, desconto_cent, min_esfihas, usos_max, usos_contagem, usado,
+                                  criado_em, desconto_pct, telefone, tipo, marco, pedido_origem_id)
+       VALUES (?, ?, 0, 0, 1, 0, 0, ?, ?, ?, 'fidelidade', ?, ?)`
+    ).bind(codigo, `Fidelidade: ${n} pedidos`, new Date().toISOString(), FIEL_PCT, chave, n, p.id).run();
+    return codigo;
+  } catch (e) {
+    return null;
+  }
+}
+
 // Codigos promocionais que SO funcionam com um combo especifico (o combo
 // individual). Qualquer outro codigo continua a nao acumular com combos.
 const PROMO_COMBO_PERMITIDO = {
   RAYGANHOU: ['Combo Minha Fome, Minhas Regras'],
 };
 
-function calcularDescontoPromo(linha, totalOriginalCent, nEsfihas) {
+// Valor so das esfihas e bebidas (sem a taxa de entrega), para codigos de
+// percentagem. Nunca excede total - taxa minima de entrega; o subtotal que o
+// site envia so pode baixar este valor, nunca subi-lo.
+function baseItensDoPedido(b, totalCent) {
+  const taxaMin = b.modo === 'entrega' ? taxaEntregaAtual() : 0;
+  let base = Math.max(0, totalCent - taxaMin);
+  const sub = parseInt(b.subtotal_cent, 10);
+  if (Number.isFinite(sub) && sub >= 0) base = Math.min(base, sub);
+  return base;
+}
+
+function calcularDescontoPromo(linha, totalOriginalCent, nEsfihas, baseItensCent) {
   const minEsfihas = linha.min_esfihas || 0;
   if (minEsfihas > 0 && nEsfihas < minEsfihas) return null;
+  // Codigos de percentagem (fidelidade): so sobre esfihas e bebidas.
+  const pct = parseInt(linha.desconto_pct, 10) || 0;
+  if (pct > 0) {
+    const base = Math.max(0, Math.min(baseItensCent == null ? totalOriginalCent : baseItensCent, totalOriginalCent));
+    return Math.min(totalOriginalCent, Math.round(base * pct / 100));
+  }
   const descontoMaxCent = Math.max(0, parseInt(linha.desconto_cent, 10) || 0);
   if (linha.preco_fixo_cent != null && nEsfihas === minEsfihas) {
     const bruto = totalOriginalCent - linha.preco_fixo_cent;
@@ -1698,14 +1835,16 @@ async function validarPromo(request, env) {
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
   const codigo = String(b.codigo || '').trim().toUpperCase();
   if (!codigo) return j({ ok: false, erro: 'codigo em falta' }, 400);
-  const linha = await env.DB.prepare(
-    'SELECT codigo, usos_max, usos_contagem, desconto_cent, preco_fixo_cent, min_esfihas FROM codigos_promo WHERE codigo = ?'
-  ).bind(codigo).first();
+  await garantirFidelidade(env);
+  const linha = await env.DB.prepare('SELECT * FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
   if (!linha) return j({ ok: false, erro: 'invalido' }, 404);
   if ((linha.usos_contagem || 0) >= (linha.usos_max || 1)) return j({ ok: false, erro: 'usado' }, 409);
+  if (linha.tipo === 'fidelidade' && chaveTelefone(b.telefone) !== linha.telefone) {
+    return j({ ok: false, erro: 'telefone' }, 409);
+  }
   const totalCent = Math.max(0, parseInt(b.total_cent, 10) || 0);
   const nEsfihas = Math.max(0, parseInt(b.n_esfihas, 10) || 0);
-  const desconto = calcularDescontoPromo(linha, totalCent, nEsfihas);
+  const desconto = calcularDescontoPromo(linha, totalCent, nEsfihas, baseItensDoPedido(b, totalCent));
   if (desconto === null) {
     return j({ ok: false, erro: 'minimo_esfihas', min_esfihas: linha.min_esfihas || 0 }, 400);
   }
