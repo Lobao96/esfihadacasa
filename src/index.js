@@ -1368,6 +1368,8 @@ async function corrigirTelefonePedido(request, env) {
   const agora = new Date().toISOString();
   await env.DB.prepare('UPDATE pedidos SET telefone = ?, itens = ?, atualizado_em = ? WHERE id = ?')
     .bind(t, it && !Array.isArray(it) ? JSON.stringify(it) : p.itens, agora, id).run();
+  // Se o pedido ja conta (entregue/pago) e o numero certo chega a 5, 10... gera o codigo de fidelidade.
+  await verificarFidelidade(env, { ...p, telefone: t });
   return j({ ok: true, telefone: t });
 }
 
