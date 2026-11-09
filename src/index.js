@@ -744,9 +744,10 @@ async function novoPedido(request, env, ctx) {
         `UPDATE codigos_promo
             SET usos_contagem = usos_contagem + 1,
                 usado = CASE WHEN usos_contagem + 1 >= usos_max THEN 1 ELSE 0 END,
-                usado_pedido_id = ?, usado_em = ?
+                usado_pedido_id = ?, usado_em = ?,
+                desconto_usado_cent = COALESCE(desconto_usado_cent, 0) + ?
           WHERE codigo = ? AND usos_contagem < usos_max`
-      ).bind(res.id, agora, promoAplicado.codigo),
+      ).bind(res.id, agora, descontoPromoCent, promoAplicado.codigo),
     ];
     if (totalEnviadoCent === 0) {
       loteOpsPromo.push(env.DB.prepare('UPDATE pedidos SET pago = 1 WHERE id = ?').bind(res.id));
@@ -809,7 +810,10 @@ async function acompanhar(request, env) {
        FROM pedidos WHERE token = ?`
   ).bind(tk).first();
   if (!p) return j({ ok: false, erro: 'nao encontrado' }, 404);
-  return j({ ok: true, pedido: p });
+  // Cartao de fidelidade do cliente (so dele: o link tem o codigo do pedido).
+  let fidelidade = null;
+  if (!p.ensaio) { try { fidelidade = await estadoFidelidade(env, p.telefone); } catch (e) {} }
+  return j({ ok: true, pedido: p, fidelidade });
 }
 
 // Cria a entrega REAL no Uber Direct para um pedido (so entrega, nunca
@@ -1732,6 +1736,7 @@ async function garantirFidelidade(env) {
     'tipo TEXT',
     'marco INTEGER',
     'pedido_origem_id INTEGER',
+    'desconto_usado_cent INTEGER',
   ];
   for (const c of cols) {
     try { await env.DB.prepare('ALTER TABLE codigos_promo ADD COLUMN ' + c).run(); } catch (e) { /* ja existe */ }
@@ -1791,6 +1796,70 @@ async function verificarFidelidade(env, p) {
   } catch (e) {
     return null;
   }
+}
+
+// Estado do cartao de fidelidade de um telefone: quantos pedidos contam,
+// quantos carimbos mostra o cartao atual (0 a 5) e os codigos ainda por usar.
+// Com o 5.o/10.o pedido feito e o codigo por usar, o cartao mostra 5/5;
+// depois de o codigo ser usado, comeca um cartao novo a 0.
+function carimbosDoCartao(n, temCodigoPorUsar) {
+  const m = n % FIEL_CADA;
+  if (n > 0 && m === 0) return temCodigoPorUsar ? FIEL_CADA : 0;
+  return m;
+}
+
+async function estadoFidelidade(env, telefone) {
+  const chave = chaveTelefone(telefone);
+  if (!chave) return null;
+  await garantirFidelidade(env);
+  const n = await contarPedidosFiel(env, chave);
+  const { results } = await env.DB.prepare(
+    "SELECT codigo, marco, usos_contagem, usos_max FROM codigos_promo WHERE tipo = 'fidelidade' AND telefone = ? ORDER BY marco ASC"
+  ).bind(chave).all();
+  const porUsar = (results || []).filter(c => (c.usos_contagem || 0) < (c.usos_max || 1));
+  return {
+    n, cada: FIEL_CADA, pct: FIEL_PCT,
+    carimbos: carimbosDoCartao(n, porUsar.length > 0),
+    codigo: porUsar.length ? porUsar[0].codigo : null,
+    codigos_por_usar: porUsar.length,
+  };
+}
+
+// Painel: todos os cartoes de fidelidade (um por cliente) com os codigos
+// gerados, se ja foram usados e quanto se descontou.
+async function listarFidelidade(request, env) {
+  await garantirFidelidade(env);
+  const { results: peds } = await env.DB.prepare(
+    `SELECT nome, telefone, criado_em FROM pedidos WHERE ${SQL_CONTA_FIEL} AND telefone IS NOT NULL ORDER BY criado_em ASC`
+  ).all();
+  const clientes = {};
+  (peds || []).forEach(r => {
+    const k = chaveTelefone(r.telefone);
+    if (!k) return;
+    const c = clientes[k] || (clientes[k] = { chave: k, nome: '', telefone: '', n: 0, ultimo: '', codigos: [] });
+    c.n += 1;
+    if (r.nome) c.nome = r.nome;
+    c.telefone = r.telefone;
+    c.ultimo = r.criado_em;
+  });
+  const { results: cods } = await env.DB.prepare(
+    "SELECT codigo, telefone, marco, usos_contagem, usos_max, usado_em, usado_pedido_id, desconto_usado_cent, criado_em FROM codigos_promo WHERE tipo = 'fidelidade' ORDER BY marco ASC"
+  ).all();
+  let emitidos = 0, usados = 0, descontado = 0;
+  (cods || []).forEach(c => {
+    emitidos += 1;
+    const usado = (c.usos_contagem || 0) >= (c.usos_max || 1);
+    if (usado) { usados += 1; descontado += c.desconto_usado_cent || 0; }
+    const cli = clientes[c.telefone] || (clientes[c.telefone] = { chave: c.telefone, nome: '', telefone: c.telefone, n: 0, ultimo: '', codigos: [] });
+    cli.codigos.push({ codigo: c.codigo, marco: c.marco, usado, usado_em: c.usado_em || null,
+                       desconto_cent: c.desconto_usado_cent || 0, criado_em: c.criado_em });
+  });
+  const lista = Object.values(clientes).map(c => {
+    const porUsar = c.codigos.filter(x => !x.usado).length;
+    return Object.assign(c, { carimbos: carimbosDoCartao(c.n, porUsar > 0), por_usar: porUsar });
+  }).sort((a, b) => (b.por_usar - a.por_usar) || (b.n - a.n) || String(b.ultimo).localeCompare(String(a.ultimo)));
+  return j({ ok: true, cada: FIEL_CADA, pct: FIEL_PCT, clientes: lista,
+             resumo: { clientes: lista.length, emitidos, usados, por_usar: emitidos - usados, descontado_cent: descontado } });
 }
 
 // Codigos promocionais que SO funcionam com um combo especifico (o combo
@@ -2525,6 +2594,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido-producao-oferta' && request.method === 'POST') return await marcarOfertaProducao(request, env);
         if (p === '/api/painel/pedido-total' && request.method === 'POST') return await corrigirTotalPedido(request, env);
         if (p === '/api/painel/pedido-telefone' && request.method === 'POST') return await corrigirTelefonePedido(request, env);
+        if (p === '/api/painel/fidelidade' && request.method === 'GET') return await listarFidelidade(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/congelados' && request.method === 'POST') return await criarEncomendaCongelados(request, env);

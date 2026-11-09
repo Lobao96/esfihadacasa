@@ -56,6 +56,21 @@
     text-decoration:none;font-weight:800;padding:13px;border-radius:999px}
   .avaliar{display:block;text-align:center;margin-top:10px;background:#fff;color:var(--ink);
     text-decoration:none;font-weight:800;padding:13px;border-radius:999px;border:2px solid #F4B942}
+
+  /* Cartao de fidelidade (carimbos) */
+  .fiel{background:var(--white);border-radius:18px;padding:18px 18px 16px;margin-top:16px;
+    box-shadow:0 6px 22px rgba(58,31,18,.08);border:2px dashed rgba(200,35,43,.35)}
+  .fiel h3{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.15rem;color:var(--red-dark);margin-bottom:2px}
+  .fiel .fiel-sub{font-size:.84rem;color:var(--ink-soft);font-weight:600;margin-bottom:12px}
+  .carimbos{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .carimbo{aspect-ratio:1/1;border-radius:50%;position:relative;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    border:2px dashed #D9CBB4;color:#C9B99F;font-weight:800;font-family:'Baloo 2',sans-serif;font-size:1.1rem;background:#FFFAF0}
+  .carimbo.cheio{border:2px solid var(--red);background:var(--red);box-shadow:0 2px 6px rgba(200,35,43,.25)}
+  .carimbo.cheio img{position:absolute;left:-6%;top:-6%;width:112%;height:112%;object-fit:cover}
+  .fiel-codigo{margin-top:14px;background:var(--cream);border-radius:12px;padding:12px 14px;text-align:center}
+  .fiel-codigo .cod{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:1.5rem;letter-spacing:.06em;color:var(--red-dark)}
+  .fiel-codigo .peq{font-size:.8rem;color:var(--ink-soft);font-weight:600;line-height:1.4}
   .rodape{text-align:center;font-size:.8rem;color:var(--ink-soft);margin-top:16px;line-height:1.5}
   .erro{background:var(--white);border-radius:18px;padding:26px 20px;text-align:center}
   .erro h2{font-family:'Baloo 2',sans-serif;font-size:1.2rem;margin-bottom:8px}
@@ -130,6 +145,7 @@
       d = await r.json();
     } catch (e) { return; }               // falha de rede: mantém o que está
     if (!d || !d.ok) return semPedido('Não encontramos esse pedido. Confirme o link, ou fale com a gente no WhatsApp.');
+    window.__fiel = d.fidelidade || null;
     pintar(d.pedido);
   }
 
@@ -192,6 +208,34 @@
       </div>`;
   }
 
+  // Cartao de fidelidade: 5 carimbos com a mascote; ao completar, mostra o codigo.
+  function fidelidadeHtml(f) {
+    if (!f || !f.cada) return '';
+    const rot = [-7, 5, -4, 8, -6];
+    const bolas = [];
+    for (let i = 0; i < f.cada; i++) {
+      bolas.push(i < f.carimbos
+        ? `<div class="carimbo cheio" style="transform:rotate(${rot[i % rot.length]}deg)"><img src="/img/mascote-esfiha-da-casa.png" alt="Carimbo ${i + 1}"></div>`
+        : `<div class="carimbo">${i + 1}</div>`);
+    }
+    const faltam = f.cada - f.carimbos;
+    let sub;
+    if (f.codigo) sub = `Parabéns! Completou o cartão e ganhou <b>${f.pct}% de desconto</b> na próxima encomenda.`;
+    else if (f.carimbos === 0) sub = `Cada encomenda entregue dá um carimbo. Com ${f.cada} carimbos, ganha ${f.pct}% de desconto na seguinte.`;
+    else sub = `Faltam <b>${faltam}</b> ${faltam === 1 ? 'encomenda' : 'encomendas'} para ganhar ${f.pct}% de desconto.`;
+    const codigo = f.codigo
+      ? `<div class="fiel-codigo"><div class="peq">O seu código de desconto</div><div class="cod">${esc(f.codigo)}</div>
+         <div class="peq">Escreva-o no campo "Código promocional" ao fazer o pedido, com este mesmo número de WhatsApp. Vale uma única vez, nas esfihas e bebidas.</div></div>`
+      : '';
+    return `<div class="fiel">
+      <h3>⭐ Cartão de fidelidade</h3>
+      <div class="fiel-sub">${sub}</div>
+      <div class="carimbos">${bolas.join('')}</div>
+      ${codigo}
+      <div class="peq" style="margin-top:12px;font-size:.76rem;color:var(--ink-soft);text-align:center">Conta as encomendas feitas pelo mesmo número de telefone.</div>
+    </div>`;
+  }
+
   function pintar(p) {
     if (p.ensaio) document.getElementById('ensaio').style.display = 'block';
     const entrega = p.modo === 'entrega';
@@ -236,6 +280,7 @@
         <a class="wa" href="https://wa.me/351938211480" target="_blank" rel="noopener">Falar no WhatsApp</a>
         ${p.estado === 'entregue' ? `<a class="avaliar" href="https://g.page/r/CfdTFYTIhpoLECA/review" target="_blank" rel="noopener">⭐ Avaliar no Google</a>` : ''}
       </div>
+      ${fidelidadeHtml(window.__fiel)}
       ${reciboHtml(p)}
       ${p.pago ? `<button class="wa" style="background:var(--ink-soft);border:none;font:inherit;cursor:pointer;width:100%" onclick="window.print()">🖨️ Guardar / imprimir recibo</button>` : ''}
       <p class="rodape">Esta página atualiza sozinha.<br>Pode deixá-la aberta e ir vendo.</p>

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiéis — Esfiha da Casa</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --red: #C8232B; --cream: #FFF3DC; --ink: #3A1F12; --ink-soft: #6B4A38;
+    --line: rgba(58,31,18,0.14); --card: #FFFFFF; --verde: #1E8E4A; --gold: #F4B942;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--cream); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; padding-bottom: 76px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--cream); border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.15rem; margin: 0; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 14px 16px 30px; }
+  .login { max-width: 320px; margin: 80px auto; text-align: center; }
+  .login input { width: 100%; padding: 12px; border-radius: 10px; border: 1.5px solid var(--line); margin-bottom: 10px; font-size: 1rem; }
+  button { font-family: inherit; }
+  button.primario { background: var(--red); color: #fff; border: none; border-radius: 10px; padding: 11px 18px; font-weight: 700; cursor: pointer; }
+  button.wa { background: var(--verde); color: #fff; border: none; border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: .82rem; cursor: pointer; }
+  .resumo { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 1.5rem; line-height: 1.1; }
+  .tile span { color: var(--ink-soft); font-size: .8rem; font-weight: 700; }
+  .tile.dest b { color: var(--red); }
+  .cli { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+  .cli.alerta { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(244,185,66,.35); }
+  .cli .topo { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .cli .nome { font-weight: 800; }
+  .cli .tel { color: var(--ink-soft); font-size: .85rem; }
+  .bolas { display: flex; gap: 6px; margin: 10px 0 4px; }
+  .bola { width: 28px; height: 28px; border-radius: 50%; border: 2px dashed #D9CBB4; background: #FFFAF0; }
+  .bola.cheia { border: 2px solid var(--red); background: var(--red) url('/img/mascote-esfiha-da-casa.png') center/118% no-repeat; }
+  .info { color: var(--ink-soft); font-size: .82rem; }
+  .cod { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); margin-top: 8px; font-size: .88rem; flex-wrap: wrap; }
+  .cod b { letter-spacing: .04em; }
+  .tag { display: inline-block; font-weight: 800; font-size: .72rem; padding: 2px 9px; border-radius: 999px; }
+  .tag.porusar { background: rgba(244,185,66,.3); color: #8a5b00; }
+  .tag.usado { background: rgba(30,142,74,.14); color: var(--verde); }
+  .vazio { text-align: center; color: var(--ink-soft); padding: 28px 0; font-size: .92rem; }
+  .regra { color: var(--ink-soft); font-size: .8rem; margin: 0 0 14px; }
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); display: flex; z-index: 10; }
+  .nav-i { flex: 1; text-align: center; padding: 9px 0 7px; color: var(--ink-soft); text-decoration: none; font-size: 0.72rem; font-weight: 700; }
+  .nav-i span { display: block; font-size: 1.2rem; }
+  .nav-i.on { color: var(--red); }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <h1>⭐ Fiéis</h1>
+  <p style="color:var(--ink-soft);font-size:0.9rem;">Mesma palavra-passe do painel.</p>
+  <input type="password" id="pass" placeholder="Senha">
+  <button class="primario" onclick="entrar()" style="width:100%">Entrar</button>
+  <p id="erro" style="color:var(--red);font-size:0.85rem;"></p>
+</div>
+
+<div id="app" style="display:none">
+  <header><h1>⭐ Cartão de fidelidade</h1><span id="hora" style="color:var(--ink-soft);font-size:.85rem"></span></header>
+  <div class="wrap">
+    <p class="regra" id="regra"></p>
+    <div class="resumo" id="resumo"></div>
+    <div id="lista"></div>
+  </div>
+  <nav class="nav">
+    <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
+    <a class="nav-i" href="/admin/"><span>📊</span>Análise</a>
+    <a class="nav-i" href="/painel/recibos.html"><span>🧾</span>Recibos</a>
+    <a class="nav-i" href="/painel/caixa.html"><span>💰</span>Caixa</a>
+    <a class="nav-i on" href="/painel/fidelidade.html"><span>⭐</span>Fiéis</a>
+    <a class="nav-i" href="/painel/seguranca.html"><span>🧴</span>Higiene</a>
+  </nav>
+</div>
+
+<script>
+  const API = '/api';
+  let pass = '';
+  let dados = null;
+
+  function eur(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',') + ' €'; }
+  function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  async function api(caminho) {
+    const r = await fetch(API + caminho, { headers: { 'x-painel-pass': pass } });
+    if (r.status === 401) throw new Error('401');
+    return r.json();
+  }
+
+  // Mesmo comportamento do painel: telemovel -> wa.me; computador -> WhatsApp Web
+  // (aba unica), para nao abrir a app pessoal do Mac.
+  const EH_MOVEL = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  function waUrl(num, txt) {
+    const ph = num ? 'phone=' + num + '&' : '';
+    if (EH_MOVEL) return 'https://wa.me/' + (num || '') + '?text=' + txt;
+    return 'https://web.whatsapp.com/send?' + ph + 'text=' + txt;
+  }
+  function abrirWa(url) {
+    if (EH_MOVEL) { window.open(url, 'esfiha_wa_cliente'); return; }
+    const l = document.createElement('a');
+    l.href = url; l.target = 'esfiha_whatsapp_web'; l.rel = 'noopener';
+    document.body.appendChild(l); l.click(); l.remove();
+  }
+
+  function mensagem(c, cod) {
+    const nome = (c.nome || '').trim().split(/\s+/)[0];
+    return `Parabéns${nome ? ', ' + nome : ''}! Você já fez ${cod.marco} encomendas com a gente ☺️\n\n` +
+      `Como agradecimento, você tem 10% de desconto na sua próxima encomenda (nas esfihas e bebidas).\n\n` +
+      `Seu código: ${cod.codigo}\n` +
+      `É só escrever o código no campo "Código promocional" do pedido, em ${location.origin}\n` +
+      `(vale só para este número de WhatsApp e uma única vez).\n\n` +
+      `Nota: o cartão de fidelidade conta as encomendas feitas pelo mesmo número de telefone. A cada 5 encomendas, você ganha 10% de desconto na seguinte.\n\n` +
+      `Obrigado pela fidelidade e por confiar na gente!`;
+  }
+
+  function enviar(ci, k) {
+    const c = dados.clientes[ci];
+    const cod = c && c.codigos[k];
+    if (!cod) return;
+    let num = String(c.telefone || '').replace(/\D/g, '');
+    if (num.length === 9) num = '351' + num;
+    abrirWa(waUrl(num, encodeURIComponent(mensagem(c, cod))));
+  }
+
+  function dataCurta(iso) {
+    try { return new Date(iso).toLocaleDateString('pt-PT'); } catch (e) { return ''; }
+  }
+
+  function pintar() {
+    const d = dados;
+    document.getElementById('regra').textContent =
+      `A cada ${d.cada} encomendas entregues pelo mesmo número de telefone, o cliente ganha ${d.pct}% de desconto na seguinte (só em esfihas e bebidas). O código é gerado sozinho, vale uma vez e fica guardado depois de usado.`;
+    const r = d.resumo;
+    document.getElementById('resumo').innerHTML =
+      `<div class="tile"><b>${r.clientes}</b><span>Clientes com cartão</span></div>
+       <div class="tile dest"><b>${r.por_usar}</b><span>Códigos por usar</span></div>
+       <div class="tile"><b>${r.usados}</b><span>Códigos já usados</span></div>
+       <div class="tile"><b>${eur(r.descontado_cent)}</b><span>Total descontado</span></div>`;
+    if (!d.clientes.length) {
+      document.getElementById('lista').innerHTML = '<div class="vazio">Ainda não há clientes com pedidos entregues.</div>';
+      return;
+    }
+    document.getElementById('lista').innerHTML = d.clientes.map((c, ci) => {
+      const bolas = Array.from({ length: d.cada }, (_, i) => `<div class="bola ${i < c.carimbos ? 'cheia' : ''}"></div>`).join('');
+      const cods = c.codigos.map((x, k) => `
+        <div class="cod">
+          <div><b>${esc(x.codigo)}</b> · ao ${x.marco}.º pedido · <span class="tag ${x.usado ? 'usado' : 'porusar'}">${x.usado ? 'usado' : 'por usar'}</span>
+            <div class="info">${x.usado ? 'Usado a ' + dataCurta(x.usado_em) + ' · descontou ' + eur(x.desconto_cent) : 'Gerado a ' + dataCurta(x.criado_em)}</div></div>
+          ${x.usado ? '' : `<button class="wa" onclick="enviar(${ci},${k})">🎁 Enviar código</button>`}
+        </div>`).join('');
+      return `<div class="cli ${c.por_usar ? 'alerta' : ''}">
+        <div class="topo"><span class="nome">${esc(c.nome || 'Cliente')}</span><span class="tel">${esc(c.telefone)}</span></div>
+        <div class="bolas">${bolas}</div>
+        <div class="info">${c.carimbos}/${d.cada} carimbos · ${c.n} ${c.n === 1 ? 'encomenda entregue' : 'encomendas entregues'}${c.ultimo ? ' · última a ' + dataCurta(c.ultimo) : ''}</div>
+        ${cods}
+      </div>`;
+    }).join('');
+  }
+
+  async function carregar() {
+    try {
+      const d = await api('/painel/fidelidade');
+      if (!d || !d.ok) return;
+      dados = d;
+      pintar();
+    } catch (e) {}
+  }
+
+  function relogio() { document.getElementById('hora').textContent = new Date().toLocaleTimeString('pt-PT'); }
+
+  function abrirApp() {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = '';
+    relogio(); setInterval(relogio, 1000);
+    carregar(); setInterval(carregar, 30000);
+  }
+
+  async function entrar() {
+    pass = document.getElementById('pass').value;
+    try {
+      await api('/painel/pedidos');
+      try { localStorage.setItem('painelPass', pass); } catch (e) {}
+      abrirApp();
+    } catch (e) {
+      document.getElementById('erro').textContent = 'Senha errada.';
+    }
+  }
+
+  (function () {
+    let g = null;
+    try { g = localStorage.getItem('painelPass'); } catch (e) {}
+    if (g) { pass = g; api('/painel/pedidos').then(abrirApp).catch(() => {}); }
+  })();
+</script>
+</body>
+</html>
