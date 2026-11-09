@@ -408,7 +408,7 @@
     if (n % 5 === 0 && p.fiel_codigo && !p.fiel_usado) {
       return `🎁 Parabéns, você já fez ${n} encomendas com a gente! Seu código de 10% de desconto na próxima encomenda (nas esfihas e bebidas): ${p.fiel_codigo}\n(vale só uma vez, com este número de WhatsApp)\n\n`;
     }
-    return `⭐ Mais um carimbo no seu cartão de fidelidade: ${(n % 5) || 5}/5. A cada 5 encomendas (pelo mesmo número de telefone) você ganha 10% de desconto na seguinte.\n\n`;
+    return `⭐ Você ganhou um carimbo no seu cartão de fidelidade: ${(n % 5) || 5}/5! Continue fazendo pedidos pra ganhar o desconto: a cada 5 encomendas (pelo mesmo número de telefone) você ganha 10% na seguinte.\n\n`;
   }
 
   // Mensagem de cancelamento -- o motivo interno (pagamento/esgotou/entrega)
