@@ -406,7 +406,7 @@
     const n = p.fiel_n || 0;
     if (!n) return '';
     if (n % 5 === 0 && p.fiel_codigo && !p.fiel_usado) {
-      return `🎁 Parabéns, você já fez ${n} encomendas com a gente! Seu código de 10% de desconto na próxima encomenda (nas esfihas e bebidas): ${p.fiel_codigo}\n(vale só uma vez, com este número de WhatsApp)\n\n`;
+      return `🎁 Parabéns, você já fez ${n} encomendas com a gente! Seu código de 10% de desconto na próxima encomenda (nas esfihas e bebidas): ${p.fiel_codigo}\n\n`;
     }
     return `⭐ Você ganhou um carimbo no seu cartão de fidelidade: ${(n % 5) || 5}/5! Continue fazendo pedidos pra ganhar o desconto.\n\n`;
   }
@@ -1355,9 +1355,7 @@
     return `Parabéns${nome ? ', ' + nome : ''}! Você já fez ${p.fiel_n || 5} encomendas com a gente ☺️\n\n` +
       `Como agradecimento, você tem 10% de desconto na sua próxima encomenda (nas esfihas e bebidas).\n\n` +
       `Seu código: ${p.fiel_codigo}\n` +
-      `É só escrever o código no campo "Código promocional" do pedido, em ${location.origin}\n` +
-      `(vale só para este número de WhatsApp e uma única vez).\n\n` +
-      `Nota: o cartão de fidelidade conta as encomendas feitas pelo mesmo número de telefone. A cada 5 encomendas, você ganha 10% de desconto na seguinte.\n\n` +
+      `É só escrever o código no campo "Código promocional" do pedido, em ${location.origin}\n\n` +
       `Obrigado pela fidelidade e por confiar na gente!`;
   }
   function enviarFidelidade(id) {
