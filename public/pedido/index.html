@@ -225,7 +225,8 @@
     else sub = `Faltam <b>${faltam}</b> ${faltam === 1 ? 'encomenda' : 'encomendas'} para ganhar ${f.pct}% de desconto.`;
     const codigo = f.codigo
       ? `<div class="fiel-codigo"><div class="peq">O seu código de desconto</div><div class="cod">${esc(f.codigo)}</div>
-         <div class="peq">Escreva-o no campo "Código promocional" ao fazer o pedido, com este mesmo número de WhatsApp. Vale uma única vez, nas esfihas e bebidas.</div></div>`
+         <div class="peq">Escreva-o no campo "Código promocional" ao fazer o pedido, com este mesmo número de WhatsApp. Vale uma única vez, nas esfihas e bebidas.</div>
+         ${f.codigos_por_usar > 1 ? `<div class="peq" style="margin-top:8px"><b>Tem ${f.codigos_por_usar} códigos por usar.</b> Cada pedido aceita só um código, por isso use um de cada vez: quando usar este, aparece o seguinte.</div>` : ''}</div>`
       : '';
     return `<div class="fiel">
       <h3>⭐ Cartão de fidelidade</h3>

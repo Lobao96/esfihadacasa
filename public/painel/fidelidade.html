@@ -154,6 +154,7 @@
         <div class="topo"><span class="nome">${esc(c.nome || 'Cliente')}</span><span class="tel">${esc(c.telefone)}</span></div>
         <div class="bolas">${bolas}</div>
         <div class="info">${c.carimbos}/${d.cada} carimbos · ${c.n} ${c.n === 1 ? 'encomenda entregue' : 'encomendas entregues'}${c.ultimo ? ' · última a ' + dataCurta(c.ultimo) : ''}</div>
+        ${c.por_usar > 1 ? '<div class="info" style="margin-top:6px"><b>' + c.por_usar + ' códigos por usar</b> — o cliente só pode usar um por pedido.</div>' : ''}
         ${cods}
       </div>`;
     }).join('');
