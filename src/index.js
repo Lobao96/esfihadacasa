@@ -1362,7 +1362,23 @@ async function pedidosDoCliente(request, env) {
        FROM pedidos WHERE ensaio = 0 AND (${conds.join(' OR ')})
       ORDER BY criado_em DESC LIMIT 80`
   ).bind(...binds).all();
-  return j({ ok: true, pedidos: results || [] });
+  let todos = results || [];
+  // Junta tambem os pedidos feitos com o mesmo numero dos que foram encontrados
+  // (o cliente pode ter escrito o nome de outra forma noutro pedido).
+  const chaves = [...new Set(todos.map(r => chaveTelefone(r.telefone)).filter(Boolean))].slice(0, 10);
+  if (chaves.length) {
+    const { results: extra } = await env.DB.prepare(
+      `SELECT id, nome, telefone, estado, origem, pago, total_cent, criado_em,
+              CASE WHEN ${SQL_CONTA_FIEL} THEN 1 ELSE 0 END AS conta
+         FROM pedidos WHERE ensaio = 0 AND ${SQL_TEL_CHAVE} IN (${chaves.map(() => '?').join(',')})
+        ORDER BY criado_em DESC LIMIT 80`
+    ).bind(...chaves).all();
+    const vistos = new Set(todos.map(r => r.id));
+    (extra || []).forEach(r => { if (!vistos.has(r.id)) todos.push(r); });
+    todos.sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em)));
+    todos = todos.slice(0, 80);
+  }
+  return j({ ok: true, pedidos: todos });
 }
 
 async function corrigirTelefonePedido(request, env) {
