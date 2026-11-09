@@ -140,7 +140,7 @@
   function pintar() {
     const d = dados;
     document.getElementById('regra').textContent =
-      `A cada ${d.cada} encomendas pagas pelo mesmo número de telefone, o cliente ganha ${d.pct}% de desconto na seguinte (só em esfihas e bebidas). O código é gerado sozinho, vale uma vez e fica guardado depois de usado.`;
+      `A cada ${d.cada} encomendas pagas de 5€ ou mais (sem a entrega) pelo mesmo número de telefone, o cliente ganha ${d.pct}% de desconto na seguinte (só em esfihas e bebidas). O código é gerado sozinho, vale uma vez e fica guardado depois de usado.`;
     const r = d.resumo;
     document.getElementById('resumo').innerHTML =
       `<div class="tile"><b>${r.clientes}</b><span>Clientes com cartão</span></div>

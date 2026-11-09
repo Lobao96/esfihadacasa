@@ -1009,7 +1009,7 @@ async function listar(request, env) {
   }
   const dia = url.searchParams.get('dia') || diaLisboa();
   const { results } = await env.DB.prepare(
-    `SELECT id, numero, senha, ensaio, estado, pago, modo, localidade, morada,
+    `SELECT id, dia, numero, senha, ensaio, estado, pago, modo, localidade, morada,
             total_cent, n_esfihas, itens, mensagem, criado_em, atualizado_em,
             token, telefone, nome, origem, motivo_cancelamento
        FROM pedidos WHERE dia = ? ORDER BY ensaio ASC, numero ASC`
@@ -1043,6 +1043,7 @@ async function listar(request, env) {
     (results || []).forEach(r => {
       const t = chaveTelefone(r.telefone);
       r.fiel_n = t ? (porTel[t] || 0) : 0;
+      r.fiel_conta = pedidoContaFiel(r) ? 1 : 0;
       const c = codigos[r.id];
       if (c) { r.fiel_codigo = c.codigo; r.fiel_usado = (c.usos_contagem || 0) >= (c.usos_max || 1) ? 1 : 0; }
     });
@@ -1717,8 +1718,8 @@ async function mudarPedido(request, env) {
   // congelado acabou de ser pago), ve se o cliente chegou a um multiplo de 5.
   const acabouDeContar = (estado === 'entregue' && p.estado !== 'entregue')
     || (pago && !p.pago);
-  const contavaAntes = p.estado !== 'cancelado' && (p.pago || p.estado === 'entregue');
-  const contaAgora = estado !== 'cancelado' && (pago || estado === 'entregue');
+  const contavaAntes = pedidoContaFiel(p);
+  const contaAgora = pedidoContaFiel({ ...p, estado, pago });
   if (acabouDeContar || (contaAgora && !contavaAntes)) await verificarFidelidade(env, p);
   if (contavaAntes && !contaAgora) await revogarFidelidade(env, p.telefone);
 
@@ -1797,7 +1798,16 @@ function chaveTelefone(v) {
 }
 
 const SQL_TEL_CHAVE = "substr(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '.', ''), -9)";
-const SQL_CONTA_FIEL = "ensaio = 0 AND estado != 'cancelado' AND (pago = 1 OR estado = 'entregue')";
+// Valor minimo (so esfihas e bebidas, sem a taxa de entrega) para o pedido
+// dar carimbo: evita juntar carimbos com pedidos de quase nada.
+const FIEL_MIN_CENT = 500;
+const SQL_VALOR_ITENS = `(total_cent - CASE WHEN modo = 'entrega' AND dia != '2026-10-31' THEN ${ENTREGA_FIXA_CENT} ELSE 0 END)`;
+const SQL_CONTA_FIEL = `ensaio = 0 AND estado != 'cancelado' AND (pago = 1 OR estado = 'entregue') AND ${SQL_VALOR_ITENS} >= ${FIEL_MIN_CENT}`;
+function pedidoContaFiel(r) {
+  if (!r || r.ensaio || r.estado === 'cancelado' || !(r.pago || r.estado === 'entregue')) return false;
+  const taxa = (r.modo === 'entrega' && r.dia !== '2026-10-31') ? ENTREGA_FIXA_CENT : 0;
+  return ((r.total_cent || 0) - taxa) >= FIEL_MIN_CENT;
+}
 
 async function contarPedidosFiel(env, chave) {
   if (!chave) return 0;
