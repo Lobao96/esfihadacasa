@@ -157,7 +157,7 @@
         <div class="cod">
           <div><b>${esc(x.codigo)}</b> · ao ${x.marco}.º pedido · <span class="tag ${x.usado ? 'usado' : 'porusar'}">${x.usado ? 'usado' : 'por usar'}</span>
             <div class="info">${x.usado ? 'Usado a ' + dataCurta(x.usado_em) + ' · descontou ' + eur(x.desconto_cent) : 'Gerado a ' + dataCurta(x.criado_em)}</div></div>
-          ${x.usado ? '' : `<button class="wa" onclick="enviar(${ci},${k})">🎁 Enviar código</button>`}
+          ${x.usado ? '' : `<span><button class="wa" onclick="enviar(${ci},${k})">🎁 Enviar código</button> <button class="sec" onclick="apagarCodigo('${esc(x.codigo)}')">🗑️ Apagar</button></span>`}
         </div>`).join('');
       return `<div class="cli ${c.por_usar ? 'alerta' : ''}">
         <div class="topo"><span class="nome">${esc(c.nome || 'Cliente')}</span><span class="tel">${esc(c.telefone)}</span></div>
@@ -168,6 +168,16 @@
         ${cods}
       </div>`;
     }).join('');
+  }
+
+  async function apagarCodigo(codigo) {
+    if (!confirm('Apagar o código ' + codigo + '?\nO cliente deixa de o poder usar. Isto não se pode desfazer.')) return;
+    try {
+      const r = await fetch(API + '/painel/fidelidade-apagar', { method: 'POST',
+        headers: { 'x-painel-pass': pass, 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo }) }).then(x => x.json());
+      if (!r.ok) { alert('Não foi possível apagar (o código já foi usado?).'); return; }
+    } catch (e) { alert('Sem ligação. Tente outra vez.'); return; }
+    await carregar();
   }
 
   // ---------- Pesquisa e correção de números ----------

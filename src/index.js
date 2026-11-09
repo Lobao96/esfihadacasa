@@ -1409,6 +1409,7 @@ async function corrigirTelefonePedido(request, env) {
     .bind(t, it && !Array.isArray(it) ? JSON.stringify(it) : p.itens, agora, id).run();
   // Se o pedido ja conta (entregue/pago) e o numero certo chega a 5, 10... gera o codigo de fidelidade.
   await verificarFidelidade(env, { ...p, telefone: t });
+  if (p.telefone && chaveTelefone(p.telefone) !== chaveTelefone(t)) await revogarFidelidade(env, p.telefone);
   return j({ ok: true, telefone: t });
 }
 
@@ -1716,7 +1717,10 @@ async function mudarPedido(request, env) {
   // congelado acabou de ser pago), ve se o cliente chegou a um multiplo de 5.
   const acabouDeContar = (estado === 'entregue' && p.estado !== 'entregue')
     || (pago && !p.pago);
-  if (acabouDeContar) await verificarFidelidade(env, p);
+  const contavaAntes = p.estado !== 'cancelado' && (p.pago || p.estado === 'entregue');
+  const contaAgora = estado !== 'cancelado' && (pago || estado === 'entregue');
+  if (acabouDeContar || (contaAgora && !contavaAntes)) await verificarFidelidade(env, p);
+  if (contavaAntes && !contaAgora) await revogarFidelidade(env, p.telefone);
 
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
 }
@@ -1815,6 +1819,34 @@ function gerarCodigoFiel() {
 // Chamado quando um pedido passa a "entregue" (ou um congelado a pago).
 // Se o cliente acabou de chegar a um multiplo de 5, cria o codigo (uma so
 // vez por marco). Nunca deixa a mudanca de estado falhar por causa disto.
+// Se um cliente perdeu carimbos (pedido cancelado, numero corrigido), apaga os
+// codigos de fidelidade ainda por usar que ja nao correspondem aos pedidos.
+async function revogarFidelidade(env, telefone) {
+  try {
+    const chave = chaveTelefone(telefone);
+    if (!chave) return;
+    await garantirFidelidade(env);
+    const n = await contarPedidosFiel(env, chave);
+    await env.DB.prepare(
+      "DELETE FROM codigos_promo WHERE tipo = 'fidelidade' AND telefone = ? AND COALESCE(usos_contagem, 0) = 0 AND marco > ?"
+    ).bind(chave, n).run();
+  } catch (e) { /* nunca bloqueia */ }
+}
+
+// Apagar manualmente um codigo de fidelidade que ainda nao foi usado.
+async function apagarCodigoFiel(request, env) {
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const codigo = String(b.codigo || '').trim().toUpperCase();
+  if (!/^FIEL-[A-Z0-9]{4,10}$/.test(codigo)) return j({ ok: false, erro: 'codigo invalido' }, 400);
+  await garantirFidelidade(env);
+  const r = await env.DB.prepare(
+    "DELETE FROM codigos_promo WHERE codigo = ? AND tipo = 'fidelidade' AND COALESCE(usos_contagem, 0) = 0"
+  ).bind(codigo).run();
+  if (!r.meta || !r.meta.changes) return j({ ok: false, erro: 'nao_apagado' }, 404);
+  return j({ ok: true });
+}
+
 async function verificarFidelidade(env, p) {
   try {
     if (!p || p.ensaio) return null;
@@ -2637,6 +2669,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido-telefone' && request.method === 'POST') return await corrigirTelefonePedido(request, env);
         if (p === '/api/painel/fidelidade' && request.method === 'GET') return await listarFidelidade(request, env);
         if (p === '/api/painel/pedidos-cliente' && request.method === 'GET') return await pedidosDoCliente(request, env);
+        if (p === '/api/painel/fidelidade-apagar' && request.method === 'POST') return await apagarCodigoFiel(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/congelados' && request.method === 'POST') return await criarEncomendaCongelados(request, env);
