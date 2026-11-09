@@ -40,6 +40,15 @@
   .tag { display: inline-block; font-weight: 800; font-size: .72rem; padding: 2px 9px; border-radius: 999px; }
   .tag.porusar { background: rgba(244,185,66,.3); color: #8a5b00; }
   .tag.usado { background: rgba(30,142,74,.14); color: var(--verde); }
+  .busca { display: flex; gap: 8px; margin: 0 0 14px; }
+  .busca input { flex: 1; padding: 11px 12px; border-radius: 10px; border: 1.5px solid var(--line); font-size: 1rem; font-family: inherit; }
+  .res { background: var(--card); border: 1.5px solid var(--gold); border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; }
+  .res h3 { margin: 0 0 8px; font-size: .95rem; display: flex; justify-content: space-between; align-items: center; }
+  .ped { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: .86rem; }
+  .ped .tel { font-family: ui-monospace, Menlo, monospace; font-weight: 700; color: var(--ink); }
+  .tag.conta { background: rgba(30,142,74,.14); color: var(--verde); }
+  .tag.nao { background: rgba(58,31,18,.1); color: var(--ink-soft); }
+  button.sec { background: #fff; color: var(--ink); border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: .8rem; cursor: pointer; white-space: nowrap; }
   .vazio { text-align: center; color: var(--ink-soft); padding: 28px 0; font-size: .92rem; }
   .regra { color: var(--ink-soft); font-size: .8rem; margin: 0 0 14px; }
   .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); display: flex; z-index: 10; }
@@ -62,6 +71,8 @@
   <header><h1>⭐ Cartão de fidelidade</h1><span id="hora" style="color:var(--ink-soft);font-size:.85rem"></span></header>
   <div class="wrap">
     <p class="regra" id="regra"></p>
+    <div class="busca"><input id="q" type="search" placeholder="Pesquisar cliente por nome ou número…" onkeydown="if(event.key==='Enter')pesquisar()"><button class="primario" onclick="pesquisar()">Pesquisar</button></div>
+    <div id="res"></div>
     <div class="resumo" id="resumo"></div>
     <div id="lista"></div>
   </div>
@@ -155,9 +166,78 @@
         <div class="bolas">${bolas}</div>
         <div class="info">${c.carimbos}/${d.cada} carimbos · ${c.n} ${c.n === 1 ? 'encomenda entregue' : 'encomendas entregues'}${c.ultimo ? ' · última a ' + dataCurta(c.ultimo) : ''}</div>
         ${c.por_usar > 1 ? '<div class="info" style="margin-top:6px"><b>' + c.por_usar + ' códigos por usar</b> — o cliente só pode usar um por pedido.</div>' : ''}
+        <div style="margin-top:8px"><button class="sec" onclick="verPedidos(${ci})">🔎 Ver pedidos e corrigir nº</button></div>
         ${cods}
       </div>`;
     }).join('');
+  }
+
+  // ---------- Pesquisa e correção de números ----------
+  let resultados = [];
+  let ultimaBusca = '';
+  const estadoTxt = { novo: 'novo', preparacao: 'a preparar', caminho: 'a caminho', entregue: 'entregue', cancelado: 'cancelado' };
+
+  async function pesquisar(q) {
+    if (typeof q !== 'string') q = document.getElementById('q').value;
+    q = (q || '').trim();
+    document.getElementById('q').value = q;
+    ultimaBusca = q;
+    const box = document.getElementById('res');
+    if (q.length < 2) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="res"><span class="info">A pesquisar…</span></div>';
+    try {
+      const r = await api('/painel/pedidos-cliente?q=' + encodeURIComponent(q));
+      resultados = (r && r.pedidos) || [];
+    } catch (e) { resultados = []; }
+    pintarRes();
+  }
+
+  function verPedidos(ci) {
+    const c = dados.clientes[ci];
+    const q = (c.nome || '').trim() || String(c.telefone || '').replace(/\D/g, '').slice(-9);
+    pesquisar(q);
+    document.getElementById('res').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function pintarRes() {
+    const box = document.getElementById('res');
+    if (!ultimaBusca) { box.innerHTML = ''; return; }
+    if (!resultados.length) { box.innerHTML = '<div class="res"><span class="info">Nenhum pedido encontrado para "' + esc(ultimaBusca) + '".</span></div>'; return; }
+    const linhas = resultados.map(p => `
+      <div class="ped">
+        <div>
+          <b>#${p.id}</b> · ${esc(p.nome || 'Cliente')} · ${dataCurta(p.criado_em)}<br>
+          <span class="tel">${esc(p.telefone || '(sem número)')}</span> ·
+          ${esc(estadoTxt[p.estado] || p.estado)} · ${eur(p.total_cent)}
+          <span class="tag ${p.conta ? 'conta' : 'nao'}">${p.conta ? 'conta' : 'não conta'}</span>
+        </div>
+        <button class="sec" onclick="corrigirNum(${p.id})">✏️ Corrigir nº</button>
+      </div>`).join('');
+    box.innerHTML = `<div class="res"><h3><span>Pedidos de "${esc(ultimaBusca)}" (${resultados.length})</span><button class="sec" onclick="ultimaBusca='';pintarRes()">Fechar</button></h3>
+      <div class="info" style="margin-bottom:4px">Procura por nome e por número, em todas as datas. Se um número estiver diferente dos outros, corrija-o aqui.</div>${linhas}</div>`;
+  }
+
+  async function corrigirNum(id) {
+    const p = resultados.find(x => x.id === id);
+    if (!p) return;
+    // sugestao: o numero que mais aparece nesta pesquisa
+    const cont = {};
+    resultados.forEach(x => { if (x.telefone) cont[x.telefone] = (cont[x.telefone] || 0) + 1; });
+    const sug = Object.keys(cont).sort((a, b) => cont[b] - cont[a])[0] || p.telefone || '+351';
+    const novo = prompt('Número certo do cliente (com indicativo, ex.: +351912345678).\nPedido #' + id + ' tem agora: ' + (p.telefone || '(vazio)'), sug);
+    if (novo === null) return;
+    try {
+      const r = await fetch(API + '/painel/pedido-telefone', { method: 'POST',
+        headers: { 'x-painel-pass': pass, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, telefone: novo }) }).then(x => x.json());
+      if (!r.ok) {
+        alert({ telefone_sem_indicativo: 'Falta o indicativo (ex.: +351 para Portugal) ou os 9 dígitos começados por 9.',
+                telefone_invalido: 'Número inválido.', telefone_pt_invalido: 'Número português inválido: 9 dígitos a começar por 9.' }[r.erro] || 'Não foi possível guardar.');
+        return;
+      }
+    } catch (e) { alert('Sem ligação. Tente outra vez.'); return; }
+    await pesquisar(ultimaBusca);
+    await carregar();
   }
 
   async function carregar() {

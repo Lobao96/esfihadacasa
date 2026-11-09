@@ -1342,6 +1342,29 @@ async function marcarOfertaProducao(request, env) {
 // Corrige o telefone de um pedido (erro de digitacao do cliente, indicativo
 // errado, etc.) para a equipa conseguir avisar o cliente. Normaliza para
 // "+<indicativo><numero>" e valida: +351 so com numero movel (9xxxxxxxx).
+// Pesquisa de pedidos por nome ou telefone (de qualquer data), para corrigir
+// numeros enganados a partir do ecra dos Fieis sem andar dia a dia.
+async function pedidosDoCliente(request, env) {
+  const url = new URL(request.url);
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 60);
+  const digitos = q.replace(/\D/g, '');
+  const conds = [];
+  const binds = [];
+  if (q.length >= 2 && !/^[\d\s+().-]+$/.test(q)) { conds.push('nome LIKE ?'); binds.push('%' + q + '%'); }
+  if (digitos.length >= 4) {
+    conds.push("replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '.', '') LIKE ?");
+    binds.push('%' + digitos + '%');
+  }
+  if (!conds.length) return j({ ok: true, pedidos: [] });
+  const { results } = await env.DB.prepare(
+    `SELECT id, nome, telefone, estado, origem, pago, total_cent, criado_em,
+            CASE WHEN ${SQL_CONTA_FIEL} THEN 1 ELSE 0 END AS conta
+       FROM pedidos WHERE ensaio = 0 AND (${conds.join(' OR ')})
+      ORDER BY criado_em DESC LIMIT 80`
+  ).bind(...binds).all();
+  return j({ ok: true, pedidos: results || [] });
+}
+
 async function corrigirTelefonePedido(request, env) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
@@ -2597,6 +2620,7 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/pedido-total' && request.method === 'POST') return await corrigirTotalPedido(request, env);
         if (p === '/api/painel/pedido-telefone' && request.method === 'POST') return await corrigirTelefonePedido(request, env);
         if (p === '/api/painel/fidelidade' && request.method === 'GET') return await listarFidelidade(request, env);
+        if (p === '/api/painel/pedidos-cliente' && request.method === 'GET') return await pedidosDoCliente(request, env);
         if (p === '/api/painel/pedido-producao-ajustar' && request.method === 'POST') return await ajustarProducaoPedido(request, env);
         if (p === '/api/painel/pedido-producao-adicionar' && request.method === 'POST') return await adicionarProducaoPedido(request, env);
         if (p === '/api/painel/congelados' && request.method === 'POST') return await criarEncomendaCongelados(request, env);
