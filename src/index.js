@@ -1699,7 +1699,7 @@ async function mudarPedido(request, env) {
   // Cartao de fidelidade: se este pedido acabou de ficar entregue (ou um
   // congelado acabou de ser pago), ve se o cliente chegou a um multiplo de 5.
   const acabouDeContar = (estado === 'entregue' && p.estado !== 'entregue')
-    || (p.origem === 'congelados' && pago && !p.pago);
+    || (pago && !p.pago);
   if (acabouDeContar) await verificarFidelidade(env, p);
 
   return j({ ok: true, estado: await estadoDoDia(env.DB, p.dia) });
@@ -1746,7 +1746,7 @@ async function mudarStock(request, env) {
 // codigo FIEL-XXXXXX de 10% (so nas esfihas e bebidas, nunca na taxa de
 // entrega), de uso unico e ligado a esse telefone. O ciclo repete-se de 5
 // em 5 (5.o, 10.o, 15.o...). Conta pedidos reais (nao ensaio, nao
-// cancelados) com estado "entregue"; os congelados contam quando pagos.
+// cancelados) que estejam pagos (ou entregues): o carimbo entra assim que o pedido e marcado como pago.
 const FIEL_CADA = 5;
 const FIEL_PCT = 10;
 let fidelidadeColunasOk = false;
@@ -1777,7 +1777,7 @@ function chaveTelefone(v) {
 }
 
 const SQL_TEL_CHAVE = "substr(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '.', ''), -9)";
-const SQL_CONTA_FIEL = "ensaio = 0 AND estado != 'cancelado' AND (estado = 'entregue' OR (origem = 'congelados' AND pago = 1))";
+const SQL_CONTA_FIEL = "ensaio = 0 AND estado != 'cancelado' AND (pago = 1 OR estado = 'entregue')";
 
 async function contarPedidosFiel(env, chave) {
   if (!chave) return 0;

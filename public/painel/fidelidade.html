@@ -142,7 +142,7 @@
   function pintar() {
     const d = dados;
     document.getElementById('regra').textContent =
-      `A cada ${d.cada} encomendas entregues pelo mesmo número de telefone, o cliente ganha ${d.pct}% de desconto na seguinte (só em esfihas e bebidas). O código é gerado sozinho, vale uma vez e fica guardado depois de usado.`;
+      `A cada ${d.cada} encomendas pagas pelo mesmo número de telefone, o cliente ganha ${d.pct}% de desconto na seguinte (só em esfihas e bebidas). O código é gerado sozinho, vale uma vez e fica guardado depois de usado.`;
     const r = d.resumo;
     document.getElementById('resumo').innerHTML =
       `<div class="tile"><b>${r.clientes}</b><span>Clientes com cartão</span></div>
@@ -150,7 +150,7 @@
        <div class="tile"><b>${r.usados}</b><span>Códigos já usados</span></div>
        <div class="tile"><b>${eur(r.descontado_cent)}</b><span>Total descontado</span></div>`;
     if (!d.clientes.length) {
-      document.getElementById('lista').innerHTML = '<div class="vazio">Ainda não há clientes com pedidos entregues.</div>';
+      document.getElementById('lista').innerHTML = '<div class="vazio">Ainda não há clientes com pedidos pagos.</div>';
       return;
     }
     document.getElementById('lista').innerHTML = d.clientes.map((c, ci) => {
@@ -164,7 +164,7 @@
       return `<div class="cli ${c.por_usar ? 'alerta' : ''}">
         <div class="topo"><span class="nome">${esc(c.nome || 'Cliente')}</span><span class="tel">${esc(c.telefone)}</span></div>
         <div class="bolas">${bolas}</div>
-        <div class="info">${c.carimbos}/${d.cada} carimbos · ${c.n} ${c.n === 1 ? 'encomenda entregue' : 'encomendas entregues'}${c.ultimo ? ' · última a ' + dataCurta(c.ultimo) : ''}</div>
+        <div class="info">${c.carimbos}/${d.cada} carimbos · ${c.n} ${c.n === 1 ? 'encomenda paga' : 'encomendas pagas'}${c.ultimo ? ' · última a ' + dataCurta(c.ultimo) : ''}</div>
         ${c.por_usar > 1 ? '<div class="info" style="margin-top:6px"><b>' + c.por_usar + ' códigos por usar</b> — o cliente só pode usar um por pedido.</div>' : ''}
         <div style="margin-top:8px"><button class="sec" onclick="verPedidos(${ci})">🔎 Ver pedidos e corrigir nº</button></div>
         ${cods}

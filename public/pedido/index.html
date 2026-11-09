@@ -221,7 +221,7 @@
     const faltam = f.cada - f.carimbos;
     let sub;
     if (f.codigo) sub = `Parabéns! Completou o cartão e ganhou <b>${f.pct}% de desconto</b> na próxima encomenda.`;
-    else if (f.carimbos === 0) sub = `Cada encomenda entregue dá um carimbo. Com ${f.cada} carimbos, ganha ${f.pct}% de desconto na seguinte.`;
+    else if (f.carimbos === 0) sub = `Cada encomenda paga dá um carimbo. Com ${f.cada} carimbos, ganha ${f.pct}% de desconto na seguinte.`;
     else sub = `Faltam <b>${faltam}</b> ${faltam === 1 ? 'encomenda' : 'encomendas'} para ganhar ${f.pct}% de desconto.`;
     const codigo = f.codigo
       ? `<div class="fiel-codigo"><div class="peq">O seu código de desconto</div><div class="cod">${esc(f.codigo)}</div>

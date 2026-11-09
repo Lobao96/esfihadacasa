@@ -390,7 +390,7 @@
           ? `Combinado: paga ${eur(p.total_cent)} em dinheiro ao estafeta, na entrega.\n\n`
           : '') +
         `Você pode acompanhar tudo por aqui:\n${link}`,
-      pago: `Pagamento recebido, obrigado! 🙌\nJá vamos colocar seu pedido ${n} na bancada.\n\n👇 Veja seu pedido e a fatura aqui:\n${link}`,
+      pago: `Pagamento recebido, obrigado! 🙌\nJá vamos colocar seu pedido ${n} na bancada.\n\n` + textoCarimbo(p) + `👇 Veja seu pedido, a fatura e o seu cartão de fidelidade aqui:\n${link}`,
       preparacao: `Seu pedido ${n} já está sendo feito 🔥\n\n${link}`,
       caminho: `Seu pedido ${n} saiu para entrega 🛵\nFica de olho no celular!\n\n${link}`,
       pronto: `Seu pedido ${n} está pronto pra retirada 🫓💛\nVenha rapidinho buscar, pra aproveitar bem quentinho — já separamos tudo com carinho pra você!`,
@@ -398,6 +398,17 @@
     };
     if (momento === 'cancelado') return mensagemCancelado(p, n);
     return M[momento] || '';
+  }
+
+  // Linha do cartao de fidelidade na mensagem de pagamento: o carimbo entra
+  // assim que o pedido e dado como pago.
+  function textoCarimbo(p) {
+    const n = p.fiel_n || 0;
+    if (!n) return '';
+    if (n % 5 === 0 && p.fiel_codigo && !p.fiel_usado) {
+      return `🎁 Parabéns, você já fez ${n} encomendas com a gente! Seu código de 10% de desconto na próxima encomenda (nas esfihas e bebidas): ${p.fiel_codigo}\n(vale só uma vez, com este número de WhatsApp)\n\n`;
+    }
+    return `⭐ Mais um carimbo no seu cartão de fidelidade: ${(n % 5) || 5}/5. A cada 5 encomendas (pelo mesmo número de telefone) você ganha 10% de desconto na seguinte.\n\n`;
   }
 
   // Mensagem de cancelamento -- o motivo interno (pagamento/esgotou/entrega)
