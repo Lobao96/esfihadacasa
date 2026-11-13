@@ -627,7 +627,7 @@
   let ctDados = null;
   let ctEditId = null;
 
-  function ctNomeCat(c) { return c === 'estafeta_mb' ? '🛵 Estafeta pago por MB (correção)' : c === 'inicio' ? '🏁 Ponto de partida' : c === 'acerto' ? '🔍 Acerto (contagem)' : ((CT_CATS[c] || {}).t || c); }
+  function ctNomeCat(c) { return c === 'estafeta_eu' ? '🛵 Fui eu o estafeta' : c === 'estafeta_mb' ? '🛵 Estafeta pago por MB (correção)' : c === 'inicio' ? '🏁 Ponto de partida' : c === 'acerto' ? '🔍 Acerto (contagem)' : ((CT_CATS[c] || {}).t || c); }
   function ctEur(c) { return (c < 0 ? '−' : '') + eurCent(Math.abs(c || 0)); }
 
   function ctPreencherForm() {
@@ -718,17 +718,25 @@
 
     const movs = (d.movimentos || []).slice().reverse();
     // Pagamentos ao estafeta (vem dos fechos): mostra-se de onde saiu cada um.
-    const estafetaMB = new Map((d.movimentos || []).filter(v => v.categoria === 'estafeta_mb').map(v => [v.data, v.id]));
+    const estMov = {};
+    (d.movimentos || []).filter(v => v.categoria === 'estafeta_mb' || v.categoria === 'estafeta_eu').forEach(v => { estMov[v.data] = v; });
+    const bE = (t, tit, fn) => `<button title="${tit}" style="font-size:.74rem;border:1.5px solid var(--line);border-radius:8px;padding:4px 6px;margin:2px 0;display:block;width:100%" onclick="${fn}">${t}</button>`;
     const linhasEst = historicoCache.filter(f => f.dia.slice(0, 7) === d.mes && (f.andreza_confirmado_cent || 0) > 0)
       .sort((a, b) => b.dia.localeCompare(a.dia)).map(f => {
         const v = f.andreza_confirmado_cent;
-        const mb = estafetaMB.has(f.dia);
+        const mv = estMov[f.dia];
+        const tipo = mv ? (mv.categoria === 'estafeta_eu' ? 'eu' : 'mb') : 'din';
+        const valor = tipo === 'eu' ? '🙋 ' + eurCent(v) : (tipo === 'mb' ? '💳 ' : '💵 ') + ctEur(-v);
+        const txt = tipo === 'eu' ? 'fui eu · ficou na caixa' : tipo === 'mb' ? 'pago por MB' : 'saiu do dinheiro vivo';
+        const btns = tipo === 'din'
+          ? bE('foi por MB?', 'Foi pago por MB', `estafetaMarcar('${f.dia}', ${v}, 'mb')`) + bE('fui eu', 'Fui eu o estafeta: o dinheiro ficou na caixa', `estafetaMarcar('${f.dia}', ${v}, 'eu')`)
+          : bE('desfazer', 'Voltar a: saiu do dinheiro vivo', `apagarMov(${mv.id})`);
         return `<div class="ct-mov"><div><b>🛵 Estafeta</b> · do fecho de caixa<br><span style="color:var(--ink-soft);font-size:.78rem">${f.dia.split('-').reverse().join('/')} · automático</span></div>
-          <div class="v">${mb ? '💳 ' + ctEur(-v) : '💵 ' + ctEur(-v)}<br><span style="font-size:.74rem;color:var(--ink-soft);font-weight:600">${mb ? 'pago por MB' : 'saiu do dinheiro vivo'}</span></div>
-          ${mb ? `<button title="Afinal foi em dinheiro" style="font-size:.74rem;border:1.5px solid var(--line);border-radius:8px;padding:4px 6px" onclick="apagarMov(${estafetaMB.get(f.dia)})">foi em dinheiro?</button>` : `<button title="Foi pago por MB" style="font-size:.74rem;border:1.5px solid var(--line);border-radius:8px;padding:4px 6px" onclick="estafetaPorMb('${f.dia}', ${v})">foi por MB?</button>`}</div>`;
+          <div class="v">${valor}<br><span style="font-size:.74rem;color:var(--ink-soft);font-weight:600">${txt}</span></div>
+          <div style="min-width:86px">${btns}</div></div>`;
       }).join('');
-    document.getElementById('ctMovs').innerHTML = (linhasEst || '') + (movs.filter(v => v.categoria !== 'estafeta_mb').length || !linhasEst ? '' : '');
-    document.getElementById('ctMovs').innerHTML += movs.filter(v => v.categoria !== 'estafeta_mb').length ? movs.filter(v => v.categoria !== 'estafeta_mb').map(v => {
+    document.getElementById('ctMovs').innerHTML = (linhasEst || '') + (movs.filter(v => v.categoria !== 'estafeta_mb' && v.categoria !== 'estafeta_eu').length || !linhasEst ? '' : '');
+    document.getElementById('ctMovs').innerHTML += movs.filter(v => v.categoria !== 'estafeta_mb' && v.categoria !== 'estafeta_eu').length ? movs.filter(v => v.categoria !== 'estafeta_mb' && v.categoria !== 'estafeta_eu').map(v => {
       const partes = [];
       if (v.dinheiro_cent) partes.push('💵 ' + ctEur(v.dinheiro_cent));
       if (v.mb_cent) partes.push('💳 ' + ctEur(v.mb_cent));
@@ -802,10 +810,16 @@
 
   // O estafeta sai por defeito do dinheiro vivo; se num dia foi pago por MB,
   // regista-se uma correcao (volta ao dinheiro vivo, sai do banco).
-  async function estafetaPorMb(dia, cent) {
-    if (!confirm('O estafeta de ' + dia.split('-').reverse().join('/') + ' (' + eurCent(cent) + ') foi pago por MB?')) return;
-    const r = await api('/painel/contas/movimento', { method: 'POST', body: JSON.stringify({ data: dia, categoria: 'estafeta_mb',
-      descricao: 'Estafeta pago por MB', dinheiro_cent: cent, mb_cent: -cent }) });
+  // O estafeta sai por defeito do dinheiro vivo. Correcoes por dia:
+  // 'mb' = foi pago por MB (volta ao dinheiro, sai do banco);
+  // 'eu' = fui eu o estafeta e o dinheiro ficou na caixa (nao saiu nada).
+  async function estafetaMarcar(dia, cent, tipo) {
+    const dd = dia.split('-').reverse().join('/');
+    if (!confirm(tipo === 'mb' ? 'O estafeta de ' + dd + ' (' + eurCent(cent) + ') foi pago por MB?' :
+      'Em ' + dd + ' foste tu o estafeta e os ' + eurCent(cent) + ' ficaram na caixa?')) return;
+    const r = await api('/painel/contas/movimento', { method: 'POST', body: JSON.stringify(tipo === 'mb'
+      ? { data: dia, categoria: 'estafeta_mb', descricao: 'Estafeta pago por MB', dinheiro_cent: cent, mb_cent: -cent }
+      : { data: dia, categoria: 'estafeta_eu', descricao: 'Fui eu o estafeta (ficou na caixa)', dinheiro_cent: cent, mb_cent: 0 }) });
     if (!r || !r.ok) { alert('Não foi possível guardar.'); return; }
     carregarContas();
   }

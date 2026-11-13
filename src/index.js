@@ -2248,7 +2248,7 @@ function horaDe(iso) {
 // com o valor em dinheiro e/ou MB (positivo = entra, negativo = sai).
 // ---------------------------------------------------------------------------
 const CATEGORIAS_CONTAS = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas',
-  'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio', 'reserva', 'estafeta_mb']);
+  'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio', 'reserva', 'estafeta_mb', 'estafeta_eu']);
 // Categorias que sao despesas do negocio (contam para o resultado do mes).
 const CATEGORIAS_DESPESA = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva']);
 let contasOk = false;
@@ -2288,6 +2288,8 @@ async function listarContas(request, env) {
     else if (v.categoria === 'levantamento') x.levantamentos += -tot;
     else if (v.categoria === 'entrada_pessoal') x.entradas_pessoais += tot;
     else if (v.categoria === 'acerto') x.acertos += tot;
+    // Dias em que o proprio dono foi o estafeta: o valor nao saiu, ficou no negocio.
+    else if (v.categoria === 'estafeta_eu') x.estafeta -= tot;
     x.por_categoria[v.categoria] = (x.por_categoria[v.categoria] || 0) + tot;
   }
   // Saldos acumulados no fim de cada mes.
