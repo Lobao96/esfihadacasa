@@ -616,7 +616,7 @@
     contas:          { t: '💡 Eletricidade, água, gás', s: -1 },
     reserva:         { t: '🐷 Reserva Segurança Social / seguro', s: -1 },
     outra_saida:     { t: '➖ Outra despesa', s: -1 },
-    levantamento:    { t: '🙋 Tirei para mim', s: -1 },
+    levantamento:    { t: '💰 Tirei lucro para mim', s: -1 },
     entrada_pessoal: { t: '💶 Pus dinheiro meu', s: +1 },
     outra_entrada:   { t: '➕ Outra entrada', s: +1 },
     deposito:        { t: '🏦 Depositei dinheiro no banco', s: 0 },
@@ -646,7 +646,7 @@
       c === 'ordenado' ? 'Se pagaste parte em dinheiro e parte em MB, preenche os dois valores — sai de cada saldo a parte certa.' :
       c === 'deposito' ? 'Sai do dinheiro vivo e entra no banco. Não conta como despesa.' :
       c === 'levantei' ? 'Sai do banco e entra no dinheiro vivo. Não conta como despesa.' :
-      c === 'levantamento' ? 'Dinheiro que tiraste do negócio para ti. Não é despesa do negócio, mas sai do saldo.' :
+      c === 'levantamento' ? 'Lucro que tiraste do negócio para ti (além do ordenado). Não é despesa, mas sai do saldo.' :
       c === 'entrada_pessoal' ? 'Dinheiro teu que puseste no negócio (ex.: para pagar compras quando não havia saldo).' :
       'Preenche o valor em dinheiro, em MB, ou os dois (se pagaste parte de cada).';
   }
@@ -705,7 +705,7 @@
         extras.map(c => L('− ' + ctNomeCat(c), -reg(c))).join('') +
         (x.entradas_outras ? L('➕ Outras entradas', x.entradas_outras) : '') +
         L('= LUCRO real do mês', x.resultado, true) +
-        (x.levantamentos ? L('🙋 Tiraste para ti (além do ordenado)', -x.levantamentos) : '') +
+        (x.levantamentos ? L('💰 Lucro que tiraste para ti', -x.levantamentos) : '') +
         (x.entradas_pessoais ? L('💶 Puseste dinheiro teu', x.entradas_pessoais) : '') +
         (x.acertos ? L(x.acertos < 0 ? '⚠️ Dinheiro que faltou nas contagens' : '🔍 Dinheiro a mais nas contagens', x.acertos) : '') +
         L('💵 Dinheiro vivo no fim do mês', x.fim_din) +
@@ -724,7 +724,7 @@
     }).join('') : '<div class="vazio">Ainda não registaste nada neste mês.</div>';
 
     const ms = (d.meses || []).slice().reverse();
-    document.getElementById('ctMeses').innerHTML = ms.length ? `<table class="ct-tab"><thead><tr><th>Mês</th><th>Vendas 💵</th><th>Vendas 💳</th><th>Saídas</th><th>Resultado</th><th>Tiraste p/ ti</th><th>Saldo 💵</th><th>Saldo 💳</th></tr></thead><tbody>${
+    document.getElementById('ctMeses').innerHTML = ms.length ? `<table class="ct-tab"><thead><tr><th>Mês</th><th>Vendas 💵</th><th>Vendas 💳</th><th>Saídas</th><th>Lucro</th><th>Lucro tirado</th><th>Saldo 💵</th><th>Saldo 💳</th></tr></thead><tbody>${
       ms.map(k => `<tr><td>${MESES[parseInt(k.mes.slice(5, 7), 10) - 1].slice(0, 3)} ${k.mes.slice(2, 4)}</td><td>${eurCent(k.vendas_din)}</td><td>${eurCent(k.vendas_mb)}</td><td>${eurCent(k.estafeta + k.despesas)}</td><td style="color:${k.resultado < 0 ? 'var(--red)' : 'var(--verde)'};font-weight:700">${ctEur(k.resultado)}</td><td>${eurCent(k.levantamentos)}</td><td>${ctEur(k.fim_din)}</td><td>${ctEur(k.fim_mb)}</td></tr>`).join('')
     }</tbody></table>` : '<div class="vazio">Sem meses ainda.</div>';
   }
