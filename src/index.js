@@ -2239,6 +2239,99 @@ function horaDe(iso) {
 // "esperados" (calculados a partir dos pedidos) sao so uma sugestao
 // mostrada no browser (igual a logica ja usada em Recibos do dia); aqui
 // so se guarda o que o Miguel confirma, nunca se calcula nada sozinho.
+// ---------------------------------------------------------------------------
+// Contas do negocio: saldos de dinheiro vivo e MB/banco. As vendas entram
+// sozinhas a partir dos fechos de caixa (dinheiro e MB confirmados; o valor
+// dado ao estafeta sai do dinheiro vivo). Tudo o resto (ordenados, compras,
+// publicidade, depositos, acertos...) e registado a mao em `movimentos`,
+// com o valor em dinheiro e/ou MB (positivo = entra, negativo = sai).
+// ---------------------------------------------------------------------------
+const CATEGORIAS_CONTAS = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas',
+  'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio']);
+// Categorias que sao despesas do negocio (contam para o resultado do mes).
+const CATEGORIAS_DESPESA = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida']);
+let contasOk = false;
+async function garantirContas(env) {
+  if (contasOk) return;
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS movimentos (
+       id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, categoria TEXT NOT NULL, descricao TEXT,
+       dinheiro_cent INTEGER NOT NULL DEFAULT 0, mb_cent INTEGER NOT NULL DEFAULT 0, criado_em TEXT NOT NULL)`
+  ).run();
+  contasOk = true;
+}
+
+async function listarContas(request, env) {
+  await garantirContas(env);
+  const url = new URL(request.url);
+  let mes = (url.searchParams.get('mes') || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(mes)) mes = diaLisboa().slice(0, 7);
+  const { results: fechos } = await env.DB.prepare(
+    'SELECT dia, dinheiro_confirmado_cent AS din, mbway_confirmado_cent AS mb, andreza_confirmado_cent AS est FROM fecho_caixa ORDER BY dia'
+  ).all();
+  const { results: movs } = await env.DB.prepare('SELECT * FROM movimentos ORDER BY data, id').all();
+
+  const meses = {};
+  const M = m => meses[m] || (meses[m] = { mes: m, vendas_din: 0, vendas_mb: 0, estafeta: 0, dias: 0,
+    despesas: 0, entradas_outras: 0, levantamentos: 0, entradas_pessoais: 0, acertos: 0,
+    por_categoria: {}, fim_din: 0, fim_mb: 0 });
+  for (const f of fechos || []) {
+    const x = M(f.dia.slice(0, 7));
+    x.vendas_din += f.din || 0; x.vendas_mb += f.mb || 0; x.estafeta += f.est || 0; x.dias += 1;
+  }
+  for (const v of movs || []) {
+    const x = M(v.data.slice(0, 7));
+    const tot = (v.dinheiro_cent || 0) + (v.mb_cent || 0);
+    if (CATEGORIAS_DESPESA.has(v.categoria)) x.despesas += -tot;
+    else if (v.categoria === 'outra_entrada') x.entradas_outras += tot;
+    else if (v.categoria === 'levantamento') x.levantamentos += -tot;
+    else if (v.categoria === 'entrada_pessoal') x.entradas_pessoais += tot;
+    else if (v.categoria === 'acerto') x.acertos += tot;
+    x.por_categoria[v.categoria] = (x.por_categoria[v.categoria] || 0) + tot;
+  }
+  // Saldos acumulados no fim de cada mes.
+  const lista = Object.values(meses).sort((a, b) => a.mes.localeCompare(b.mes));
+  const porMesDin = {}, porMesMb = {};
+  for (const f of fechos || []) { const m = f.dia.slice(0, 7); porMesDin[m] = (porMesDin[m] || 0) + (f.din || 0) - (f.est || 0); porMesMb[m] = (porMesMb[m] || 0) + (f.mb || 0); }
+  for (const v of movs || []) { const m = v.data.slice(0, 7); porMesDin[m] = (porMesDin[m] || 0) + (v.dinheiro_cent || 0); porMesMb[m] = (porMesMb[m] || 0) + (v.mb_cent || 0); }
+  let din = 0, mb = 0;
+  for (const x of lista) {
+    din += porMesDin[x.mes] || 0; mb += porMesMb[x.mes] || 0;
+    x.fim_din = din; x.fim_mb = mb;
+    x.resultado = x.vendas_din + x.vendas_mb - x.estafeta - x.despesas + x.entradas_outras;
+  }
+  return j({ ok: true, mes, saldo_din: din, saldo_mb: mb, meses: lista,
+             movimentos: (movs || []).filter(v => v.data.slice(0, 7) === mes) });
+}
+
+async function guardarMovimento(request, env) {
+  await garantirContas(env);
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const data = String(b.data || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return j({ ok: false, erro: 'data invalida' }, 400);
+  const categoria = String(b.categoria || '');
+  if (!CATEGORIAS_CONTAS.has(categoria)) return j({ ok: false, erro: 'categoria invalida' }, 400);
+  const lim = v => { const n = Math.round(Number(v) || 0); return Math.max(-10000000, Math.min(10000000, n)); };
+  const din = lim(b.dinheiro_cent), mbv = lim(b.mb_cent);
+  if (!din && !mbv) return j({ ok: false, erro: 'valor em falta' }, 400);
+  const descricao = String(b.descricao || '').trim().slice(0, 200);
+  const r = await env.DB.prepare(
+    'INSERT INTO movimentos (data, categoria, descricao, dinheiro_cent, mb_cent, criado_em) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(data, categoria, descricao, din, mbv, new Date().toISOString()).run();
+  return j({ ok: true, id: r.meta && r.meta.last_row_id });
+}
+
+async function apagarMovimento(request, env) {
+  await garantirContas(env);
+  let b;
+  try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
+  const id = parseInt(b.id, 10);
+  if (!id) return j({ ok: false, erro: 'id em falta' }, 400);
+  await env.DB.prepare('DELETE FROM movimentos WHERE id = ?').bind(id).run();
+  return j({ ok: true });
+}
+
 async function listarFechoCaixa(request, env) {
   const url = new URL(request.url);
   const dia = (url.searchParams.get('dia') || '').trim();
@@ -2749,6 +2842,9 @@ async function handleRequest(request, env, ctx) {
         if (p === '/api/painel/limpar-ensaio' && request.method === 'POST') return await limparEnsaio(request, env);
         if (p === '/api/painel/analise' && request.method === 'GET') return await analise(request, env);
         if (p === '/api/painel/fecho-caixa' && request.method === 'GET') return await listarFechoCaixa(request, env);
+        if (p === '/api/painel/contas' && request.method === 'GET') return await listarContas(request, env);
+        if (p === '/api/painel/contas/movimento' && request.method === 'POST') return await guardarMovimento(request, env);
+        if (p === '/api/painel/contas/apagar' && request.method === 'POST') return await apagarMovimento(request, env);
         if (p === '/api/painel/fecho-caixa' && request.method === 'POST') return await guardarFechoCaixa(request, env);
         if (p === '/api/painel/custos' && request.method === 'GET') return await listarCustos(env);
         if (p === '/api/painel/custos' && request.method === 'POST') return await guardarCustos(request, env);

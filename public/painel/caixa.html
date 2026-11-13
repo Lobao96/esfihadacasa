@@ -79,6 +79,27 @@
     @page { size: A4; margin: 14mm; }
     #reciboCaixaImpressao { display: block; position: static; top: 0; left: 0; width: 100%; padding: 24px; max-width: 420px; margin: 0 auto; }
   }
+  .ct-saldos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .ct-tile { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #FFFAF0; }
+  .ct-tile b { display: block; font-size: 1.25rem; line-height: 1.15; }
+  .ct-tile span { color: var(--ink-soft); font-size: .76rem; font-weight: 700; }
+  .ct-tile.neg b { color: var(--red); }
+  .ct-sub { font-size: .9rem; margin: 18px 0 8px; }
+  .ct-barra { height: 8px; border-radius: 99px; background: rgba(58,31,18,.08); overflow: hidden; margin-top: 3px; }
+  .ct-barra i { display: block; height: 100%; background: var(--red); }
+  .ct-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ct-form select, .ct-form input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--line); font-size: .95rem; font-family: inherit; background: #fff; color: var(--ink); }
+  .ct-form .full { grid-column: 1 / -1; }
+  .ct-form label { font-size: .78rem; font-weight: 700; color: var(--ink-soft); display: block; margin-bottom: 2px; }
+  .ct-mov { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .86rem; align-items: center; }
+  .ct-mov .v { text-align: right; white-space: nowrap; font-weight: 700; }
+  .ct-mov button { border: none; background: transparent; cursor: pointer; font-size: .95rem; }
+  .ct-tab { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  .ct-tab th, .ct-tab td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  .ct-tab th:first-child, .ct-tab td:first-child { text-align: left; }
+  .ct-tab th { color: var(--ink-soft); font-size: .72rem; text-transform: uppercase; }
+  .ct-scroll { overflow-x: auto; }
+  @media (max-width: 520px) { .ct-saldos { grid-template-columns: 1fr 1fr; } .ct-form { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -167,6 +188,36 @@
       </div>
       <div id="historico"></div>
     </div>
+
+    <div class="bloco" id="blocoContas">
+      <h2>💼 Contas do negócio — para onde vai o dinheiro</h2>
+      <div class="ct-saldos" id="ctSaldos"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="secundario" onclick="contarDinheiro('din')">🔍 Contei o dinheiro vivo</button>
+        <button class="secundario" onclick="contarDinheiro('mb')">🔍 Vi o saldo do banco</button>
+      </div>
+      <div class="nota-custo" style="margin-top:4px">As vendas entram sozinhas a partir de cada fecho de caixa (💵 para o dinheiro vivo, 💳 para o banco; o que dás ao estafeta sai do dinheiro vivo). Tudo o resto registas aqui em baixo. Quando contares o dinheiro, usa o botão "Contei" — a diferença fica registada, assim vês se há dinheiro a desaparecer.</div>
+
+      <h3 class="ct-sub" id="ctTituloMes">O mês</h3>
+      <div id="ctMes"></div>
+
+      <h3 class="ct-sub">➕ Registar entrada ou saída</h3>
+      <div class="ct-form">
+        <div><label>Data</label><input type="date" id="ctData"></div>
+        <div><label>O que foi</label><select id="ctCat" onchange="ctMudouCat()"></select></div>
+        <div class="full"><label>Descrição (opcional)</label><input id="ctDesc" placeholder="Ex.: Recheio, Ordenado da Letícia, Anúncio Instagram…"></div>
+        <div><label id="ctLblDin">💵 Valor em dinheiro vivo (€)</label><input type="number" id="ctDin" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+        <div id="ctBoxMb"><label>💳 Valor em MB / banco (€)</label><input type="number" id="ctMb" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+        <div class="full"><button class="primario" style="width:100%" onclick="guardarMov()">Guardar</button></div>
+      </div>
+      <div class="nota-custo" id="ctAjuda"></div>
+
+      <h3 class="ct-sub">📋 Movimentos do mês</h3>
+      <div id="ctMovs"></div>
+
+      <h3 class="ct-sub">📅 Fim de cada mês</h3>
+      <div class="ct-scroll" id="ctMeses"></div>
+    </div>
   </div>
   <nav class="nav">
     <a class="nav-i" href="/painel/"><span>🫓</span>Pedidos</a>
@@ -183,7 +234,7 @@
 <script>
   const API = '/api';
   const VALOR_HORA = 10; // euros/h, mao de obra do Miguel
-  const ELETRICIDADE_PADRAO = 3.85; // sugestao de custo fixo por dia aberto, editavel
+  const ELETRICIDADE_PADRAO = 3.00; // sugestao de custo fixo por dia aberto, editavel
   let pass = '';
   let esperadoAtual = { dinheiro: 0, mbway: 0, andreza: 0, ingredientesCent: 0 };
 
@@ -497,6 +548,7 @@
 
   function renderHistorico() {
     const m = mesSelecionado();
+    setTimeout(carregarContas, 0);
     const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
     const hojeStr = diaLisboaHoje();
     const dias = diasDoMes();
@@ -551,6 +603,153 @@
       <div class="resultado-linha"><span>− Teu trabalho: ${fmtHoras(T.horas)}h × ${VALOR_HORA}€/h</span><b>${eurCent(T.maoObra)}</b></div>
       <div class="resultado-linha"><span><b>= ${lucro ? 'LUCRO' : 'PREJUÍZO'} do mês</b></span><b style="color:${lucro ? 'var(--verde)' : 'var(--red)'}">${neg(T.resultado)}</b></div>
       <div class="nota-custo">${antesMO >= 0 ? `Sem contar o teu trabalho, o negócio sobrou ${eurCent(antesMO)} — isso dá ${T.horas ? fmtNum(antesMO / 100 / T.horas) : '0,00'}€ por hora trabalhada (a tua meta é ${VALOR_HORA}€/h).` : `Mesmo sem te pagares nada, o negócio ficou ${eurCent(-antesMO)} no vermelho.`}</div>`;
+  }
+
+
+  // ---------- Contas do negocio ----------
+  const CT_CATS = {
+    ordenado:        { t: '👩‍🍳 Ordenado', s: -1 },
+    ingredientes:    { t: '🛒 Ingredientes / compras', s: -1 },
+    publicidade:     { t: '📣 Publicidade', s: -1 },
+    embalagens:      { t: '📦 Embalagens', s: -1 },
+    equipamento:     { t: '🔧 Equipamento / investimento', s: -1 },
+    contas:          { t: '💡 Eletricidade, água, gás', s: -1 },
+    outra_saida:     { t: '➖ Outra despesa', s: -1 },
+    levantamento:    { t: '🙋 Tirei para mim', s: -1 },
+    entrada_pessoal: { t: '💶 Pus dinheiro meu', s: +1 },
+    outra_entrada:   { t: '➕ Outra entrada', s: +1 },
+    deposito:        { t: '🏦 Depositei dinheiro no banco', s: 0 },
+    levantei:        { t: '🏧 Levantei do banco para a caixa', s: 0 },
+  };
+  const CT_DESPESAS = ['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida'];
+  let ctDados = null;
+
+  function ctNomeCat(c) { return c === 'inicio' ? '🏁 Ponto de partida' : c === 'acerto' ? '🔍 Acerto (contagem)' : ((CT_CATS[c] || {}).t || c); }
+  function ctEur(c) { return (c < 0 ? '−' : '') + eurCent(Math.abs(c || 0)); }
+
+  function ctPreencherForm() {
+    const sel = document.getElementById('ctCat');
+    if (!sel.options.length) {
+      sel.innerHTML = Object.keys(CT_CATS).map(k => `<option value="${k}">${CT_CATS[k].t}</option>`).join('');
+      document.getElementById('ctData').value = diaLisboaHoje();
+      ctMudouCat();
+    }
+  }
+
+  function ctMudouCat() {
+    const c = document.getElementById('ctCat').value;
+    const transf = c === 'deposito' || c === 'levantei';
+    document.getElementById('ctBoxMb').style.display = transf ? 'none' : '';
+    document.getElementById('ctLblDin').textContent = transf ? '💶 Valor (€)' : '💵 Valor em dinheiro vivo (€)';
+    document.getElementById('ctAjuda').textContent =
+      c === 'ordenado' ? 'Se pagaste parte em dinheiro e parte em MB, preenche os dois valores — sai de cada saldo a parte certa.' :
+      c === 'deposito' ? 'Sai do dinheiro vivo e entra no banco. Não conta como despesa.' :
+      c === 'levantei' ? 'Sai do banco e entra no dinheiro vivo. Não conta como despesa.' :
+      c === 'levantamento' ? 'Dinheiro que tiraste do negócio para ti. Não é despesa do negócio, mas sai do saldo.' :
+      c === 'entrada_pessoal' ? 'Dinheiro teu que puseste no negócio (ex.: para pagar compras quando não havia saldo).' :
+      'Preenche o valor em dinheiro, em MB, ou os dois (se pagaste parte de cada).';
+  }
+
+  async function carregarContas() {
+    ctPreencherForm();
+    try {
+      const d = await api('/painel/contas?mes=' + mesSelecionado());
+      if (!d || !d.ok) return;
+      ctDados = d;
+      renderContas();
+    } catch (e) {}
+  }
+
+  function renderContas() {
+    const d = ctDados;
+    const tile = (v, t) => `<div class="ct-tile ${v < 0 ? 'neg' : ''}"><b>${ctEur(v)}</b><span>${t}</span></div>`;
+    document.getElementById('ctSaldos').innerHTML =
+      tile(d.saldo_din, '💵 Dinheiro vivo agora') + tile(d.saldo_mb, '💳 MB / banco agora') + tile(d.saldo_din + d.saldo_mb, 'Total do negócio');
+
+    const m = d.mes;
+    const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
+    document.getElementById('ctTituloMes').textContent = '🧮 ' + nomeMes;
+    const x = (d.meses || []).find(k => k.mes === m);
+    if (!x) {
+      document.getElementById('ctMes').innerHTML = '<div class="vazio">Sem vendas nem movimentos neste mês.</div>';
+    } else {
+      const L = (t, v, forte) => `<div class="resultado-linha"><span>${forte ? '<b>' + t + '</b>' : t}</span><b${forte ? ` style="color:${v < 0 ? 'var(--red)' : 'var(--verde)'}"` : ''}>${ctEur(v)}</b></div>`;
+      const desp = CT_DESPESAS.map(c => ({ c, v: -(x.por_categoria[c] || 0) })).filter(o => o.v);
+      const totalSaidas = x.estafeta + desp.reduce((a, o) => a + o.v, 0);
+      const linhasDesp = [{ c: 'estafeta', v: x.estafeta }, ...desp].filter(o => o.v).sort((a, b) => b.v - a.v)
+        .map(o => {
+          const pct = totalSaidas > 0 ? Math.round(o.v * 100 / totalSaidas) : 0;
+          return `<div style="padding:5px 0"><div style="display:flex;justify-content:space-between;font-size:.88rem"><span>${o.c === 'estafeta' ? '🛵 Estafeta (dos fechos)' : ctNomeCat(o.c)}</span><b>${eurCent(o.v)} <span style="color:var(--ink-soft);font-weight:600">· ${pct}%</span></b></div><div class="ct-barra"><i style="width:${pct}%"></i></div></div>`;
+        }).join('');
+      document.getElementById('ctMes').innerHTML =
+        L('💵 Vendas em dinheiro (' + x.dias + ' fechos)', x.vendas_din) +
+        L('💳 Vendas em MB', x.vendas_mb) +
+        (x.entradas_outras ? L('➕ Outras entradas', x.entradas_outras) : '') +
+        L('− Saídas do negócio', -totalSaidas) +
+        L('= Resultado real do mês', x.resultado, true) +
+        (x.levantamentos ? L('🙋 Tiraste para ti', -x.levantamentos) : '') +
+        (x.entradas_pessoais ? L('💶 Puseste dinheiro teu', x.entradas_pessoais) : '') +
+        (x.acertos ? L(x.acertos < 0 ? '⚠️ Dinheiro que faltou nas contagens' : '🔍 Dinheiro a mais nas contagens', x.acertos) : '') +
+        L('💵 Saldo de dinheiro no fim do mês', x.fim_din) +
+        L('💳 Saldo do banco no fim do mês', x.fim_mb) +
+        (linhasDesp ? `<div style="margin-top:12px"><div style="font-weight:800;font-size:.88rem;margin-bottom:4px">Para onde foi o dinheiro</div>${linhasDesp}</div>` : '') +
+        `<div class="nota-custo">Resultado real = vendas − estafeta − despesas que registaste (ordenados, compras, publicidade…). Não usa estimativas: só dinheiro que entrou e saiu mesmo. O que tiras para ti não conta como despesa, mas sai do saldo.</div>`;
+    }
+
+    const movs = (d.movimentos || []).slice().reverse();
+    document.getElementById('ctMovs').innerHTML = movs.length ? movs.map(v => {
+      const partes = [];
+      if (v.dinheiro_cent) partes.push('💵 ' + ctEur(v.dinheiro_cent));
+      if (v.mb_cent) partes.push('💳 ' + ctEur(v.mb_cent));
+      return `<div class="ct-mov"><div><b>${ctNomeCat(v.categoria)}</b>${v.descricao ? ' · ' + esc(v.descricao) : ''}<br><span style="color:var(--ink-soft);font-size:.78rem">${v.data.split('-').reverse().join('/')}</span></div>
+        <div class="v">${partes.join('<br>')}</div><button title="Apagar" onclick="apagarMov(${v.id})">🗑️</button></div>`;
+    }).join('') : '<div class="vazio">Ainda não registaste nada neste mês.</div>';
+
+    const ms = (d.meses || []).slice().reverse();
+    document.getElementById('ctMeses').innerHTML = ms.length ? `<table class="ct-tab"><thead><tr><th>Mês</th><th>Vendas 💵</th><th>Vendas 💳</th><th>Saídas</th><th>Resultado</th><th>Para ti</th><th>Saldo 💵</th><th>Saldo 💳</th></tr></thead><tbody>${
+      ms.map(k => `<tr><td>${MESES[parseInt(k.mes.slice(5, 7), 10) - 1].slice(0, 3)} ${k.mes.slice(2, 4)}</td><td>${eurCent(k.vendas_din)}</td><td>${eurCent(k.vendas_mb)}</td><td>${eurCent(k.estafeta + k.despesas)}</td><td style="color:${k.resultado < 0 ? 'var(--red)' : 'var(--verde)'};font-weight:700">${ctEur(k.resultado)}</td><td>${eurCent(k.levantamentos)}</td><td>${ctEur(k.fim_din)}</td><td>${ctEur(k.fim_mb)}</td></tr>`).join('')
+    }</tbody></table>` : '<div class="vazio">Sem meses ainda.</div>';
+  }
+
+  async function guardarMov() {
+    const c = document.getElementById('ctCat').value;
+    const data = document.getElementById('ctData').value || diaLisboaHoje();
+    const din = Math.round((parseFloat(document.getElementById('ctDin').value) || 0) * 100);
+    const mb = Math.round((parseFloat(document.getElementById('ctMb').value) || 0) * 100);
+    let dinheiro_cent = 0, mb_cent = 0;
+    if (c === 'deposito') { dinheiro_cent = -din; mb_cent = din; }
+    else if (c === 'levantei') { dinheiro_cent = din; mb_cent = -din; }
+    else { dinheiro_cent = CT_CATS[c].s * din; mb_cent = CT_CATS[c].s * mb; }
+    if (!dinheiro_cent && !mb_cent) { alert('Escreve o valor.'); return; }
+    const r = await api('/painel/contas/movimento', { method: 'POST', body: JSON.stringify({ data, categoria: c, descricao: document.getElementById('ctDesc').value, dinheiro_cent, mb_cent }) });
+    if (!r || !r.ok) { alert('Não foi possível guardar.'); return; }
+    document.getElementById('ctDin').value = ''; document.getElementById('ctMb').value = ''; document.getElementById('ctDesc').value = '';
+    carregarContas();
+  }
+
+  async function apagarMov(id) {
+    if (!confirm('Apagar este movimento?')) return;
+    await api('/painel/contas/apagar', { method: 'POST', body: JSON.stringify({ id }) });
+    carregarContas();
+  }
+
+  // "Contei o dinheiro": regista a diferenca entre o que devia haver e o que ha mesmo.
+  async function contarDinheiro(qual) {
+    if (!ctDados) return;
+    const atual = qual === 'din' ? ctDados.saldo_din : ctDados.saldo_mb;
+    const txt = prompt((qual === 'din' ? 'Quanto dinheiro vivo tens mesmo, contado agora?' : 'Qual é o saldo do banco/MB agora?') +
+      '\nAs contas dizem ' + ctEur(atual) + '.', (atual / 100).toFixed(2));
+    if (txt === null) return;
+    const real = Math.round(parseFloat(String(txt).replace(',', '.')) * 100);
+    if (!Number.isFinite(real)) { alert('Valor inválido.'); return; }
+    const dif = real - atual;
+    if (!dif) { alert('Bate certo! ✅'); return; }
+    const inicio = confirm('É a PRIMEIRA vez que contas (ponto de partida das contas)?\n\nOK = sim, é o ponto de partida (não conta como dinheiro desaparecido)\nCancelar = não, é uma contagem normal');
+    if (!inicio && !confirm((dif < 0 ? 'Faltam ' : 'Há a mais ') + eurCent(Math.abs(dif)) + '. Registar o acerto para o saldo ficar igual ao real?')) return;
+    const r = await api('/painel/contas/movimento', { method: 'POST', body: JSON.stringify({ data: diaLisboaHoje(), categoria: inicio ? 'inicio' : 'acerto',
+      descricao: qual === 'din' ? 'Contagem do dinheiro vivo' : 'Saldo do banco', dinheiro_cent: qual === 'din' ? dif : 0, mb_cent: qual === 'din' ? 0 : dif }) });
+    if (!r || !r.ok) { alert('Não foi possível guardar.'); return; }
+    carregarContas();
   }
 
   async function imprimirMes() {

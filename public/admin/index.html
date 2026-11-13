@@ -232,6 +232,15 @@
       const d = await api('/painel/custos');
       (d.custos || []).forEach(c => { atuais[c.produto] = c.custo_cent; });
     } catch (e) {}
+    // Sabores novos guardados no servidor (ex.: novidades que ainda nao estao
+    // escritas no codigo do site) entram tambem na lista dos doces/salgadas.
+    try {
+      const nv = await api('/novidade');
+      (nv.novidades || []).forEach(n => {
+        const g = PRODUTOS_CUSTO.find(x => x.grupo === (n.doce ? 'Doces' : 'Salgadas'));
+        if (g && !g.itens.includes(n.name)) g.itens.push(n.name);
+      });
+    } catch (e) {}
     document.getElementById('custosLista').innerHTML = PRODUTOS_CUSTO.map(g => `
       <div class="custo-grupo">${esc(g.grupo)}</div>
       ${g.itens.map(nome => `
