@@ -614,6 +614,7 @@
     embalagens:      { t: '📦 Embalagens', s: -1 },
     equipamento:     { t: '🔧 Equipamento / investimento', s: -1 },
     contas:          { t: '💡 Eletricidade, água, gás', s: -1 },
+    reserva:         { t: '🐷 Reserva Segurança Social / seguro', s: -1 },
     outra_saida:     { t: '➖ Outra despesa', s: -1 },
     levantamento:    { t: '🙋 Tirei para mim', s: -1 },
     entrada_pessoal: { t: '💶 Pus dinheiro meu', s: +1 },
@@ -621,7 +622,7 @@
     deposito:        { t: '🏦 Depositei dinheiro no banco', s: 0 },
     levantei:        { t: '🏧 Levantei do banco para a caixa', s: 0 },
   };
-  const CT_DESPESAS = ['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida'];
+  const CT_DESPESAS = ['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva'];
   let ctDados = null;
 
   function ctNomeCat(c) { return c === 'inicio' ? '🏁 Ponto de partida' : c === 'acerto' ? '🔍 Acerto (contagem)' : ((CT_CATS[c] || {}).t || c); }
@@ -665,6 +666,7 @@
     const tile = (v, t) => `<div class="ct-tile ${v < 0 ? 'neg' : ''}"><b>${ctEur(v)}</b><span>${t}</span></div>`;
     document.getElementById('ctSaldos').innerHTML =
       tile(d.saldo_din, '💵 Dinheiro vivo agora') + tile(d.saldo_mb, '💳 MB / banco agora') + tile(d.saldo_din + d.saldo_mb, 'Total do negócio');
+    document.getElementById('ctSaldos').insertAdjacentHTML('afterend', document.getElementById('ctSaldoNota') ? '' : '<div id="ctSaldoNota" class="nota-custo" style="margin:-6px 0 10px">Total do negócio = tudo o que vendeste desde o início − estafeta − tudo o que registaste como saída. É o dinheiro que devia existir agora (somando todos os meses, não só este).</div>');
 
     const m = d.mes;
     const nomeMes = MESES[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(0, 4);
@@ -674,7 +676,18 @@
       document.getElementById('ctMes').innerHTML = '<div class="vazio">Sem vendas nem movimentos neste mês.</div>';
     } else {
       const L = (t, v, forte) => `<div class="resultado-linha"><span>${forte ? '<b>' + t + '</b>' : t}</span><b${forte ? ` style="color:${v < 0 ? 'var(--red)' : 'var(--verde)'}"` : ''}>${ctEur(v)}</b></div>`;
-      const desp = CT_DESPESAS.map(c => ({ c, v: -(x.por_categoria[c] || 0) })).filter(o => o.v);
+      // Valores previstos pelos fechos de caixa deste mes (os mesmos da "Conta final").
+      const fechosMes = historicoCache.filter(f => f.dia.slice(0, 7) === m);
+      const prev = { ingredientes: 0, contas: 0, ordenado: 0, reserva: 0 };
+      fechosMes.forEach(f => { const c = calcDia(f); prev.ingredientes += c.ingred; prev.contas += c.extra; prev.ordenado += c.maoObra; prev.reserva += RESERVA_SS_DIA_CENT + SEGURO_DIA_CENT; });
+      const reg = c => -(x.por_categoria[c] || 0);
+      const linhaPrev = (c, nome) => {
+        const r = reg(c), p = prev[c] || 0, falta = p - r;
+        const btn = falta > 50 ? `<button class="secundario" style="padding:4px 10px;font-size:.78rem;margin-left:6px" onclick="ctPreencher('${c}', ${falta})">Registar ${eurCent(falta)}</button>` : (p && r ? ' ✅' : '');
+        return `<div class="resultado-linha"><span>− ${nome}<br><span style="font-size:.76rem">previsto no fecho: ${eurCent(p)}${btn}</span></span><b>${ctEur(-r)}</b></div>`;
+      };
+      const extras = ['publicidade', 'embalagens', 'equipamento', 'outra_saida'].filter(c => reg(c));
+      const desp = CT_DESPESAS.map(c => ({ c, v: reg(c) })).filter(o => o.v);
       const totalSaidas = x.estafeta + desp.reduce((a, o) => a + o.v, 0);
       const linhasDesp = [{ c: 'estafeta', v: x.estafeta }, ...desp].filter(o => o.v).sort((a, b) => b.v - a.v)
         .map(o => {
@@ -682,18 +695,23 @@
           return `<div style="padding:5px 0"><div style="display:flex;justify-content:space-between;font-size:.88rem"><span>${o.c === 'estafeta' ? '🛵 Estafeta (dos fechos)' : ctNomeCat(o.c)}</span><b>${eurCent(o.v)} <span style="color:var(--ink-soft);font-weight:600">· ${pct}%</span></b></div><div class="ct-barra"><i style="width:${pct}%"></i></div></div>`;
         }).join('');
       document.getElementById('ctMes').innerHTML =
-        L('💵 Vendas em dinheiro (' + x.dias + ' fechos)', x.vendas_din) +
-        L('💳 Vendas em MB', x.vendas_mb) +
+        L('Receita do mês (' + x.dias + ' fechos)', x.vendas_din + x.vendas_mb) +
+        `<div style="font-size:.78rem;color:var(--ink-soft);margin:-2px 0 4px">💵 ${eurCent(x.vendas_din)} em dinheiro · 💳 ${eurCent(x.vendas_mb)} em MB</div>` +
+        L('− Estafeta (dos fechos, automático)', -x.estafeta) +
+        linhaPrev('ingredientes', '🛒 Ingredientes / compras') +
+        linhaPrev('contas', '💡 Eletricidade / outros') +
+        linhaPrev('reserva', '🐷 Reservas SS + seguro') +
+        linhaPrev('ordenado', '👩‍🍳 Ordenados (o teu trabalho incluído)') +
+        extras.map(c => L('− ' + ctNomeCat(c), -reg(c))).join('') +
         (x.entradas_outras ? L('➕ Outras entradas', x.entradas_outras) : '') +
-        L('− Saídas do negócio', -totalSaidas) +
-        L('= Resultado real do mês', x.resultado, true) +
-        (x.levantamentos ? L('🙋 Tiraste para ti', -x.levantamentos) : '') +
+        L('= LUCRO real do mês', x.resultado, true) +
+        (x.levantamentos ? L('🙋 Tiraste para ti (além do ordenado)', -x.levantamentos) : '') +
         (x.entradas_pessoais ? L('💶 Puseste dinheiro teu', x.entradas_pessoais) : '') +
         (x.acertos ? L(x.acertos < 0 ? '⚠️ Dinheiro que faltou nas contagens' : '🔍 Dinheiro a mais nas contagens', x.acertos) : '') +
-        L('💵 Saldo de dinheiro no fim do mês', x.fim_din) +
-        L('💳 Saldo do banco no fim do mês', x.fim_mb) +
+        L('💵 Dinheiro vivo no fim do mês', x.fim_din) +
+        L('💳 Banco no fim do mês', x.fim_mb) +
         (linhasDesp ? `<div style="margin-top:12px"><div style="font-weight:800;font-size:.88rem;margin-bottom:4px">Para onde foi o dinheiro</div>${linhasDesp}</div>` : '') +
-        `<div class="nota-custo">Resultado real = vendas − estafeta − despesas que registaste (ordenados, compras, publicidade…). Não usa estimativas: só dinheiro que entrou e saiu mesmo. O que tiras para ti não conta como despesa, mas sai do saldo.</div>`;
+        `<div class="nota-custo">"Previsto no fecho" é o que a Conta final do mês já calcula (ingredientes estimados, eletricidade, reservas e as tuas horas). Carrega em "Registar" para o passar para as contas: o valor fica no formulário em baixo para confirmares, corrigires e dizeres se saiu em dinheiro ou MB. Publicidade e outras compras acrescentas tu.</div>`;
     }
 
     const movs = (d.movimentos || []).slice().reverse();
@@ -706,9 +724,23 @@
     }).join('') : '<div class="vazio">Ainda não registaste nada neste mês.</div>';
 
     const ms = (d.meses || []).slice().reverse();
-    document.getElementById('ctMeses').innerHTML = ms.length ? `<table class="ct-tab"><thead><tr><th>Mês</th><th>Vendas 💵</th><th>Vendas 💳</th><th>Saídas</th><th>Resultado</th><th>Para ti</th><th>Saldo 💵</th><th>Saldo 💳</th></tr></thead><tbody>${
+    document.getElementById('ctMeses').innerHTML = ms.length ? `<table class="ct-tab"><thead><tr><th>Mês</th><th>Vendas 💵</th><th>Vendas 💳</th><th>Saídas</th><th>Resultado</th><th>Tiraste p/ ti</th><th>Saldo 💵</th><th>Saldo 💳</th></tr></thead><tbody>${
       ms.map(k => `<tr><td>${MESES[parseInt(k.mes.slice(5, 7), 10) - 1].slice(0, 3)} ${k.mes.slice(2, 4)}</td><td>${eurCent(k.vendas_din)}</td><td>${eurCent(k.vendas_mb)}</td><td>${eurCent(k.estafeta + k.despesas)}</td><td style="color:${k.resultado < 0 ? 'var(--red)' : 'var(--verde)'};font-weight:700">${ctEur(k.resultado)}</td><td>${eurCent(k.levantamentos)}</td><td>${ctEur(k.fim_din)}</td><td>${ctEur(k.fim_mb)}</td></tr>`).join('')
     }</tbody></table>` : '<div class="vazio">Sem meses ainda.</div>';
+  }
+
+  // Passa um valor previsto do fecho para o formulario, para confirmar/corrigir.
+  function ctPreencher(cat, cent) {
+    const m = ctDados.mes;
+    const ultimo = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).toISOString().slice(0, 10);
+    const hoje = diaLisboaHoje();
+    document.getElementById('ctData').value = ultimo < hoje ? ultimo : hoje;
+    document.getElementById('ctCat').value = cat; ctMudouCat();
+    document.getElementById('ctDesc').value = 'Previsto no fecho de caixa';
+    document.getElementById('ctDin').value = (cent / 100).toFixed(2);
+    document.getElementById('ctMb').value = '';
+    document.getElementById('ctDin').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('ctAjuda').innerHTML = '<b>Confirma o valor e de onde saiu:</b> se foi pago por MB, passa o valor para o campo MB (ou divide pelos dois). Depois carrega em Guardar.';
   }
 
   async function guardarMov() {
