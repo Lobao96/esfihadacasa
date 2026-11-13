@@ -695,7 +695,7 @@ async function novoPedido(request, env, ctx) {
     const linhaPromo = await env.DB.prepare('SELECT * FROM codigos_promo WHERE codigo = ?').bind(codigoPromo).first();
     if (!linhaPromo) return j({ ok: false, erro: 'promo_invalido' }, 400);
     // Codigo de fidelidade: so vale para o telefone a que foi dado.
-    if (linhaPromo.tipo === 'fidelidade' && chaveTelefone(telCliente) !== linhaPromo.telefone) {
+    if ((linhaPromo.tipo === 'fidelidade' || linhaPromo.tipo === 'premio') && chaveTelefone(telCliente) !== linhaPromo.telefone) {
       return j({ ok: false, erro: 'promo_telefone' }, 400);
     }
     if ((linhaPromo.usos_contagem || 0) >= (linhaPromo.usos_max || 1)) return j({ ok: false, erro: 'promo_usado' }, 400);
@@ -725,6 +725,12 @@ async function novoPedido(request, env, ctx) {
       return !combosPermitidos.some(n => t.toLowerCase().startsWith(n));
     })) {
       return j({ ok: false, erro: 'promo_nao_acumula_combo' }, 400);
+    }
+    // Codigo de premio (tipo 'premio'): so vale se o pedido tiver mesmo o
+    // combo a que se destina (senao o desconto fixo serviria para outra coisa).
+    if (linhaPromo.tipo === 'premio' && combosPermitidos.length &&
+        !linhasRecebidas.some(l => combosPermitidos.some(n => String(l || '').trim().toLowerCase().startsWith(n)))) {
+      return j({ ok: false, erro: 'promo_so_combo' }, 400);
     }
     promoAplicado = linhaPromo;
   }
@@ -2008,6 +2014,7 @@ async function listarFidelidade(request, env) {
 // individual). Qualquer outro codigo continua a nao acumular com combos.
 const PROMO_COMBO_PERMITIDO = {
   RAYGANHOU: ['Combo Minha Fome, Minhas Regras'],
+  LUANGEL: ['Combo Minha Fome, Minhas Regras'],
 };
 
 // Valor so das esfihas e bebidas (sem a taxa de entrega), para codigos de
@@ -2050,7 +2057,7 @@ async function validarPromo(request, env) {
   const linha = await env.DB.prepare('SELECT * FROM codigos_promo WHERE codigo = ?').bind(codigo).first();
   if (!linha) return j({ ok: false, erro: 'invalido' }, 404);
   if ((linha.usos_contagem || 0) >= (linha.usos_max || 1)) return j({ ok: false, erro: 'usado' }, 409);
-  if (linha.tipo === 'fidelidade' && chaveTelefone(b.telefone) !== linha.telefone) {
+  if ((linha.tipo === 'fidelidade' || linha.tipo === 'premio') && chaveTelefone(b.telefone) !== linha.telefone) {
     return j({ ok: false, erro: 'telefone' }, 409);
   }
   const totalCent = Math.max(0, parseInt(b.total_cent, 10) || 0);

@@ -1771,7 +1771,7 @@
   // Codigos feitos para um combo especifico (o combo individual): so esse
   // combo e aceite com eles. Tem de bater certo com PROMO_COMBO_PERMITIDO
   // no servidor (src/index.js).
-  const PROMO_COMBO_PERMITIDO = { RAYGANHOU: ['combo1'] };
+  const PROMO_COMBO_PERMITIDO = { RAYGANHOU: ['combo1'], LUANGEL: ['combo1'] };
   function codigoPromoAtual() {
     const i = document.getElementById('promoInput');
     return String(promoAplicado || (i && i.value) || '').trim().toUpperCase();
@@ -3162,7 +3162,7 @@
         mostrarFaltas(['O valor do pedido não ficou certo. Recarregue a página, monte o pedido de novo e tente enviar outra vez. Se continuar, fale com a gente pelo WhatsApp.']);
         return false;
       }
-      else if (d && (d.erro === 'promo_invalido' || d.erro === 'promo_usado' || d.erro === 'promo_nao_acumula_brinde' || d.erro === 'promo_nao_acumula_combo' || d.erro === 'promo_telefone')) {
+      else if (d && (d.erro === 'promo_invalido' || d.erro === 'promo_usado' || d.erro === 'promo_nao_acumula_brinde' || d.erro === 'promo_nao_acumula_combo' || d.erro === 'promo_so_combo' || d.erro === 'promo_telefone')) {
         // O codigo passou na verificacao ao vivo mas, entre isso e o envio,
         // deixou de ser valido (ex.: usado por outro pedido entretanto).
         btn.textContent = textoOriginal;
