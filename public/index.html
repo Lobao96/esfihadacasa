@@ -1096,7 +1096,7 @@
       { id: "caip", name: "A Caipira", desc: "Frango desfiado bem temperado com queijo cremoso", price: 2.50,
         ing: "Frango desfiado temperado da casa, queijo cremoso, salsinha.",
         alerg: ["Glúten", "Sésamo", "Leite"],
-        img: "/img/esfiha-caipira.jpg" },
+        img: "/img/esfiha-caipira.jpg?v=2" },
       { id: "quer", name: "A Queridinha", desc: "Calabresa, cebola", price: 2.50,
         ing: "Calabresa, cebola, orégãos.",
         alerg: ["Glúten"],
@@ -1404,7 +1404,7 @@
       : `<div class="card-img placeholder">🫓</div>`;
     const alerg = i.alerg.map(a => `<span class="alerg-tag">${a}</span>`).join('');
     return `<div class="card${i.novo ? ' novo-card' : ''}" data-item="${i.id}">
-      ${i.novo ? '<span class="novo-flag">Novidade</span>' : ''}
+      ${i.previa ? '<span class="novo-flag" style="background:#3A1F12">Pré-visualização · só você vê</span>' : (i.novo ? '<span class="novo-flag">Novidade</span>' : '')}
       ${img}
       <h3>${i.name}</h3>
       <p class="desc">${i.desc}</p>
@@ -3316,6 +3316,34 @@
 
   var sm = document.getElementById('seoMenu'); if (sm) sm.style.display = 'none';
   renderMenu();
+  // Sabores novos guardados no servidor (so aparecem a partir da hora marcada;
+  // com a palavra-passe do painel guardada neste aparelho, aparecem logo como
+  // pre-visualizacao). So acrescenta cartoes novos, nunca refaz os existentes.
+  async function carregarNovidades() {
+    try {
+      const hd = {};
+      try { const pw = localStorage.getItem('painelPass'); if (pw) hd['x-painel-pass'] = pw; } catch (e) {}
+      const r = await fetch(API + '/novidade', { cache: 'no-store', headers: hd });
+      const d = await r.json();
+      if (!d || !d.ok) return;
+      const dg = document.getElementById('docesGrid');
+      let mudou = false;
+      (d.novidades || []).forEach(n => {
+        if (MENU.doces.some(i => i.id === n.id)) return;
+        const item = { id: n.id, name: n.name, desc: n.desc, price: n.price, ing: n.ing || '', alerg: n.alerg || [],
+                       img: n.img || '', novo: true, previa: !!n.previa };
+        MENU.doces.push(item);
+        if (dg) dg.insertAdjacentHTML('beforeend', cardHtml(item));
+        mudou = true;
+      });
+      if (mudou) {
+        try { aplicarStockSabores(); } catch (e) {}
+        try { renderOrderList(); } catch (e) {}
+      }
+    } catch (e) { /* sem servidor: o menu normal continua igual */ }
+  }
+  carregarNovidades();
+  setInterval(carregarNovidades, 120000);
   renderOrderList();
   setOrderType('entrega');
   updateStatus();

@@ -510,6 +510,57 @@ async function cotacao(request, env) {
 
 // ---------------------------------------------------------------- pedidos
 
+// ---------------------------------------------------------------------------
+// Novidades "secretas": sabores novos guardados na base de dados (nao no
+// codigo, que e publico) e que so aparecem no site a partir de `publica_em`.
+// Antes dessa hora so quem tem a palavra-passe do painel os ve (pre-visualizacao)
+// e o servidor recusa pedidos que os incluam.
+// ---------------------------------------------------------------------------
+let novidadesOk = false;
+async function garantirNovidades(env) {
+  if (novidadesOk) return;
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS novidades (
+       id TEXT PRIMARY KEY, nome TEXT NOT NULL, descricao TEXT, ingredientes TEXT, alergenios TEXT,
+       preco_cent INTEGER NOT NULL, img_data TEXT, publica_em TEXT NOT NULL, doce INTEGER NOT NULL DEFAULT 1)`
+  ).run();
+  novidadesOk = true;
+}
+
+async function novidadesPublicas(request, env) {
+  try {
+    await garantirNovidades(env);
+    const previa = autorizado(request, env);
+    const agora = new Date().toISOString();
+    const { results } = await env.DB.prepare(
+      previa ? 'SELECT * FROM novidades ORDER BY publica_em ASC'
+             : 'SELECT * FROM novidades WHERE publica_em <= ? ORDER BY publica_em ASC'
+    ).bind(...(previa ? [] : [agora])).all();
+    const novidades = (results || []).map(r => {
+      let alerg = [];
+      try { alerg = JSON.parse(r.alergenios || '[]'); } catch (e) {}
+      return { id: r.id, name: r.nome, desc: r.descricao || '', ing: r.ingredientes || '', alerg,
+               price: (r.preco_cent || 0) / 100, img: r.img_data || '', doce: r.doce ? 1 : 0,
+               previa: r.publica_em > agora ? 1 : 0 };
+    });
+    return new Response(JSON.stringify({ ok: true, novidades }), {
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    });
+  } catch (e) {
+    return j({ ok: true, novidades: [] });
+  }
+}
+
+// Nomes das novidades ainda por publicar (para recusar pedidos que as incluam).
+async function nomesNovidadesOcultas(env) {
+  try {
+    await garantirNovidades(env);
+    const { results } = await env.DB.prepare('SELECT nome FROM novidades WHERE publica_em > ?')
+      .bind(new Date().toISOString()).all();
+    return (results || []).map(r => r.nome);
+  } catch (e) { return []; }
+}
+
 async function novoPedido(request, env, ctx) {
   let b;
   try { b = await request.json(); } catch (e) { return j({ ok: false, erro: 'corpo invalido' }, 400); }
@@ -521,6 +572,13 @@ async function novoPedido(request, env, ctx) {
   // (mesmo que alguem ainda consiga abrir uma copia antiga da pagina).
   if (ensaio) {
     return j({ ok: false, erro: 'ensaio_desativado' }, 409);
+  }
+  {
+    const ocultas = await nomesNovidadesOcultas(env);
+    if (ocultas.length) {
+      const prod = (b.itens && typeof b.itens === 'object' && Array.isArray(b.itens.producao)) ? b.itens.producao : [];
+      if (prod.some(x => x && ocultas.includes(x.sabor))) return j({ ok: false, erro: 'indisponivel' }, 409);
+    }
   }
   const st = await estadoDoDia(env.DB, dia);
   if (!ensaio && !st.aberto) {
@@ -2657,6 +2715,9 @@ async function handleRequest(request, env, ctx) {
       }
       if (p === '/api/visita' && request.method === 'POST') {
         return await registarVisita(request, env);
+      }
+      if (p === '/api/novidade' && request.method === 'GET') {
+        return await novidadesPublicas(request, env);
       }
       if (p === '/api/stock-bebidas' && request.method === 'GET') {
         return await stockPublicoBebidas(request, env);
