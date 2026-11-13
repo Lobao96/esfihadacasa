@@ -208,7 +208,8 @@
         <div class="full"><label>Descrição (opcional)</label><input id="ctDesc" placeholder="Ex.: Recheio, Ordenado da Letícia, Anúncio Instagram…"></div>
         <div><label id="ctLblDin">💵 Valor em dinheiro vivo (€)</label><input type="number" id="ctDin" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
         <div id="ctBoxMb"><label>💳 Valor em MB / banco (€)</label><input type="number" id="ctMb" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
-        <div class="full"><button class="primario" style="width:100%" onclick="guardarMov()">Guardar</button></div>
+        <div class="full"><button class="primario" id="ctBtnGuardar" style="width:100%" onclick="guardarMov()">Guardar</button>
+          <button class="secundario" id="ctBtnCancelar" style="width:100%;margin-top:6px;display:none" onclick="ctCancelarEdicao()">Cancelar alteração</button></div>
       </div>
       <div class="nota-custo" id="ctAjuda"></div>
 
@@ -624,6 +625,7 @@
   };
   const CT_DESPESAS = ['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva'];
   let ctDados = null;
+  let ctEditId = null;
 
   function ctNomeCat(c) { return c === 'inicio' ? '🏁 Ponto de partida' : c === 'acerto' ? '🔍 Acerto (contagem)' : ((CT_CATS[c] || {}).t || c); }
   function ctEur(c) { return (c < 0 ? '−' : '') + eurCent(Math.abs(c || 0)); }
@@ -720,7 +722,7 @@
       if (v.dinheiro_cent) partes.push('💵 ' + ctEur(v.dinheiro_cent));
       if (v.mb_cent) partes.push('💳 ' + ctEur(v.mb_cent));
       return `<div class="ct-mov"><div><b>${ctNomeCat(v.categoria)}</b>${v.descricao ? ' · ' + esc(v.descricao) : ''}<br><span style="color:var(--ink-soft);font-size:.78rem">${v.data.split('-').reverse().join('/')}</span></div>
-        <div class="v">${partes.join('<br>')}</div><button title="Apagar" onclick="apagarMov(${v.id})">🗑️</button></div>`;
+        <div class="v">${partes.join('<br>')}</div><button title="Editar" onclick="editarMov(${v.id})">✏️</button><button title="Apagar" onclick="apagarMov(${v.id})">🗑️</button></div>`;
     }).join('') : '<div class="vazio">Ainda não registaste nada neste mês.</div>';
 
     const ms = (d.meses || []).slice().reverse();
@@ -753,10 +755,38 @@
     else if (c === 'levantei') { dinheiro_cent = din; mb_cent = -din; }
     else { dinheiro_cent = CT_CATS[c].s * din; mb_cent = CT_CATS[c].s * mb; }
     if (!dinheiro_cent && !mb_cent) { alert('Escreve o valor.'); return; }
-    const r = await api('/painel/contas/movimento', { method: 'POST', body: JSON.stringify({ data, categoria: c, descricao: document.getElementById('ctDesc').value, dinheiro_cent, mb_cent }) });
+    const corpo = { data, categoria: c, descricao: document.getElementById('ctDesc').value, dinheiro_cent, mb_cent };
+    if (ctEditId) corpo.id = ctEditId;
+    const r = await api('/painel/contas/movimento', { method: 'POST', body: JSON.stringify(corpo) });
     if (!r || !r.ok) { alert('Não foi possível guardar.'); return; }
-    document.getElementById('ctDin').value = ''; document.getElementById('ctMb').value = ''; document.getElementById('ctDesc').value = '';
+    ctCancelarEdicao();
     carregarContas();
+  }
+
+  // Carrega um movimento no formulario para o corrigir.
+  function editarMov(id) {
+    const v = (ctDados.movimentos || []).find(x => x.id === id);
+    if (!v) return;
+    if (!CT_CATS[v.categoria]) { alert('As contagens não se editam: apaga esta e carrega outra vez em "Contei".'); return; }
+    ctEditId = id;
+    document.getElementById('ctData').value = v.data;
+    const sel = document.getElementById('ctCat');
+    sel.value = v.categoria; ctMudouCat();
+    document.getElementById('ctDesc').value = v.descricao || '';
+    const transf = v.categoria === 'deposito' || v.categoria === 'levantei';
+    document.getElementById('ctDin').value = ((transf ? Math.abs(v.dinheiro_cent) : Math.abs(v.dinheiro_cent || 0)) / 100).toFixed(2);
+    document.getElementById('ctMb').value = transf ? '' : (Math.abs(v.mb_cent || 0) / 100).toFixed(2);
+    document.getElementById('ctBtnGuardar').textContent = 'Guardar alteração';
+    document.getElementById('ctBtnCancelar').style.display = '';
+    document.getElementById('ctData').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function ctCancelarEdicao() {
+    ctEditId = null;
+    document.getElementById('ctDin').value = ''; document.getElementById('ctMb').value = ''; document.getElementById('ctDesc').value = '';
+    document.getElementById('ctBtnGuardar').textContent = 'Guardar';
+    document.getElementById('ctBtnCancelar').style.display = 'none';
+    ctMudouCat();
   }
 
   async function apagarMov(id) {

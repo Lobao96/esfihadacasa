@@ -717,8 +717,9 @@ async function novoPedido(request, env, ctx) {
     // Excecao: certos codigos (PROMO_COMBO_PERMITIDO) foram feitos de
     // proposito para um combo especifico (ex.: premio de sorteio = Combo
     // individual) e so esse combo e aceite com eles.
+    // Codigos tipo 'toda' valem para a encomenda toda, combos incluidos.
     const combosPermitidos = (PROMO_COMBO_PERMITIDO[codigoPromo] || []).map(x => x.toLowerCase());
-    if (linhasRecebidas.some(l => {
+    if (linhaPromo.tipo !== 'toda' && linhasRecebidas.some(l => {
       const t = String(l || '').trim();
       if (!/^Combo\s/i.test(t)) return false;
       return !combosPermitidos.some(n => t.toLowerCase().startsWith(n));
@@ -2058,7 +2059,7 @@ async function validarPromo(request, env) {
   if (desconto === null) {
     return j({ ok: false, erro: 'minimo_esfihas', min_esfihas: linha.min_esfihas || 0 }, 400);
   }
-  return j({ ok: true, desconto_cent: desconto });
+  return j({ ok: true, desconto_cent: desconto, toda: linha.tipo === 'toda' ? 1 : 0 });
 }
 
 async function stockPublicoBebidas(request, env) {
@@ -2316,6 +2317,12 @@ async function guardarMovimento(request, env) {
   const din = lim(b.dinheiro_cent), mbv = lim(b.mb_cent);
   if (!din && !mbv) return j({ ok: false, erro: 'valor em falta' }, 400);
   const descricao = String(b.descricao || '').trim().slice(0, 200);
+  const idEditar = parseInt(b.id, 10);
+  if (idEditar) {
+    await env.DB.prepare('UPDATE movimentos SET data = ?, categoria = ?, descricao = ?, dinheiro_cent = ?, mb_cent = ? WHERE id = ?')
+      .bind(data, categoria, descricao, din, mbv, idEditar).run();
+    return j({ ok: true, id: idEditar });
+  }
   const r = await env.DB.prepare(
     'INSERT INTO movimentos (data, categoria, descricao, dinheiro_cent, mb_cent, criado_em) VALUES (?, ?, ?, ?, ?, ?)'
   ).bind(data, categoria, descricao, din, mbv, new Date().toISOString()).run();

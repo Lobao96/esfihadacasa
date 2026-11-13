@@ -1240,6 +1240,7 @@
   let orderType = "entrega";
   let metodoPagamento = "mbway";   // "mbway" ou "dinheiro" -- so importa no modo entrega
   let promoAplicado = null;   // codigo promocional ja validado no servidor, ou null
+  let promoToda = false;     // codigo valido na encomenda toda (combos incluidos), segundo o servidor
   let promoDescontoCent = 0;  // desconto (em centimos) desse codigo -- nunca o pedido todo
 
   let estoqueBebidas = {};
@@ -1776,6 +1777,7 @@
     return String(promoAplicado || (i && i.value) || '').trim().toUpperCase();
   }
   function carrinhoTemCombo() {
+    if (promoToda) return false;
     const ok = PROMO_COMBO_PERMITIDO[codigoPromoAtual()] || [];
     return units.some(u => isCombo(u.itemId) && ok.indexOf(u.itemId) < 0);
   }
@@ -1783,7 +1785,7 @@
     if (carrinhoTemCombo()) return 'Este código não é válido com combos.';
     // O codigo do sorteio (PROMO_COMBO_PERMITIDO) mantem-se sempre, mesmo com
     // 10+ esfihas: nesse caso a bebida gratis automatica e que fica de fora.
-    if (!PROMO_COMBO_PERMITIDO[codigoPromoAtual()] && !/^FIEL-/.test(codigoPromoAtual()) && contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas) return 'Este código não acumula com a promoção de bebida grátis (10+ esfihas).';
+    if (!PROMO_COMBO_PERMITIDO[codigoPromoAtual()] && !/^FIEL-/.test(codigoPromoAtual()) && !promoToda && contaEsfihasAvulsas() >= PROMO_BRINDE.minEsfihas) return 'Este código não acumula com a promoção de bebida grátis (10+ esfihas).';
     return null;
   }
 
@@ -2040,6 +2042,7 @@
   function limparEstadoPromo() {
     if (promoAplicado) {
       promoAplicado = null;
+      promoToda = false;
       promoDescontoCent = 0;
       const status = document.getElementById('promoStatus');
       if (status) { status.textContent = ''; status.className = 'promo-code-status'; }
@@ -2052,14 +2055,7 @@
     const status = document.getElementById('promoStatus');
     const codigo = ((input && input.value) || '').trim().toUpperCase();
     if (!codigo) return;
-    const bloqueio = promoBloqueadaPorOutraPromo();
-    if (bloqueio) {
-      promoAplicado = null;
-      promoDescontoCent = 0;
-      if (status) { status.textContent = bloqueio; status.className = 'promo-code-status erro'; }
-      updateTotal();
-      return;
-    }
+    promoToda = false;
     if (status) { status.textContent = 'A verificar…'; status.className = 'promo-code-status'; }
     try {
       const r = await fetch(API + '/validar-promo', {
@@ -2076,6 +2072,14 @@
       });
       const d = await r.json();
       if (d && d.ok) {
+        promoToda = !!d.toda;
+        const bloqueio = promoBloqueadaPorOutraPromo();
+        if (bloqueio) {
+          promoAplicado = null; promoToda = false; promoDescontoCent = 0;
+          if (status) { status.textContent = bloqueio; status.className = 'promo-code-status erro'; }
+          updateTotal();
+          return;
+        }
         promoAplicado = codigo;
         promoDescontoCent = parseInt(d.desconto_cent, 10) || 0;
         if (status) { status.textContent = '✅ Código aplicado — desconto de ' + fmt(promoDescontoCent / 100) + '!'; status.className = 'promo-code-status ok'; }
