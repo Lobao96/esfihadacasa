@@ -2248,7 +2248,7 @@ function horaDe(iso) {
 // com o valor em dinheiro e/ou MB (positivo = entra, negativo = sai).
 // ---------------------------------------------------------------------------
 const CATEGORIAS_CONTAS = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas',
-  'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio', 'reserva']);
+  'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio', 'reserva', 'estafeta_mb']);
 // Categorias que sao despesas do negocio (contam para o resultado do mes).
 const CATEGORIAS_DESPESA = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva']);
 let contasOk = false;
