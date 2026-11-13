@@ -623,6 +623,9 @@
     deposito:        { t: '🏦 Depositei dinheiro no banco', s: 0 },
     levantei:        { t: '🏧 Levantei do banco para a caixa', s: 0 },
   };
+  // Tem de bater com ESTAFETA_PROPRIO_DESDE em src/index.js: a partir deste dia o
+  // estafeta es tu e a taxa fica no negocio, junto com o pagamento do pedido.
+  const ESTAFETA_PROPRIO_DESDE = '2026-10-18';
   const CT_DESPESAS = ['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva'];
   let ctDados = null;
   let ctEditId = null;
@@ -724,10 +727,16 @@
     const linhasEst = historicoCache.filter(f => f.dia.slice(0, 7) === d.mes && (f.andreza_confirmado_cent || 0) > 0)
       .sort((a, b) => b.dia.localeCompare(a.dia)).map(f => {
         const v = f.andreza_confirmado_cent;
+        if (f.dia >= ESTAFETA_PROPRIO_DESDE) {
+          return `<div class="ct-mov"><div><b>🛵 Estafeta</b> · fui eu<br><span style="color:var(--ink-soft);font-size:.78rem">${f.dia.split('-').reverse().join('/')} · automático</span></div>
+            <div class="v">🙋 ${eurCent(v)}<br><span style="font-size:.74rem;color:var(--ink-soft);font-weight:600">ficou no negócio, junto com o pedido</span></div><div style="min-width:86px"></div></div>`;
+        }
         const mv = estMov[f.dia];
         const tipo = mv ? (mv.categoria === 'estafeta_eu' ? 'eu' : 'mb') : 'din';
-        const valor = tipo === 'eu' ? '🙋 ' + eurCent(v) : (tipo === 'mb' ? '💳 ' : '💵 ') + ctEur(-v);
-        const txt = tipo === 'eu' ? 'fui eu · ficou na caixa' : tipo === 'mb' ? 'pago por MB' : 'saiu do dinheiro vivo';
+        const pmb = tipo === 'mb' ? Math.min(v, -(mv.mb_cent || 0)) : 0;
+        const valor = tipo === 'eu' ? '🙋 ' + eurCent(v) : tipo === 'mb'
+          ? ('💳 ' + ctEur(-pmb) + (v - pmb > 0 ? '<br>💵 ' + ctEur(-(v - pmb)) : '')) : '💵 ' + ctEur(-v);
+        const txt = tipo === 'eu' ? 'fui eu · ficou na caixa' : tipo === 'mb' ? (v - pmb > 0 ? 'parte por MB, parte em dinheiro' : 'pago por MB') : 'saiu do dinheiro vivo';
         const btns = tipo === 'din'
           ? bE('foi por MB?', 'Foi pago por MB', `estafetaMarcar('${f.dia}', ${v}, 'mb')`) + bE('fui eu', 'Fui eu o estafeta: o dinheiro ficou na caixa', `estafetaMarcar('${f.dia}', ${v}, 'eu')`)
           : bE('desfazer', 'Voltar a: saiu do dinheiro vivo', `apagarMov(${mv.id})`);
@@ -815,10 +824,15 @@
   // 'eu' = fui eu o estafeta e o dinheiro ficou na caixa (nao saiu nada).
   async function estafetaMarcar(dia, cent, tipo) {
     const dd = dia.split('-').reverse().join('/');
-    if (!confirm(tipo === 'mb' ? 'O estafeta de ' + dd + ' (' + eurCent(cent) + ') foi pago por MB?' :
-      'Em ' + dd + ' foste tu o estafeta e os ' + eurCent(cent) + ' ficaram na caixa?')) return;
+    let parte = cent;
+    if (tipo === 'mb') {
+      const t = prompt('Quanto do estafeta de ' + dd + ' (' + eurCent(cent) + ') foi pago por MB? (o resto fica como dinheiro)', (cent / 100).toFixed(2));
+      if (t === null) return;
+      parte = Math.round(parseFloat(String(t).replace(',', '.')) * 100);
+      if (!Number.isFinite(parte) || parte <= 0 || parte > cent) { alert('Valor inválido.'); return; }
+    } else if (!confirm('Em ' + dd + ' foste tu o estafeta e os ' + eurCent(cent) + ' ficaram na caixa?')) return;
     const r = await api('/painel/contas/movimento', { method: 'POST', body: JSON.stringify(tipo === 'mb'
-      ? { data: dia, categoria: 'estafeta_mb', descricao: 'Estafeta pago por MB', dinheiro_cent: cent, mb_cent: -cent }
+      ? { data: dia, categoria: 'estafeta_mb', descricao: 'Estafeta pago por MB', dinheiro_cent: parte, mb_cent: -parte }
       : { data: dia, categoria: 'estafeta_eu', descricao: 'Fui eu o estafeta (ficou na caixa)', dinheiro_cent: cent, mb_cent: 0 }) });
     if (!r || !r.ok) { alert('Não foi possível guardar.'); return; }
     carregarContas();

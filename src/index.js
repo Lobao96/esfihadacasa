@@ -2247,6 +2247,7 @@ function horaDe(iso) {
 // publicidade, depositos, acertos...) e registado a mao em `movimentos`,
 // com o valor em dinheiro e/ou MB (positivo = entra, negativo = sai).
 // ---------------------------------------------------------------------------
+const ESTAFETA_PROPRIO_DESDE = '2026-10-18';
 const CATEGORIAS_CONTAS = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas',
   'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio', 'reserva', 'estafeta_mb', 'estafeta_eu']);
 // Categorias que sao despesas do negocio (contam para o resultado do mes).
@@ -2270,12 +2271,17 @@ async function listarContas(request, env) {
   const { results: fechos } = await env.DB.prepare(
     'SELECT dia, dinheiro_confirmado_cent AS din, mbway_confirmado_cent AS mb, andreza_confirmado_cent AS est FROM fecho_caixa ORDER BY dia'
   ).all();
-  const { results: movs } = await env.DB.prepare('SELECT * FROM movimentos ORDER BY data, id').all();
+  const { results: movsTodos } = await env.DB.prepare('SELECT * FROM movimentos ORDER BY data, id').all();
+  // Correcoes de estafeta em dias em que ja eras tu o estafeta deixam de contar.
+  const movs = (movsTodos || []).filter(v => !(/^estafeta_/.test(v.categoria) && v.data >= ESTAFETA_PROPRIO_DESDE));
 
   const meses = {};
   const M = m => meses[m] || (meses[m] = { mes: m, vendas_din: 0, vendas_mb: 0, estafeta: 0, dias: 0,
     despesas: 0, entradas_outras: 0, levantamentos: 0, entradas_pessoais: 0, acertos: 0,
     por_categoria: {}, fim_din: 0, fim_mb: 0 });
+  // Desde ESTAFETA_PROPRIO_DESDE o estafeta e o proprio dono: a taxa de entrega
+  // fica no negocio (onde o cliente pagou), nao sai como pagamento.
+  for (const f of fechos || []) if (f.dia >= ESTAFETA_PROPRIO_DESDE) f.est = 0;
   for (const f of fechos || []) {
     const x = M(f.dia.slice(0, 7));
     x.vendas_din += f.din || 0; x.vendas_mb += f.mb || 0; x.estafeta += f.est || 0; x.dias += 1;
