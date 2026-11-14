@@ -699,24 +699,38 @@
           const pct = totalSaidas > 0 ? Math.round(o.v * 100 / totalSaidas) : 0;
           return `<div style="padding:5px 0"><div style="display:flex;justify-content:space-between;font-size:.88rem"><span>${o.c === 'estafeta' ? '🛵 Estafeta (dos fechos)' : ctNomeCat(o.c)}</span><b>${eurCent(o.v)} <span style="color:var(--ink-soft);font-weight:600">· ${pct}%</span></b></div><div class="ct-barra"><i style="width:${pct}%"></i></div></div>`;
         }).join('');
+      // Vista simples do fim do mes: o que devia ir de parte, o que ja tirei, o que falta.
+      const estDevido = fechosMes.filter(f => f.dia >= ESTAFETA_PROPRIO_DESDE).reduce((a, f) => a + (f.andreza_confirmado_cent || 0), 0);
+      const receita = x.vendas_din + x.vendas_mb;
+      const partes = [
+        { c: 'ingredientes', t: '🛒 Ingredientes / compras', dev: prev.ingredientes },
+        { c: 'contas', t: '💡 Eletricidade / outros', dev: prev.contas },
+        { c: 'reserva', t: '🐷 Segurança Social + seguro', dev: prev.reserva },
+        { c: 'ordenado', t: '👩‍🍳 Ordenado (teu trabalho + estafeta)', dev: prev.ordenado + estDevido },
+      ];
+      let totDev = 0, totFalta = 0;
+      const linhasP = partes.map(o => {
+        const tirei = reg(o.c), falta = Math.max(0, o.dev - tirei);
+        totDev += o.dev; totFalta += falta;
+        const btn = falta > 50 ? ` <button class="secundario" style="padding:3px 9px;font-size:.74rem" onclick="ctPreencher('${o.c}', ${falta})">Registar</button>` : '';
+        return `<tr><td>${o.t}</td><td>${eurCent(o.dev)}</td><td>${eurCent(tirei)}</td><td><b>${eurCent(falta)}</b>${btn}</td></tr>`;
+      }).join('');
+      const totExtras = extras.reduce((a, c) => a + reg(c), 0);
+      const lucroMes = receita - totDev - totExtras;
+      const dinheiroTotal = x.fim_din + x.fim_mb;
+      const sobra = dinheiroTotal - totFalta;
       document.getElementById('ctMes').innerHTML =
-        L('Receita do mês (' + x.dias + ' fechos)', x.vendas_din + x.vendas_mb) +
-        `<div style="font-size:.78rem;color:var(--ink-soft);margin:-2px 0 4px">💵 ${eurCent(x.vendas_din)} em dinheiro · 💳 ${eurCent(x.vendas_mb)} em MB</div>` +
-        L('− 🛵 Estafeta (dos fechos, automático)', -x.estafeta) +
-        linhaPrev('ingredientes', '🛒 Ingredientes / compras') +
-        linhaPrev('contas', '💡 Eletricidade / outros') +
-        linhaPrev('reserva', '🐷 Reservas SS + seguro') +
-        linhaPrev('ordenado', '👩‍🍳 Ordenados (o teu trabalho incluído)') +
-        extras.map(c => L('− ' + ctNomeCat(c), -reg(c))).join('') +
-        (x.entradas_outras ? L('➕ Outras entradas', x.entradas_outras) : '') +
-        L('= LUCRO real do mês', x.resultado, true) +
-        (x.levantamentos ? L('💰 Lucro que tiraste para ti', -x.levantamentos) : '') +
-        (x.entradas_pessoais ? L('💶 Puseste dinheiro teu', x.entradas_pessoais) : '') +
-        (x.acertos ? L(x.acertos < 0 ? '⚠️ Dinheiro que faltou nas contagens' : '🔍 Dinheiro a mais nas contagens', x.acertos) : '') +
-        L('💵 Dinheiro vivo no fim do mês', x.fim_din) +
-        L('💳 Banco no fim do mês', x.fim_mb) +
-        (linhasDesp ? `<div style="margin-top:12px"><div style="font-weight:800;font-size:.88rem;margin-bottom:4px">Para onde foi o dinheiro</div>${linhasDesp}</div>` : '') +
-        `<div class="nota-custo">"Previsto no fecho" é o que a Conta final do mês já calcula (ingredientes estimados, eletricidade, reservas e as tuas horas). Carrega em "Registar" para o passar para as contas: o valor fica no formulário em baixo para confirmares, corrigires e dizeres se saiu em dinheiro ou MB. Publicidade e outras compras acrescentas tu.</div>`;
+        `<div class="resultado-linha"><span><b>1. Entrou este mês</b><br><span style="font-size:.76rem">${x.dias} fechos · 💵 ${eurCent(x.vendas_din)} · 💳 ${eurCent(x.vendas_mb)}</span></span><b>${eurCent(receita)}</b></div>` +
+        `<div style="font-weight:800;font-size:.9rem;margin:12px 0 4px">2. O que tens de pôr de parte</div>` +
+        `<table class="ct-tab"><thead><tr><th>Para quê</th><th>Devia ir</th><th>Já tirei</th><th>Falta tirar</th></tr></thead><tbody>${linhasP}</tbody></table>` +
+        (extras.length ? `<div style="font-weight:800;font-size:.9rem;margin:12px 0 4px">3. Despesas já pagas</div>` + extras.map(c => L(ctNomeCat(c), -reg(c))).join('') : '') +
+        `<div style="font-weight:800;font-size:.9rem;margin:12px 0 4px">${extras.length ? '4' : '3'}. Resultado</div>` +
+        L('Lucro do mês (entrou − tudo o que devia ir − despesas)', lucroMes, true) +
+        `<div style="font-weight:800;font-size:.9rem;margin:12px 0 4px">${extras.length ? '5' : '4'}. O dinheiro que existe agora</div>` +
+        L('💵 Dinheiro vivo + 💳 banco', dinheiroTotal) +
+        L('− O que ainda falta tirar (ordenado, reservas…)', -totFalta) +
+        L('= Dinheiro livre de verdade', sobra, true) +
+        `<div class="nota-custo">Durante o mês não tens de mexer em nada: as vendas entram sozinhas pelo fecho de caixa. No fim do mês, vais registando em baixo o que tiraste (ordenado, reservas, lucro) e o que pagaste (faturas). A coluna "Falta tirar" vai a zero quando tudo estiver de parte, e "Dinheiro livre" é o que realmente podes gastar ou tirar como lucro.</div>`;
     }
 
     const movs = (d.movimentos || []).slice().reverse();
