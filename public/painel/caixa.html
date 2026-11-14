@@ -713,7 +713,8 @@
         const tirei = reg(o.c), falta = Math.max(0, o.dev - tirei);
         totDev += o.dev; totFalta += falta;
         const btn = falta > 50 ? ` <button class="secundario" style="padding:3px 9px;font-size:.74rem" onclick="ctPreencher('${o.c}', ${falta})">Registar</button>` : '';
-        return `<tr><td>${o.t}</td><td>${eurCent(o.dev)}</td><td>${eurCent(tirei)}</td><td><b>${eurCent(falta)}</b>${btn}</td></tr>`;
+        const edit = tirei > 0 ? ` <button title="Editar o que já tirei" style="border:1.5px solid var(--line);border-radius:8px;background:#fff;padding:1px 6px" onclick="ctEditarCat('${o.c}')">✏️</button>` : '';
+        return `<tr><td>${o.t}</td><td>${eurCent(o.dev)}</td><td>${eurCent(tirei)}${edit}</td><td><b>${eurCent(falta)}</b>${btn}</td></tr>`;
       }).join('');
       const totExtras = extras.reduce((a, c) => a + reg(c), 0);
       const lucroMes = receita - totDev - totExtras;
@@ -806,6 +807,14 @@
   }
 
   // Carrega um movimento no formulario para o corrigir.
+  // Atalho da tabela do mes: edita o registo mais recente desta categoria
+  // (para corrigir o que "ja tirei"). Se houver varios, os outros editam-se
+  // na lista "Movimentos do mes".
+  function ctEditarCat(c) {
+    const l = (ctDados.movimentos || []).filter(v => v.categoria === c).sort((a, b) => b.id - a.id);
+    if (l.length) editarMov(l[0].id);
+  }
+
   function editarMov(id) {
     const v = (ctDados.movimentos || []).find(x => x.id === id);
     if (!v) return;
