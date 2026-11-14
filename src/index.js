@@ -2256,9 +2256,9 @@ function horaDe(iso) {
 // ---------------------------------------------------------------------------
 const ESTAFETA_PROPRIO_DESDE = '2026-10-18';
 const CATEGORIAS_CONTAS = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas',
-  'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio', 'reserva', 'estafeta_mb', 'estafeta_eu']);
+  'outra_saida', 'levantamento', 'entrada_pessoal', 'outra_entrada', 'deposito', 'levantei', 'acerto', 'inicio', 'reserva', 'reserva_estafeta', 'estafeta_mb', 'estafeta_eu']);
 // Categorias que sao despesas do negocio (contam para o resultado do mes).
-const CATEGORIAS_DESPESA = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva']);
+const CATEGORIAS_DESPESA = new Set(['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva', 'reserva_estafeta']);
 let contasOk = false;
 async function garantirContas(env) {
   if (contasOk) return;

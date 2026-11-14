@@ -616,6 +616,7 @@
     equipamento:     { t: '🔧 Equipamento / investimento', s: -1 },
     contas:          { t: '💡 Eletricidade, água, gás', s: -1 },
     reserva:         { t: '🐷 Reserva Segurança Social / seguro', s: -1 },
+    reserva_estafeta:{ t: '🛵 Estafeta (o que ponho de parte para ele)', s: -1 },
     outra_saida:     { t: '➖ Outra despesa', s: -1 },
     levantamento:    { t: '💰 Tirei lucro para mim', s: -1 },
     entrada_pessoal: { t: '💶 Pus dinheiro meu', s: +1 },
@@ -626,7 +627,7 @@
   // Tem de bater com ESTAFETA_PROPRIO_DESDE em src/index.js: a partir deste dia o
   // estafeta es tu e a taxa fica no negocio, junto com o pagamento do pedido.
   const ESTAFETA_PROPRIO_DESDE = '2026-10-18';
-  const CT_DESPESAS = ['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva'];
+  const CT_DESPESAS = ['ordenado', 'ingredientes', 'publicidade', 'embalagens', 'equipamento', 'contas', 'outra_saida', 'reserva', 'reserva_estafeta'];
   let ctDados = null;
   let ctEditId = null;
 
@@ -706,7 +707,8 @@
         { c: 'ingredientes', t: '🛒 Ingredientes / compras', dev: prev.ingredientes },
         { c: 'contas', t: '💡 Eletricidade / outros', dev: prev.contas },
         { c: 'reserva', t: '🐷 Segurança Social + seguro', dev: prev.reserva },
-        { c: 'ordenado', t: '👩‍🍳 Ordenado (teu trabalho + estafeta)', dev: prev.ordenado + estDevido },
+        { c: 'ordenado', t: '👩‍🍳 Ordenado (as tuas horas)', dev: prev.ordenado },
+        { c: 'reserva_estafeta', t: '🛵 Estafeta (taxas de entrega)', dev: estDevido },
       ];
       let totDev = 0, totFalta = 0;
       const linhasP = partes.map(o => {
